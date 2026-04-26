@@ -7,3 +7,10 @@ obj/
 appsettings.Development.json
 **/bin/
 **/obj/
+
+
+
+publish/
+node_modules/
+dist/
+.env
