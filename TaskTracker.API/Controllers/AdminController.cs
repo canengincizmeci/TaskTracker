@@ -1,12 +1,9 @@
-﻿using FluentValidation.Validators;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Cryptography;
-using TaskTracker.API.Context;
-using TaskTracker.API.DTOs;
-using TaskTracker.API.Entitites;
-using TaskTracker.API.Services;
-using Microsoft.EntityFrameworkCore;
+
+using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Core.DataAccess;
 
 namespace TaskTracker.API.Controllers
 {
@@ -14,108 +11,115 @@ namespace TaskTracker.API.Controllers
     [ApiController]
     public class AdminController : ControllerBase
     {
-        private readonly MyDbContext _context;
+        private readonly TaskTrackerDbContext _context;
         private readonly IEmailService _emailService;
 
-        public AdminController(MyDbContext context, IEmailService emailService)
+        public AdminController(TaskTrackerDbContext context, IEmailService emailService)
         {
             _context = context;
             _emailService = emailService;
         }
+        [HttpGet("authorize")]
+        [Authorize(Roles = "Admin")]
 
-        [HttpPost("login")]
-        public async Task<IActionResult> Login(AdminLoginDto adminDto)
+        public async Task<IActionResult> AuthorizationTest()
         {
-            var admin = await _context.Admins
-                .FirstOrDefaultAsync(x => x.Username == adminDto.Username);
-
-            if (admin == null)
-                return Unauthorized("Username or password is wrong.");
-
-            var passwordIsValid = BCrypt.Net.BCrypt.Verify(adminDto.Password, admin.PasswordHash);
-
-            if (!passwordIsValid)
-                return Unauthorized("Username or password is wrong.");
-
-            var otpCode = GenerateOtpCode();
-
-            var otp = new AdminOtp
-            {
-                AdminId = admin.Id,
-                Code = BCrypt.Net.BCrypt.HashPassword(otpCode),
-                CreatedTime = DateTime.UtcNow,
-                ExpireTime = DateTime.UtcNow.AddMinutes(5),
-                IsUsed = false,
-                FailedAttemptCount = 0
-            };
-
-            _context.AdminOtps.Add(otp);
-            await _context.SaveChangesAsync();
-
-            await _emailService.SendEmailAsync(
-                admin.Email,
-                "TaskTracker Admin Login Code",
-                $"Your login code is: {otpCode}. This code expires in 5 minutes."
-            );
-
-            return Ok("Verification code sent to admin email.");
+            return Ok("Admin authorized successfully.");
         }
 
-        [HttpPost("verify-otp")]
-        public async Task<IActionResult> VerifyOtp(VerifyOtpDto dto)
-        {
-            var admin = await _context.Admins
-                .FirstOrDefaultAsync(x => x.Username == dto.Username);
+        //[HttpPost("login")]
+        //public async Task<IActionResult> Login(AdminLoginDto adminDto)
+        //{
+        //    var admin = await _context.Admins
+        //        .FirstOrDefaultAsync(x => x.Username == adminDto.Username);
 
-            if (admin == null)
-                return Unauthorized("Invalid verification request.");
+        //    if (admin == null)
+        //        return Unauthorized("Username or password is wrong.");
 
-            var otp = await _context.AdminOtps
-                .Where(x =>
-                    x.AdminId == admin.Id &&
-                    !x.IsUsed &&
-                    x.ExpireTime > DateTime.UtcNow &&
-                    x.FailedAttemptCount < 3)
-                .OrderByDescending(x => x.CreatedTime)
-                .FirstOrDefaultAsync();
+        //    var passwordIsValid = BCrypt.Net.BCrypt.Verify(adminDto.Password, admin.PasswordHash);
 
-            if (otp == null)
-                return Unauthorized("Verification code expired or invalid.");
+        //    if (!passwordIsValid)
+        //        return Unauthorized("Username or password is wrong.");
 
-            var codeIsValid = BCrypt.Net.BCrypt.Verify(dto.Code, otp.Code);
+        //    var otpCode = GenerateOtpCode();
 
-            if (!codeIsValid)
-            {
-                otp.FailedAttemptCount++;
-                await _context.SaveChangesAsync();
+        //    var otp = new AdminOtp
+        //    {
+        //        AdminId = admin.Id,
+        //        Code = BCrypt.Net.BCrypt.HashPassword(otpCode),
+        //        CreatedTime = DateTime.UtcNow,
+        //        ExpireTime = DateTime.UtcNow.AddMinutes(5),
+        //        IsUsed = false,
+        //        FailedAttemptCount = 0
+        //    };
 
-                return Unauthorized("Verification code is wrong.");
-            }
+        //    _context.AdminOtps.Add(otp);
+        //    await _context.SaveChangesAsync();
 
-            otp.IsUsed = true;
-            await _context.SaveChangesAsync();
+        //    await _emailService.SendEmailAsync(
+        //        admin.Email,
+        //        "TaskTracker Admin Login Code",
+        //        $"Your login code is: {otpCode}. This code expires in 5 minutes."
+        //    );
 
-            var adminToken = GenerateSecureToken(); ;
+        //    return Ok("Verification code sent to admin email.");
+        //}
 
-            var session = new AdminSession
-            {
-                AdminId = admin.Id,
-                Token = adminToken,
-                CreatedAt = DateTime.UtcNow,
-                ExpireAt = DateTime.UtcNow.AddHours(2),
-                IsRevoked = false
-            };
+        //[HttpPost("verify-otp")]
+        //public async Task<IActionResult> VerifyOtp(VerifyOtpDto dto)
+        //{
+        //    var admin = await _context.Admins
+        //        .FirstOrDefaultAsync(x => x.Username == dto.Username);
 
-            _context.AdminSessions.Add(session);
-            await _context.SaveChangesAsync();
+        //    if (admin == null)
+        //        return Unauthorized("Invalid verification request.");
 
-            return Ok(new
-            {
-                Message = "Admin login successful.",
-                AdminToken = adminToken,
-                ExpireAt = session.ExpireAt
-            });
-        }
+        //    var otp = await _context.AdminOtps
+        //        .Where(x =>
+        //            x.AdminId == admin.Id &&
+        //            !x.IsUsed &&
+        //            x.ExpireTime > DateTime.UtcNow &&
+        //            x.FailedAttemptCount < 3)
+        //        .OrderByDescending(x => x.CreatedTime)
+        //        .FirstOrDefaultAsync();
+
+        //    if (otp == null)
+        //        return Unauthorized("Verification code expired or invalid.");
+
+        //    var codeIsValid = BCrypt.Net.BCrypt.Verify(dto.Code, otp.Code);
+
+        //    if (!codeIsValid)
+        //    {
+        //        otp.FailedAttemptCount++;
+        //        await _context.SaveChangesAsync();
+
+        //        return Unauthorized("Verification code is wrong.");
+        //    }
+
+        //    otp.IsUsed = true;
+        //    await _context.SaveChangesAsync();
+
+        //    var adminToken = GenerateSecureToken(); ;
+
+        //    var session = new AdminSession
+        //    {
+        //        AdminId = admin.Id,
+        //        Token = adminToken,
+        //        CreatedAt = DateTime.UtcNow,
+        //        ExpireAt = DateTime.UtcNow.AddHours(2),
+        //        IsRevoked = false
+        //    };
+
+        //    _context.AdminSessions.Add(session);
+        //    await _context.SaveChangesAsync();
+
+        //    return Ok(new
+        //    {
+        //        Message = "Admin login successful.",
+        //        AdminToken = adminToken,
+        //        ExpireAt = session.ExpireAt
+        //    });
+        //}
 
         private static string GenerateOtpCode()
         {
@@ -127,17 +131,17 @@ namespace TaskTracker.API.Controllers
             var bytes = RandomNumberGenerator.GetBytes(32);
             return Convert.ToBase64String(bytes);
         }
-        private bool IsAdminAuthorized()
-        {
-            if (!Request.Headers.TryGetValue("X-Admin-Token", out var token))
-                return false;
+        //private bool IsAdminAuthorized()
+        //{
+        //    if (!Request.Headers.TryGetValue("X-Admin-Token", out var token))
+        //        return false;
 
-            var tokenValue = token.ToString();
+        //    var tokenValue = token.ToString();
 
-            return _context.AdminSessions.Any(x =>
-                x.Token == tokenValue &&
-                !x.IsRevoked &&
-                x.ExpireAt > DateTime.UtcNow);
-        }
+        //    return _context.AdminSessions.Any(x =>
+        //        x.Token == tokenValue &&
+        //        !x.IsRevoked &&
+        //        x.ExpireAt > DateTime.UtcNow);
+        //}
     }
 }

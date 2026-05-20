@@ -1,0 +1,32 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace TaskTracker.Bussiness.Constanst
+{
+    public static class Messages
+    {
+        public static string MaintenanceTime = "Sistem bakımda";
+        public static string AuthorizationDenied = "Yetkiniz Yok";
+        public static string UserRegistered = "Kullanıcı başarıyla kaydedildi";
+        public static string UserNotFound = "Kullanıcı bulunamadı";
+        public static string PasswordError = "Şifre hatalı";
+        public static string SuccessfulLogin = "Sisteme giriş başarılı";
+        public static string UserAlreadyExists = "Bu kullanıcı zaten mevcut";
+        public static string AccessTokenCreated = "Access token başarıyla oluşturuldu";
+        public static string CodeNotFound = "Kod yanlış veya süresi geçmiş";
+        public static string EmailIsCorrect = "Email doğrulandı giriş yapabilirsiniz";
+        public static string UserPassive = "Kullanıcı aktif değil";
+        public static string EmailNotVerified = "Email doğrulanmadı";
+        public static string VerifyEmailCode = "Kayıt başarılı, mailine gönderilen kodu gir.";
+        public static string CodeExpired = "Kod süresi doldu.";
+        public static string RefreshTokenInvalid = "Refresh token geçersiz";
+        public static string RefreshTokenExpired = "Refresh token süresi dolmuş";
+        public static string DataGettingSuccess = "Veri başarıyla çekildi";
+        public static string DataAdded = "Veri başarıyla eklendi";
+        public static string DataUpdated = "Veri başarıyla güncellendi";
+        public static string DataDeleted = "Veri başarıyla silindi";
+
+
+    }
+}
