@@ -14,10 +14,12 @@ Production-ready full-stack task management platform built with ASP.NET Core Web
 
 ### Backend
 - ASP.NET Core Web API
+- N-tier architecture
 - Entity Framework Core
 - PostgreSQL
 - JWT Authentication
 - FluentValidation
+- Generic Repository and UniofWrok pattern
 
 ### Frontend
 - React
