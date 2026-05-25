@@ -1,6 +1,6 @@
 ﻿using System.Collections;
-using DrivingCourse.Core.DataAccess.EfCore.Repository;
 using TaskTracker.Core.DataAccess.EfCore.Repository;
+
 
 namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
 {
@@ -31,9 +31,9 @@ namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
 
             if (!_repositories.ContainsKey(type))
             {
-                var repositoryType = typeof(EfEntityRepositoryBase<>);
+                var repositoryType = typeof(EfEntityRepositoryBase<,>);
                 var repositoryInstance = Activator.CreateInstance(
-                    repositoryType.MakeGenericType(typeof(T)),
+                    repositoryType.MakeGenericType(typeof(T), typeof(TaskTrackerDbContext)),
                     _context
                 );
 

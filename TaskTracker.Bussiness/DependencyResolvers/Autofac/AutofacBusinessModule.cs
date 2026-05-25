@@ -2,7 +2,7 @@
 using Autofac.Core;
 using Autofac.Extras.DynamicProxy;
 using Castle.DynamicProxy;
-using DrivingCourse.Core.Utilities.Interceptors;
+using TaskTracker.Core.Utilities.Interceptors;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;

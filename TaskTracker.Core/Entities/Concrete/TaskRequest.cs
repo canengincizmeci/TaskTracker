@@ -1,18 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using TaskTracker.Core.Utilities.Enums;
 
 namespace TaskTracker.Core.Entities.Concrete
 {
-    public class TaskRequest:IEntity
+    public class TaskRequest : IEntity
     {
         public int Id { get; set; }
-        public string Title { get; set; }
-        public string Description { get; set; }
-        public string Category { get; set; }
-        public string Priority { get; set; }
-        public string Status { get; set; }
+        public int OwnerId { get; set; }
+        public required string Title { get; set; }
+        public required string Description { get; set; } 
+        public required string Category { get; set; } 
+        public required string Priority { get; set; } 
+        public required string Status { get; set; } 
         public bool Activity { get; set; }
+        public int SharedCount { get; set; }
+        public DateTime? DueDate { get; set; } 
+        public TaskVisibility Visibility { get; set; } = TaskVisibility.Private;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public User Owner { get; set; } = null!;
+        public ICollection<TaskShare> TaskShares { get; set; } = new List<TaskShare>();
     }
 }
+
+

@@ -1,4 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
 using TaskTracker.Core.DataAccess;
 using TaskTracker.Core.Entities.Concrete;
@@ -10,95 +14,117 @@ namespace TaskTracker.API.Controllers
     [ApiController]
     public class TaskRequestController : ControllerBase
     {
-        private readonly TaskTrackerDbContext _context;
-        private readonly TaskRequestValidator _validator;
 
-        public TaskRequestController(TaskTrackerDbContext context, TaskRequestValidator validator)
+        private readonly ITaskRequestService _taskRequestService;
+        private readonly ICurrentUserService _currentUserService;
+
+        public TaskRequestController(ITaskRequestService taskRequestService, ICurrentUserService currentUserService)
         {
-            _context = context;
-            _validator = validator;
+            _taskRequestService = taskRequestService;
+            _currentUserService = currentUserService;
         }
 
-        [HttpGet("{id}")]
-        public IActionResult GetTaskRequest(int id)
+        [HttpGet("get-task/{id}")]
+        [Authorize(Roles = "Admin,User")]
+        public async Task<IActionResult> GetTaskRequest(int id)
         {
-            var taskRequest = _context.TaskRequests
-                .FirstOrDefault(x => x.Id == id && x.Activity);
+            //int? currentUser =  _currentUserService.UserId;
+            //if (!currentUser.HasValue)
+            //{
+            //    return BadRequest(Messages.UserNotFound);
+            //}
 
-            if (taskRequest is null)
-                return NotFound();
+            var currentUserId = _currentUserService.UserId;
 
-            return Ok(taskRequest);
-        }
+            var result = await _taskRequestService.GetTaskById(id, _currentUserService.UserId);
 
-        [HttpGet]
-        public IActionResult ListAllTaskRequests()
-        {
-            var taskRequests = _context.TaskRequests
-                .Where(x => x.Activity)
-                .ToList();
-
-            return Ok(taskRequests);
-        }
-
-        [HttpPost]
-        public IActionResult AddTaskRequest(
-    [FromHeader(Name = "X-Admin-Token")] string adminToken,
-    TaskRequestDto taskRequestDto)
-        {
-            //if (!IsAdminAuthorized(adminToken))
-            //    return Unauthorized("Admin authorization required.");
-
-            var validationResult = _validator.Validate(taskRequestDto);
-
-            if (!validationResult.IsValid)
-                return BadRequest(validationResult.Errors);
-
-            var taskRequest = new TaskRequest
+            if (!result.Success)
             {
-                Category = taskRequestDto.Category,
-                CreatedAt = DateTime.UtcNow,
-                Description = taskRequestDto.Description,
-                Priority = taskRequestDto.Priority,
-                Status = taskRequestDto.Status,
-                Title = taskRequestDto.Title,
-                Activity = true
-            };
+                return BadRequest(result.Message);
+            }
 
-            //_context.TaskRequests.Add(taskRequest);
-            _context.SaveChanges();
-
-            return Ok(taskRequest);
+            return Ok(result.Data);
         }
 
-        [HttpPost("{id}")]
-        public IActionResult DeleteTaskRequest(
-            int id,
-            [FromHeader(Name = "X-Admin-Token")] string adminToken)
+        [Authorize(Roles = "Admin")]
+        [HttpGet("list-alltasks")]
+        public async Task<IActionResult> ListAllTaskRequests()
         {
-            //if (!IsAdminAuthorized(adminToken))
-            //    return Unauthorized("Admin authorization required.");
+            //int? currentUser = _currentUserService.UserId;
+            //if (!currentUser.HasValue)
+            //{
+            //    return BadRequest(Messages.UserNotFound);
+            //}
 
-            var taskRequest = _context.TaskRequests.Find(id);
+            var result = await _taskRequestService.GetAllTasks();
 
-            if (taskRequest is null)
-                return NotFound();
+            if (!result.Success)
+                return BadRequest(result.Message);
 
-            taskRequest.Activity = false;
-            _context.SaveChanges();
+            return Ok(result.Data);
+        }
+         
+        [Authorize(Roles = "User")]
+        [HttpPost("add-task")]
+        public async Task<IActionResult> AddTaskRequest(TaskRequestCreateDto taskRequestDto)
+        {
+            //int? currentUserId = _currentUserService.UserId;
+            //if (!currentUserId.HasValue)
+            //{
+            //    return BadRequest(Messages.UserNotFound);
+            //}
 
-            return Ok("Task request deleted.");
+            var currentUserId = _currentUserService.UserId;
+
+            var result = await _taskRequestService.AddTaskRequestAsync(
+                taskRequestDto,
+                currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
         }
 
-        //private bool IsAdminAuthorized(string adminToken)
-        //{
-        //    if (string.IsNullOrWhiteSpace(adminToken))
-        //        return false;
+        [Authorize(Roles = "Admin,User")]
+        [HttpDelete("delete-task/{id}")]
+        public async Task<IActionResult> DeleteTaskRequest(int id)
+        {
+            //int? currentUserId = _currentUserService.UserId;
+            //if (!currentUserId.HasValue)
+            //{
+            //    return BadRequest(Messages.UserNotFound);
+            //}
 
-        //    return _context.AdminSessions.Any(x =>
-        //        x.Token == adminToken &&
-        //        !x.IsRevoked &&
-        //        x.ExpireAt > DateTime.UtcNow);
-        //}
+            var currentUserId = _currentUserService.UserId;
+
+            var result = await _taskRequestService.DeleteTask(id, currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("update-task")]
+        public async Task<IActionResult> UpdateTaskRequest(UpdateTaskRequestDto taskRequestDto)
+        {
+            //int? currentUserId = _currentUserService.UserId;
+            //if (!currentUserId.HasValue)
+            //{
+            //    return BadRequest(Messages.UserNotFound);
+            //}
+
+            var currentUserId = _currentUserService.UserId;
+
+            var result = await _taskRequestService.UpdateTask(taskRequestDto, currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+        
     }
 }

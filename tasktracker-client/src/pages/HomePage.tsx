@@ -1,113 +1,140 @@
-import { useEffect, useState } from "react";
-import { getAllTasks } from "../api/taskService";
-import type { Task } from "../types/task";
-import TaskCard from "../components/TaskCard";
+import { Link } from "react-router-dom";
 
 function HomePage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const data = await getAllTasks();
-        setTasks(data);
-      } catch (error) {
-        console.log(error);
-        setError("Tasks could not be loaded.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
-  const activeCount = tasks.filter((task) => task.status !== "Done").length;
-  const highPriorityCount = tasks.filter(
-    (task) => task.priority === "High" || task.priority === "Critical"
-  ).length;
-  const completedCount = tasks.filter((task) => task.status === "Done").length;
-
-  if (loading) return <div className="page public-page state-message">Loading requests...</div>;
-  if (error) return <div className="page public-page state-message">{error}</div>;
-
   return (
-    <main className="page public-page">
-      <section className="landing-hero">
-        <div className="hero-content">
-          <span className="product-pill">TaskTracker / Request Management</span>
-          <h1>Track requests without losing operational context.</h1>
+    <main className="page public-page home-landing-page">
+      <section className="home-hero">
+        <div className="home-hero-content">
+          <span className="product-pill">TaskTracker / Collaborative Task Management</span>
+
+          <h1>Organize your tasks, share work, and keep ownership clear.</h1>
+
           <p>
-            A lightweight public request board for service tasks, internal operations,
-            support items and follow-up work.
+            TaskTracker helps users create tasks, manage priorities, and share
+            responsibilities with the right people without losing context.
           </p>
+
+          <div className="home-hero-actions">
+            <Link to="/register" className="primary-button home-action-button">
+              Create account
+            </Link>
+
+            <Link to="/login" className="secondary-button home-action-button">
+              Sign in
+            </Link>
+          </div>
         </div>
 
-        <div className="hero-panel">
-          <div className="panel-header">
-            <span>Today’s overview</span>
-            <strong>{tasks.length} requests</strong>
+        <div className="home-preview-card">
+          <div className="preview-card-header">
+            <span>Workspace preview</span>
+            <strong>Live structure</strong>
           </div>
 
-          <div className="metric-list">
+          <div className="preview-task-card">
             <div>
-              <span>Active</span>
-              <strong>{activeCount}</strong>
+              <span className="task-category">Product</span>
+              <h3>Prepare task sharing flow</h3>
+              <p>Owner can invite another user with selected permission.</p>
             </div>
+
+            <span className="priority-pill priority-high">High</span>
+          </div>
+
+          <div className="preview-task-card">
             <div>
-              <span>High priority</span>
-              <strong>{highPriorityCount}</strong>
+              <span className="task-category">Backend</span>
+              <h3>Connect permissions to UI</h3>
+              <p>Shared users can view or edit based on task access.</p>
             </div>
+
+            <span className="priority-pill priority-medium">Medium</span>
+          </div>
+
+          <div className="preview-users">
+            <span>Shared with</span>
+
             <div>
-              <span>Completed</span>
-              <strong>{completedCount}</strong>
+              <strong>CE</strong>
+              <strong>AK</strong>
+              <strong>MY</strong>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="content-shell">
-        <aside className="summary-sidebar">
-          <h2>Board summary</h2>
+      <section className="home-section">
+        <div className="section-heading">
+          <span className="eyebrow">WHY TASKTRACKER</span>
+          <h2>Built for real task ownership.</h2>
           <p>
-            Requests are listed by creation order. Open items stay visible until an
-            administrator marks or removes them.
+            Not just a public board. TaskTracker is moving toward a user-based
+            workspace where every task has an owner, visibility and sharing
+            rules.
           </p>
+        </div>
 
-          <div className="summary-box">
-            <span>Total requests</span>
-            <strong>{tasks.length}</strong>
+        <div className="feature-grid">
+          <article className="feature-card">
+            <span>01</span>
+            <h3>User based tasks</h3>
+            <p>
+              Users can create their own tasks and keep personal work separated
+              from shared work.
+            </p>
+          </article>
+
+          <article className="feature-card">
+            <span>02</span>
+            <h3>Task sharing</h3>
+            <p>
+              Add people to a task and control who can access the details of
+              that work item.
+            </p>
+          </article>
+
+          <article className="feature-card">
+            <span>03</span>
+            <h3>Permission focused</h3>
+            <p>
+              The system is designed around ownership and access rules instead
+              of simple open CRUD screens.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="home-split-section">
+        <div>
+          <span className="eyebrow">WORKFLOW</span>
+          <h2>From personal task to shared responsibility.</h2>
+          <p>
+            Create a task, define its priority, invite another user when needed,
+            and continue tracking the work from one place.
+          </p>
+        </div>
+
+        <div className="workflow-list">
+          <div>
+            <strong>1</strong>
+            <span>Create your task</span>
           </div>
 
-          <div className="summary-box">
-            <span>Needs attention</span>
-            <strong>{highPriorityCount}</strong>
-          </div>
-        </aside>
-
-        <section className="request-list-area">
-          <div className="request-list-header">
-            <div>
-              <h2>Latest requests</h2>
-              <p>Operational tasks and service requests currently visible to users.</p>
-            </div>
+          <div>
+            <strong>2</strong>
+            <span>Assign visibility and priority</span>
           </div>
 
-          {tasks.length === 0 ? (
-            <div className="empty-card">
-              <h3>No requests yet</h3>
-              <p>When new tasks are created, they will appear here.</p>
-            </div>
-          ) : (
-            <div className="task-list">
-              {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
-          )}
-        </section>
+          <div>
+            <strong>3</strong>
+            <span>Share with another user</span>
+          </div>
+
+          <div>
+            <strong>4</strong>
+            <span>Track progress from dashboard</span>
+          </div>
+        </div>
       </section>
     </main>
   );

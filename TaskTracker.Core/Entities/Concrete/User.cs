@@ -17,9 +17,11 @@ namespace TaskTracker.Core.Entities.Concrete
         public bool Status { get; set; }
         public bool IsVerified { get; set; } = false;
         public bool IsPhoneVerified { get; set; }
-        public DateTime? PhoneVerifiedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? UserVerifiedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? PhoneVerifiedAt { get; set; } 
+        public DateTime? UserVerifiedAt { get; set; } 
         public ICollection<UserOperationClaim> UserOperationClaims { get; set; } = new List<UserOperationClaim>();
+        public ICollection<TaskRequest> OwnedTaskRequests { get; set; } = new List<TaskRequest>();
+        public ICollection<TaskShare> SharedTaskRequests { get; set; } = new List<TaskShare>();
 
 
     }

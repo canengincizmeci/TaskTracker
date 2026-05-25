@@ -19,7 +19,8 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<EmailVerification> EmailVerifications { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<TaskRequest> TaskRequests { get; set; }
-       
+        public DbSet<TaskShare> TaskShares { get; set; }
+
 
 
         protected override void OnModelCreating(ModelBuilder builder)

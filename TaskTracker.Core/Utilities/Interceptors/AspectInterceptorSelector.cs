@@ -3,7 +3,7 @@ using System.Reflection;
 using TaskTracker.Core.Utilities.Interceptors;
 using IInterceptor = Castle.DynamicProxy.IInterceptor;
 
-namespace DrivingCourse.Core.Utilities.Interceptors
+namespace TaskTracker.Core.Utilities.Interceptors
 {
     public class AspectInterceptorSelector : IInterceptorSelector
     {

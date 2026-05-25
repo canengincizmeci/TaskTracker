@@ -1,189 +1,169 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createTask, deleteTask, getAllTasks } from "../api/taskService";
+import { deleteTask, getAllTasks } from "../api/taskService";
 import type { Task } from "../types/task";
 import TaskCard from "../components/TaskCard";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 function AdminDashboardPage() {
   const navigate = useNavigate();
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("Medium");
-  const [status, setStatus] = useState("Open");
+  const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const loadTasks = async () => {
-    const data = await getAllTasks();
-    setTasks(data);
-  };
-
-  useEffect(() => {
-    const token = sessionStorage.getItem("adminToken");
-    const expireAt = sessionStorage.getItem("adminTokenExpireAt");
-
-    if (!token || !expireAt) {
-      navigate("/secret-admin-entry");
-      return;
-    }
-
-    const expireDate = new Date(expireAt);
-
-    if (expireDate <= new Date()) {
-      sessionStorage.removeItem("adminToken");
-      sessionStorage.removeItem("adminTokenExpireAt");
-      navigate("/secret-admin-entry");
-      return;
-    }
-
-    loadTasks();
-  }, [navigate]);
-
-  const handleCreateTask = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
     try {
-      setLoading(true);
       setError("");
-
-      await createTask({
-        title,
-        description,
-        category,
-        priority,
-        status,
-      });
-
-      setTitle("");
-      setDescription("");
-      setCategory("");
-      setPriority("Medium");
-      setStatus("Open");
-
-      await loadTasks();
+      const data = await getAllTasks();
+      setTasks(data);
     } catch (error) {
-      console.log(error);
-      setError("Task could not be created.");
+      setError("Tasks could not be loaded.");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  const activeCount = tasks.filter((task) => task.status !== "Done").length;
+
+  const completedCount = tasks.filter((task) => task.status === "Done").length;
+
+  const highPriorityCount = tasks.filter(
+    (task) => task.priority === "High" || task.priority === "Critical"
+  ).length;
+
+  const openCount = tasks.filter((task) => task.status === "Open").length;
+
   const handleDeleteTask = async (id: number) => {
-    const confirmed = window.confirm("Are you sure you want to delete this task?");
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this task?"
+    );
 
     if (!confirmed) return;
 
     try {
+      setActionLoadingId(id);
       setError("");
+
       await deleteTask(id);
       await loadTasks();
     } catch (error) {
-      console.log(error);
       setError("Task could not be deleted.");
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem("adminToken");
-    sessionStorage.removeItem("adminTokenExpireAt");
-    navigate("/");
+    sessionStorage.clear();
+    navigate("/login");
   };
 
+  if (loading) {
+    return (
+      <main className="page public-page">
+        <LoadingSpinner text="Loading admin dashboard..." />
+      </main>
+    );
+  }
+
   return (
-    <main className="page">
-      <section className="admin-header">
+    <main className="page public-page admin-dashboard-page">
+      <section className="admin-topbar">
         <div>
           <p className="eyebrow">ADMIN DASHBOARD</p>
-          <h1>Manage Tasks</h1>
-          <p className="hero-text">
-            Create and remove task requests from this protected admin panel.
+          <h1>System task overview</h1>
+          <p>
+            Review all tasks created by users, monitor task status and remove
+            outdated or invalid records when necessary.
           </p>
         </div>
 
-        <button className="secondary-button" onClick={handleLogout}>
-          Logout
-        </button>
+        <div className="admin-topbar-actions">
+          <button className="secondary-button" onClick={loadTasks}>
+            Refresh
+          </button>
+
+          <button className="secondary-button" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
       </section>
 
-      <section className="admin-layout">
-        <form className="admin-form" onSubmit={handleCreateTask}>
-          <h2>Create Task</h2>
+      <section className="admin-metrics-grid">
+        <div className="admin-metric-card">
+          <span>Total tasks</span>
+          <strong>{tasks.length}</strong>
+        </div>
 
-          <div className="form-group">
-            <label>Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-            />
-          </div>
+        <div className="admin-metric-card">
+          <span>Active</span>
+          <strong>{activeCount}</strong>
+        </div>
 
-          <div className="form-group">
-            <label>Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={5}
-              required
-            />
-          </div>
+        <div className="admin-metric-card">
+          <span>Open</span>
+          <strong>{openCount}</strong>
+        </div>
 
-          <div className="form-group">
-            <label>Category</label>
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-            />
-          </div>
+        <div className="admin-metric-card">
+          <span>High priority</span>
+          <strong>{highPriorityCount}</strong>
+        </div>
 
-          <div className="form-group">
-            <label>Priority</label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-            >
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-              <option>Critical</option>
-            </select>
-          </div>
+        <div className="admin-metric-card">
+          <span>Completed</span>
+          <strong>{completedCount}</strong>
+        </div>
+      </section>
 
-          <div className="form-group">
-            <label>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option>Open</option>
-              <option>In Progress</option>
-              <option>Done</option>
-            </select>
-          </div>
-
-          {error && <p className="error-message">{error}</p>}
-
-          <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create Task"}
-          </button>
-        </form>
-
-        <section className="admin-task-list">
-          {tasks.map((task) => (
-            <div key={task.id} className="admin-task-item">
-              <TaskCard task={task} />
-
-              <button
-                className="danger-button"
-                onClick={() => handleDeleteTask(task.id)}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+      {error && (
+        <section className="admin-error-box">
+          <p className="error-message">{error}</p>
         </section>
+      )}
+
+      <section className="admin-full-list-card">
+        <div className="admin-list-header">
+          <div>
+            <p className="eyebrow">ALL TASKS</p>
+            <h2>User created tasks</h2>
+          </div>
+
+          <span>{tasks.length} records</span>
+        </div>
+
+        {tasks.length === 0 ? (
+          <div className="empty-card">
+            <h3>No tasks found</h3>
+            <p>When users create tasks, they will appear here.</p>
+          </div>
+        ) : (
+          <div className="admin-task-list">
+            {tasks.map((task) => (
+              <div key={task.id} className="admin-task-item">
+                <TaskCard task={task} />
+
+                <div className="admin-task-actions">
+                  <button
+                    className="danger-button"
+                    onClick={() => handleDeleteTask(task.id)}
+                    disabled={actionLoadingId === task.id}
+                  >
+                    {actionLoadingId === task.id
+                      ? "Deleting..."
+                      : "Delete task"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

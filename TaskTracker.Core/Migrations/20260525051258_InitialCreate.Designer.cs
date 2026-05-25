@@ -12,8 +12,8 @@ using TaskTracker.Core.DataAccess;
 namespace TaskTracker.Core.Migrations
 {
     [DbContext(typeof(TaskTrackerDbContext))]
-    [Migration("20260514160421_IntialMigrationTask")]
-    partial class IntialMigrationTask
+    [Migration("20260525051258_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -116,34 +116,89 @@ namespace TaskTracker.Core.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<bool>("Activity")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("Category")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OwnerId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Priority")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("SharedCount")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("Visibility")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.ToTable("TaskRequests");
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("TaskRequests", (string)null);
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskShare", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Permission")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("SharedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("SharedWithUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SharedWithUserId");
+
+                    b.HasIndex("TaskRequestId", "SharedWithUserId")
+                        .IsUnique();
+
+                    b.ToTable("TaskShares", (string)null);
                 });
 
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.User", b =>
@@ -192,10 +247,17 @@ namespace TaskTracker.Core.Migrations
                     b.Property<bool>("Status")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("UserVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
 
                     b.ToTable("Users", (string)null);
                 });
@@ -245,6 +307,36 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskRequest", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "Owner")
+                        .WithMany("OwnedTaskRequests")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskShare", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "SharedWithUser")
+                        .WithMany("SharedTaskRequests")
+                        .HasForeignKey("SharedWithUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany("TaskShares")
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SharedWithUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.UserOperationClaim", b =>
                 {
                     b.HasOne("TaskTracker.Core.Entities.Concrete.OperationClaim", "OperationClaim")
@@ -269,8 +361,17 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("UserOperationClaims");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskRequest", b =>
+                {
+                    b.Navigation("TaskShares");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.User", b =>
                 {
+                    b.Navigation("OwnedTaskRequests");
+
+                    b.Navigation("SharedTaskRequests");
+
                     b.Navigation("UserOperationClaims");
                 });
 #pragma warning restore 612, 618

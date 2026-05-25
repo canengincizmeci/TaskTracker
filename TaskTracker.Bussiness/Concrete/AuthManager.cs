@@ -1,18 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Results;
+using TaskTracker.Core.Utilities.Security.Cryptography;
 using TaskTracker.Core.Utilities.Security.Hashing;
 using TaskTracker.Core.Utilities.Security.Jwt;
 using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.Bussiness.Concrete
 {
-    public class AuthManager: IAuthService
+    public class AuthManager : IAuthService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITokenHelper _tokenHelper;
@@ -24,7 +26,7 @@ namespace TaskTracker.Bussiness.Concrete
             _tokenHelper = tokenHelper;
             _emailService = emailService;
         }
-        
+
         public async Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user)
         {
             var userOperationClaimRepo = _unitOfWork.GetRepository<UserOperationClaim>();
@@ -60,7 +62,17 @@ namespace TaskTracker.Bussiness.Concrete
 
 
             var claims = await GetUserClaimsAsync(user.Id);
+            Console.WriteLine("=== BEFORE TOKEN CREATE ===");
+            Console.WriteLine($"DTO Email: {dto.Email}");
+            Console.WriteLine($"User Id: {user.Id}");
+            Console.WriteLine($"User Email: {user.Email}");
+            Console.WriteLine($"User Name: {user.FirstName} {user.LastName}");
 
+            foreach (var claim in claims)
+            {
+                Console.WriteLine($"Role Claim: {claim.Name}");
+            }
+            Console.WriteLine("===========================");
 
             var accessToken = _tokenHelper.CreateToken(user, claims);
             var refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
@@ -80,50 +92,126 @@ namespace TaskTracker.Bussiness.Concrete
         }
 
 
+        //public async Task<IDataResult<User>> RegisterAsync(UserForRegisterDto dto)
+        //{
+        //    var userRepo = _unitOfWork.GetRepository<User>();
+        //    var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
+
+
+        //    byte[] passwordHash, passwordSalt;
+        //    HashingHelper.CreatePasswordHash(dto.Password, out passwordHash, out passwordSalt);
+
+        //    var user = new User
+        //    {
+        //        Email = dto.Email,
+        //        FirstName = dto.FirstName,
+        //        LastName = dto.LastName,
+        //        UserName = dto.UserName,
+        //        PasswordHash = passwordHash,
+        //        PasswordSalt = passwordSalt,
+        //        Status = true,
+        //        IsVerified = false,
+        //        IsPhoneVerified = false
+        //    };
+
+        //    await userRepo.AddAsync(user);
+        //    await _unitOfWork.SaveChangesAsync();
+
+
+        //    var code = CodeGenerator.Generate6DigitCode();
+
+
+        //    var verification = new EmailVerification
+        //    {
+        //        UserId = user.Id,
+        //        Code = code
+        //    };
+
+        //    await verificationRepo.AddAsync(verification);
+        //    await _unitOfWork.SaveChangesAsync();
+
+
+        //    await _emailService.SendVerificationCodeAsync(user.Email, code);
+
+
+        //    return new SuccessDataResult<User>(user, "Kayıt başarılı, mailine gönderilen kodu gir.");
+        ////}
         public async Task<IDataResult<User>> RegisterAsync(UserForRegisterDto dto)
         {
             var userRepo = _unitOfWork.GetRepository<User>();
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
 
-
             byte[] passwordHash, passwordSalt;
             HashingHelper.CreatePasswordHash(dto.Password, out passwordHash, out passwordSalt);
 
-            var user = new User
+            var existingUser = await userRepo.GetAsync(u => u.Email == dto.Email);
+
+            User user;
+
+            if (existingUser != null && existingUser.IsVerified)
             {
-                Email = dto.Email,
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                PasswordHash = passwordHash,
-                PasswordSalt = passwordSalt,
-                Status = true,
-                IsVerified = false,
-                IsPhoneVerified = false
-            };
+                return new ErrorDataResult<User>(Messages.UserAlreadyExists);
+            }
 
-            await userRepo.AddAsync(user);
-            await _unitOfWork.SaveChangesAsync();
+            if (existingUser != null && !existingUser.IsVerified)
+            {
+                existingUser.FirstName = dto.FirstName;
+                existingUser.LastName = dto.LastName;
+                existingUser.UserName = dto.UserName;
+                existingUser.PasswordHash = passwordHash;
+                existingUser.PasswordSalt = passwordSalt;
+                existingUser.Status = true;
+                existingUser.IsPhoneVerified = false;
 
+                userRepo.Update(existingUser);
+                user = existingUser;
+            }
+            else
+            {
+                user = new User
+                {
+                    Email = dto.Email,
+                    FirstName = dto.FirstName,
+                    LastName = dto.LastName,
+                    UserName = dto.UserName,
+                    PasswordHash = passwordHash,
+                    PasswordSalt = passwordSalt,
+                    Status = true,
+                    IsVerified = false,
+                    IsPhoneVerified = false
+                };
 
-            //var code = CodeGenerator.Generate6DigitCode();
-            var code = "1234";
+                await userRepo.AddAsync(user);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            var oldVerifications = await verificationRepo.GetAllAsync(v =>
+                v.UserId == user.Id &&
+                !v.IsVerified);
+
+            foreach (var oldVerification in oldVerifications)
+            {
+                oldVerification.IsVerified = true;
+                verificationRepo.Update(oldVerification);
+            }
+
+            var code = CodeGenerator.Generate6DigitCode();
 
             var verification = new EmailVerification
             {
                 UserId = user.Id,
-                Code = code
+                Code = code,
+                IsVerified = false,
+                CreatedAt = DateTime.UtcNow
             };
 
             await verificationRepo.AddAsync(verification);
             await _unitOfWork.SaveChangesAsync();
 
-
-            //await _emailService.SendVerificationCodeAsync(user.Email, code);
-
+            await _emailService.SendVerificationCodeAsync(user.Email, code);
 
             return new SuccessDataResult<User>(user, "Kayıt başarılı, mailine gönderilen kodu gir.");
         }
-
         public async Task<Core.Utilities.Results.IResult> UserExistsAsync(string email)
         {
             var userRepo = _unitOfWork.GetRepository<User>();
@@ -136,12 +224,47 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessResult();
         }
+        //public async Task<Core.Utilities.Results.IResult> VerifyEmailAsync(EmailVerificationDto dto)
+        //{
+        //    var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
+        //    var userRepo = _unitOfWork.GetRepository<User>();
+
+        //    var verification = await verificationRepo.GetAsync(v =>
+        //        v.Code == dto.Code &&
+        //        !v.IsVerified);
+
+        //    if (verification is null)
+        //        return new ErrorResult(Messages.CodeNotFound);
+
+        //    if (verification.CreatedAt.AddMinutes(10) < DateTime.UtcNow)
+        //        return new ErrorResult(Messages.CodeExpired);
+
+        //    var user = await userRepo.GetByIdAsync(verification.UserId);
+        //    if (user is null)
+        //        return new ErrorResult(Messages.UserNotFound);
+
+        //    verification.IsVerified = true;
+        //    user.IsVerified = true;
+        //    await AddUserClaimToUserAsync(user.Id);
+
+        //    await _unitOfWork.SaveChangesAsync();
+
+        //    return new SuccessResult(Messages.EmailIsCorrect);
+        //}
         public async Task<Core.Utilities.Results.IResult> VerifyEmailAsync(EmailVerificationDto dto)
         {
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
             var userRepo = _unitOfWork.GetRepository<User>();
 
+            var user = await userRepo.GetAsync(u =>
+                u.Email == dto.Email &&
+                u.IsVerified == false);
+
+            if (user is null)
+                return new ErrorResult(Messages.UserNotFound);
+
             var verification = await verificationRepo.GetAsync(v =>
+                v.UserId == user.Id &&
                 v.Code == dto.Code &&
                 !v.IsVerified);
 
@@ -151,13 +274,10 @@ namespace TaskTracker.Bussiness.Concrete
             if (verification.CreatedAt.AddMinutes(10) < DateTime.UtcNow)
                 return new ErrorResult(Messages.CodeExpired);
 
-            var user = await userRepo.GetByIdAsync(verification.UserId);
-            if (user is null)
-                return new ErrorResult(Messages.UserNotFound);
-
             verification.IsVerified = true;
             user.IsVerified = true;
 
+            await AddUserClaimToUserAsync(user.Id);
 
             await _unitOfWork.SaveChangesAsync();
 
@@ -219,8 +339,17 @@ namespace TaskTracker.Bussiness.Concrete
         }
 
 
-
-
+        private async Task AddUserClaimToUserAsync(int id)
+        {
+          
+            var userOperationClaimRepo = _unitOfWork.GetRepository<UserOperationClaim>();
+            await userOperationClaimRepo.AddAsync(new UserOperationClaim
+            {
+                UserId = id,
+                OperationClaimId = 2
+            });
+         
+        }
 
 
 

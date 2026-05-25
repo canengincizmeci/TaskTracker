@@ -8,7 +8,7 @@ using TaskTracker.DataAccess.Abstract;
 
 namespace TaskTracker.DataAccess.Concrete.EfCore
 {
-    public class EfUserDal : EfEntityRepositoryBase<User>, IUserDal
+    public class EfUserDal : EfEntityRepositoryBase<User, TaskTrackerDbContext>, IUserDal     
     {
         private readonly TaskTrackerDbContext _driveContext;
 

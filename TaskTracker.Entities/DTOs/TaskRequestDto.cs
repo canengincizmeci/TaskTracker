@@ -7,6 +7,7 @@ namespace TaskTracker.Entities.DTOs
 {
     public class TaskRequestDto:IDto
     {
+      
         public string Title { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
@@ -16,3 +17,4 @@ namespace TaskTracker.Entities.DTOs
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

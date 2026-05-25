@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 
-namespace DrivingCourse.Core.DataAccess.EfCore.Repository
+namespace TaskTracker.Core.DataAccess.EfCore.Repository
 {
     public interface IEntityRepository<T> where T : class, IEntity
     {
@@ -15,9 +15,10 @@ namespace DrivingCourse.Core.DataAccess.EfCore.Repository
                           Func<IQueryable<T>, IQueryable<T>>? include = null);
         Task AddAsync(T entity);
 
-        Task<T> GetByIdAsync(int id);
+        Task<T?> GetByIdAsync(int id);
      
         void Update(T entity);
         void Delete(T entity);
+        Task<bool> AnyAsync(Expression<Func<T, bool>> filter);
     }
 }

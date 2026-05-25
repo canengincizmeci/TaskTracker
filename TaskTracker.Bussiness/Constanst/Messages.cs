@@ -26,6 +26,7 @@ namespace TaskTracker.Bussiness.Constanst
         public static string DataAdded = "Veri başarıyla eklendi";
         public static string DataUpdated = "Veri başarıyla güncellendi";
         public static string DataDeleted = "Veri başarıyla silindi";
+        public static string DataNotFound = "Veri bulunamadı";
 
 
     }

@@ -38,7 +38,13 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             );
 
             var token = new JwtSecurityTokenHandler().WriteToken(jwt);
-
+            Console.WriteLine("=== GENERATED JWT DEBUG ===");
+            Console.WriteLine($"User Id: {user.Id}");
+            Console.WriteLine($"User Email: {user.Email}");
+            Console.WriteLine($"User Name: {user.FirstName} {user.LastName}");
+            Console.WriteLine($"Roles: {string.Join(",", operationClaims.Select(x => x.Name))}");
+            Console.WriteLine($"Token: {token}");
+            Console.WriteLine("===========================");
             return new AccessToken
             {
                 Token = token,

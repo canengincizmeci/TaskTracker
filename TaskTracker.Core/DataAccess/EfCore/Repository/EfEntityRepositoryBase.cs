@@ -4,18 +4,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
-using DrivingCourse.Core.DataAccess.EfCore.Repository;
+using TaskTracker.Core.DataAccess.EfCore.Repository;
+
 
 namespace TaskTracker.Core.DataAccess.EfCore.Repository
 {
    
-    public class EfEntityRepositoryBase<T> : IEntityRepository<T>
+    public class EfEntityRepositoryBase<T,TContext> : IEntityRepository<T>
         where T : class, IEntity
+        where TContext : DbContext
     {
-        protected readonly DbContext _context;
+       
+        protected readonly TContext _context;
         protected readonly DbSet<T> _dbSet;
 
-        public EfEntityRepositoryBase(DbContext context)
+        public EfEntityRepositoryBase(TContext context)
         {
             _context = context;
             _dbSet = context.Set<T>();
@@ -31,10 +34,11 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
             _dbSet.Remove(entity);
         }
 
-        public async Task<List<T>> GetAllAsync(Expression<Func<T, bool>>? filter = null,
-                                        Func<IQueryable<T>, IQueryable<T>>? include = null)
+        public async Task<List<T>> GetAllAsync(
+            Expression<Func<T, bool>>? filter = null,
+            Func<IQueryable<T>, IQueryable<T>>? include = null)
         {
-            IQueryable<T> query = _context.Set<T>();
+            IQueryable<T> query = _dbSet;
 
             if (include != null)
                 query = include(query);
@@ -45,9 +49,11 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
             return await query.ToListAsync();
         }
 
-        public async Task<T?> GetAsync(Expression<Func<T, bool>> filter,Func<IQueryable<T>, IQueryable<T>>? include = null)
+        public async Task<T?> GetAsync(
+            Expression<Func<T, bool>> filter,
+            Func<IQueryable<T>, IQueryable<T>>? include = null)
         {
-            IQueryable<T> query = _context.Set<T>();
+            IQueryable<T> query = _dbSet;
 
             if (include != null)
                 query = include(query);
@@ -55,7 +61,7 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
             return await query.FirstOrDefaultAsync(filter);
         }
 
-        public async Task<T> GetByIdAsync(int id)
+        public async Task<T?> GetByIdAsync(int id)
         {
             return await _dbSet.FindAsync(id);
         }
@@ -64,7 +70,10 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
         {
             _dbSet.Update(entity);
         }
+        public async Task<bool> AnyAsync(Expression<Func<T, bool>> filter)
+        {
+            return await _dbSet.AnyAsync(filter);
+        }
 
-        
     }
 }
