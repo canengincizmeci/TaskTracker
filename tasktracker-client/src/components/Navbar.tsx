@@ -20,7 +20,7 @@ function Navbar() {
         <Link to="/">Home</Link>
 
         {isAuthenticated && (
-          <Link to="/tasks/create" className="create-task-link">
+          <Link to="/tasks/create-task" className="create-task-link">
             + Create Task
           </Link>
         )}

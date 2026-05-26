@@ -7,6 +7,7 @@ import VerifyEmailPage from "../pages/VerifyEmailPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ProfilePage from "../pages/ProfilePage";
 import ProtectedRoute from "./ProtectedRoute";
+import CreateTaskPage from "../pages/CreateTaskPage";
 
 function AppRouter() {
   return (
@@ -33,6 +34,15 @@ function AppRouter() {
             <AdminDashboardPage />
           </ProtectedRoute>
         }
+      />
+
+      <Route
+        path="/tasks/create-task"
+        element={
+          <ProtectedRoute>
+            <CreateTaskPage />
+          </ProtectedRoute>
+        } 
       />
     </Routes>
   );

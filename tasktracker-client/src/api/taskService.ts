@@ -14,12 +14,12 @@ async function getTaskById(id: number): Promise<Task> {
 
 
 async function createTask(data: CreateTaskRequest): Promise<Task> {
-  const response = await axiosClient.post("/TaskRequest", data);
+  const response = await axiosClient.post("/TaskRequest/add-task", data);
   return response.data;
 }
 
 async function deleteTask(id: number): Promise<string> {
-  const response = await axiosClient.post(`/TaskRequest/${id}`);
+  const response = await axiosClient.delete(`/TaskRequest/${id}`);
   return response.data;
 }
 
