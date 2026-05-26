@@ -1986,3 +1986,18 @@ select {
     margin-top: 18px;
   }
 }
+
+.create-task-link {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background-color: #2563eb;
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+  transition: 0.2s ease;
+}
+
+.create-task-link:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+}
