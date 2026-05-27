@@ -29,13 +29,13 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(tr => tr.Activity).IsRequired().HasDefaultValue(true);
 
-
+            builder.Property(tr => tr.DueDate).HasColumnType("date");
 
 
             builder.Property(x => x.Visibility)
                 .IsRequired()
                 .HasConversion<int>();
-            
+
 
             builder.Property(x => x.CreatedAt)
                 .IsRequired()

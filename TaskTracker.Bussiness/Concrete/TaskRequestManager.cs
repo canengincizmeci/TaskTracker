@@ -45,6 +45,7 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = DateTime.UtcNow,
                 SharedCount = 0
             };
+          
 
             await taskRepository.AddAsync(taskRequest);
             await _unitOfWork.SaveChangesAsync();

@@ -17,7 +17,7 @@ namespace TaskTracker.Core.Entities.Concrete
         public TaskStatus Status { get; set; } = TaskStatus.Pending;
         public bool Activity { get; set; }
         public int SharedCount { get; set; }
-        public DateTime? DueDate { get; set; } 
+        public DateOnly? DueDate { get; set; } 
         public TaskVisibility Visibility { get; set; } = TaskVisibility.Private;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public User Owner { get; set; } = null!;

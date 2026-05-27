@@ -14,6 +14,6 @@ namespace TaskTracker.Entities.DTOs
         public string Category { get; set; }
         public TaskPriority Priority { get; set; }
         public TaskStatus Status { get; set; }
-        public DateTime? DueDate { get; set; }
+        public DateOnly? DueDate { get; set; }
     }
 }
