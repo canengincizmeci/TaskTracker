@@ -24,7 +24,7 @@ function CreateTaskPage() {
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
 
@@ -61,19 +61,23 @@ function CreateTaskPage() {
       const result = await createTask(formData);
 
       setSuccessMessage(
-        typeof result === "string"
-          ? result
-          : "Task created successfully."
+        typeof result === "string" ? result : "Task created successfully.",
       );
 
       setTimeout(() => {
         navigate("/");
       }, 1200);
     } catch (err: any) {
+      console.error("Create task error:", err);
+
+      const apiError = err?.response?.data;
+
       setError(
-        err?.response?.data ||
-          err?.response?.data?.message ||
-          "Task could not be created."
+        typeof apiError === "string"
+          ? apiError
+          : apiError?.title
+            ? apiError.title
+            : "Task could not be created.",
       );
     } finally {
       setLoading(false);
@@ -106,10 +110,7 @@ function CreateTaskPage() {
           </div>
         )}
 
-        <form
-          className="create-task-page__form"
-          onSubmit={handleSubmit}
-        >
+        <form className="create-task-page__form" onSubmit={handleSubmit}>
           <div className="create-task-page__field">
             <label htmlFor="title">Title</label>
 
