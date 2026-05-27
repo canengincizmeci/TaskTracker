@@ -23,9 +23,9 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(tr => tr.Category).IsRequired().HasMaxLength(150);
 
-            builder.Property(tr => tr.Priority).IsRequired().HasMaxLength(50);
+            builder.Property(tr => tr.Priority).IsRequired().HasConversion<string>().HasMaxLength(50);
 
-            builder.Property(tr => tr.Status).IsRequired().HasMaxLength(50);
+            builder.Property(tr => tr.Status).IsRequired().HasMaxLength(50).HasConversion<string>().HasMaxLength(50);
 
             builder.Property(tr => tr.Activity).IsRequired().HasDefaultValue(true);
 
