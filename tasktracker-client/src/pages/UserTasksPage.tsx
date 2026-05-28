@@ -1,11 +1,9 @@
-
-
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import type { Task } from "../types/task";
-import {getUserTasks} from "../api/taskService";
+import { getUserTasks } from "../api/taskService";
 
 type LocationState = {
   successMessage?: string;
@@ -26,7 +24,6 @@ function UserTasksPage() {
 
     if (state?.successMessage && !hasShownSuccessToast.current) {
       hasShownSuccessToast.current = true;
-
       toast.success(state.successMessage);
 
       navigate(location.pathname, {
@@ -37,90 +34,118 @@ function UserTasksPage() {
   }, [location, navigate]);
 
   useEffect(() => {
-  const loadTasks = async () => {
-    try {
-      setLoading(true);
-      setError("");
+    const loadTasks = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-      const data = await getUserTasks();
-      setTasks(data);
-    } catch (err) {
-      console.error(err);
+        const data = await getUserTasks();
+        setTasks(data);
+      } catch (err) {
+        console.error(err);
+        setError("Tasks could not be loaded.");
+        toast.error("Tasks could not be loaded.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      setError("Tasks could not be loaded.");
-      toast.error("Tasks could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  loadTasks();
-}, []);
+    loadTasks();
+  }, []);
 
   return (
-    <main className="user-tasks-page">
-      <section className="user-tasks-page__header">
-        <div>
-          <p className="user-tasks-page__eyebrow">Workspace</p>
+    <main className="utasks-page">
+      <section className="utasks-hero">
+        <div className="utasks-hero__content">
+          <p className="utasks-hero__eyebrow">Workspace</p>
 
           <h1>My Tasks</h1>
 
-          <p className="user-tasks-page__description">
-            View and manage the tasks you created.
+          <p>
+            View, track and manage the tasks you created in your personal
+            workspace.
           </p>
         </div>
 
-        <button
-          className="user-tasks-page__create-button"
-          onClick={() => navigate("/tasks/create-task")}
-        >
-          Create Task
-        </button>
+        <div className="utasks-hero__panel">
+          <span>Total Tasks</span>
+          <strong>{tasks.length}</strong>
+
+          <button
+            className="utasks-create-button"
+            onClick={() => navigate("/tasks/create-task")}
+          >
+            Create Task
+          </button>
+        </div>
       </section>
 
-      {loading && (
-        <div className="user-tasks-page__state">Loading tasks...</div>
-      )}
+      <section className="utasks-content-card">
+        <div className="utasks-section-header">
+          <div>
+            <p className="utasks-section-header__label">Task list</p>
+            <h2>Your active workspace</h2>
+          </div>
 
-      {error && (
-        <div className="user-tasks-page__state user-tasks-page__state--error">
-          {error}
+          <span>{tasks.length} task</span>
         </div>
-      )}
 
-      {!loading && !error && tasks.length === 0 && (
-        <div className="user-tasks-page__empty">
-          <h2>No tasks yet</h2>
+        {loading && (
+          <div className="utasks-state">
+            <div className="utasks-spinner" />
+            <span>Loading tasks...</span>
+          </div>
+        )}
 
-          <p>You have not created any tasks yet.</p>
-        </div>
-      )}
+        {error && (
+          <div className="utasks-state utasks-state--error">{error}</div>
+        )}
 
-      {!loading && !error && tasks.length > 0 && (
-        <section className="user-tasks-page__grid">
-          {tasks.map((task) => (
-            <article key={task.id} className="user-tasks-page__card">
-              <div className="user-tasks-page__card-top">
-                <span className="user-tasks-page__priority">
-                  {task.priority}
-                </span>
+        {!loading && !error && tasks.length === 0 && (
+          <div className="utasks-empty">
+            <div className="utasks-empty__icon">✓</div>
 
-                <span className="user-tasks-page__status">{task.status}</span>
-              </div>
+            <h2>No tasks yet</h2>
 
-              <h2>{task.title}</h2>
+            <p>You have not created any tasks yet. Start by creating your first task.</p>
 
-              <p>{task.description}</p>
+            <button
+              className="utasks-create-button"
+              onClick={() => navigate("/tasks/create-task")}
+            >
+              Create First Task
+            </button>
+          </div>
+        )}
 
-              <div className="user-tasks-page__meta">
-                <span>{task.category}</span>
+        {!loading && !error && tasks.length > 0 && (
+          <section className="utasks-grid">
+            {tasks.map((task) => (
+              <article key={task.id} className="utasks-card">
+                <div className="utasks-card__top">
+                  <span className="utasks-pill utasks-pill--priority">
+                    {task.priority}
+                  </span>
 
-                {task.dueDate && <span>{task.dueDate}</span>}
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
+                  <span className="utasks-pill utasks-pill--status">
+                    {task.status}
+                  </span>
+                </div>
+
+                <h2>{task.title}</h2>
+
+                <p>{task.description}</p>
+
+                <div className="utasks-card__meta">
+                  <span>{task.category}</span>
+
+                  {task.dueDate && <span>{task.dueDate}</span>}
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+      </section>
     </main>
   );
 }
