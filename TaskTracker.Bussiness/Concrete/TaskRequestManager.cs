@@ -19,11 +19,13 @@ namespace TaskTracker.Bussiness.Concrete
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITaskShareDal _taskShareDal;
+        private readonly ITaskRequestDal _taskRequestDal;
 
-        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal)
+        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
+            _taskRequestDal = taskRequestDal;
         }
 
         [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
@@ -45,7 +47,7 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = DateTime.UtcNow,
                 SharedCount = 0
             };
-          
+
 
             await taskRepository.AddAsync(taskRequest);
             await _unitOfWork.SaveChangesAsync();
@@ -170,6 +172,62 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessResult(Messages.DataUpdated);
         }
+          
+
+        public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId)
+        {
+            var tasks = await _taskRequestDal.GetTasksByUserIdAsync(userId);
+
+            var mappedTasks = tasks.Select(task =>
+            {
+                var share = task.TaskShares
+                    .FirstOrDefault(ts => ts.SharedWithUserId == userId);
+
+                var isOwner = task.OwnerId == userId;
+
+                return new GetTasksDto
+                {
+                    Id = task.Id,
+                    OwnerId = task.OwnerId,
+
+                    Title = task.Title,
+                    Description = task.Description,
+                    Category = task.Category,
+
+                    Priority = task.Priority.ToString(),
+                    Status = task.Status.ToString(),
+
+                    DueDate = task.DueDate,
+
+                    IsOwner = isOwner,
+                    IsSharedWithMe = share != null,
+
+                    CanView = isOwner || share != null,
+
+                    CanEdit =
+                        isOwner ||
+                        (share != null &&
+                         share.Permission == TaskPermission.Edit),
+
+                    CanShare = isOwner,
+
+                    Visibility = task.Visibility.ToString(),
+
+                    CreatedAt = task.CreatedAt,
+
+                    SharedCount = task.SharedCount
+                };
+            }).ToList();
+
+            return new SuccessDataResult<List<GetTasksDto>>(
+                mappedTasks,
+                Messages.DataListed
+            );
+        }
+
+
+
+
         public async Task<IDataResult<List<TaskRequest>>> GetAllTasks()
         {
             var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
@@ -178,5 +236,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessDataResult<List<TaskRequest>>(tasks);
         }
+
+        
     }
 }

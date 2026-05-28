@@ -104,5 +104,18 @@ namespace TaskTracker.API.Controllers
             return Ok(result.Message);
         }
 
+        [Authorize(Roles = "User")]
+        [HttpGet("list-user-tasks")]
+        public async Task<IActionResult> ListUserTasks()
+        {
+            var currentUserId = _currentUserService.UserId;
+            var result = await _taskRequestService.GetTasksByUserId(currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Data);
+        }
+
     }
 }
