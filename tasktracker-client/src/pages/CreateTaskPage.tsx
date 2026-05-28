@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { createTask } from "../api/taskService";
 import type { CreateTaskRequest } from "../types/CreateTaskRequest";
+import toast from "react-hot-toast";
 
 function CreateTaskPage() {
   const navigate = useNavigate();
@@ -58,27 +59,37 @@ function CreateTaskPage() {
     try {
       setLoading(true);
 
-      const result = await createTask(formData);
+      // const result = await createTask(formData);
 
-      setSuccessMessage(
-        typeof result === "string" ? result : "Task created successfully.",
-      );
+      // const message =
+      //   typeof result === "string" ? result : "Task created successfully.";
 
-      setTimeout(() => {
-        navigate("/");
-      }, 1200);
+      await createTask(formData);
+
+      const message = "Task created successfully.";
+
+      setSuccessMessage(message);
+      // toast.success(message);
+
+      navigate("/tasks/user-tasks", {
+        state: {
+          successMessage: message,
+        },
+      });
     } catch (err: any) {
       console.error("Create task error:", err);
 
       const apiError = err?.response?.data;
 
-      setError(
+      const message =
         typeof apiError === "string"
           ? apiError
           : apiError?.title
             ? apiError.title
-            : "Task could not be created.",
-      );
+            : "Task could not be created.";
+
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

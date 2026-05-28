@@ -8,6 +8,7 @@ import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ProfilePage from "../pages/ProfilePage";
 import ProtectedRoute from "./ProtectedRoute";
 import CreateTaskPage from "../pages/CreateTaskPage";
+import UserTasksPage from "../pages/UserTasksPage";
 
 function AppRouter() {
   return (
@@ -17,7 +18,6 @@ function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
-
       <Route
         path="/profile"
         element={
@@ -42,7 +42,16 @@ function AppRouter() {
           <ProtectedRoute>
             <CreateTaskPage />
           </ProtectedRoute>
-        } 
+        }
+      />
+
+      <Route
+        path="/tasks/user-tasks"
+        element={
+          <ProtectedRoute>
+            <UserTasksPage />
+          </ProtectedRoute>
+        }
       />
     </Routes>
   );

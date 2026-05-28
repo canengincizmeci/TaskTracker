@@ -7,4 +7,5 @@ export interface Task {
   status: string;
   activity: boolean;
   createdAt: string;
+  dueDate: string | null;
 }
