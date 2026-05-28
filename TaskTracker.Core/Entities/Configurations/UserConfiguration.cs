@@ -24,6 +24,10 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.HasIndex(u => u.Email).IsUnique();
 
+            builder.Property(u => u.UserName).IsRequired().HasMaxLength(50);
+
+            builder.HasIndex(u => u.UserName).IsUnique();
+
             builder.Property(u => u.PasswordSalt).IsRequired();
 
             builder.Property(u => u.PasswordHash).IsRequired();
