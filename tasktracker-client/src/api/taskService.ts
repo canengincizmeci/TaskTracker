@@ -21,4 +21,11 @@ async function deleteTask(id: number): Promise<string> {
   const response = await axiosClient.delete(`/TaskRequest/delete-task/${id}`);
   return response.data;
 }
-export { getAllTasks, getTaskById, createTask, deleteTask };
+
+async function getUserTasks(): Promise<Task[]> {
+  const response = await axiosClient.get("/TaskRequest/list-user-tasks");
+  return response.data;
+}
+
+
+export { getAllTasks, getTaskById, createTask, deleteTask,getUserTasks };
