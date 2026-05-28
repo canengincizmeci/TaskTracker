@@ -14,10 +14,8 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<TaskRequest>> GetTaskById(int taskId, int currentUserId);
         Task<IResult> DeleteTask(int taskId, int currentUserId);
         Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId);
-        Task<IResult> ShareTask(int taskId, int ownerUserId, int sharedUserId, TaskPermission permission);
         Task<IDataResult<List<TaskRequest>>> GetAllTasks();
         Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId);
-
 
 
 

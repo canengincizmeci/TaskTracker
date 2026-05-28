@@ -92,52 +92,7 @@ namespace TaskTracker.Bussiness.Concrete
             return new SuccessDataResult<TaskRequest>(task);
         }
 
-        public async Task<IResult> ShareTask(int taskId, int ownerUserId, int sharedUserId, TaskPermission permission)
-        {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var userRepository = _unitOfWork.GetRepository<User>();
-
-            var user = await userRepository.GetByIdAsync(sharedUserId);
-            if (user == null)
-                return new ErrorResult(Messages.UserNotFound);
-
-            var task = await taskRepository.GetByIdAsync(taskId);
-            if (task == null || !task.Activity)
-                return new ErrorResult(Messages.DataNotFound);
-
-            if (task.OwnerId != ownerUserId)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (ownerUserId == sharedUserId)
-                return new ErrorResult("Task kendinle paylaşılamaz.");
-
-            var alreadyShared = await _taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == sharedUserId);
-
-            if (alreadyShared != null)
-            {
-                alreadyShared.Permission = permission;
-                alreadyShared.SharedAt = DateTime.UtcNow;
-
-                _taskShareDal.Update(alreadyShared);
-            }
-            else
-            {
-                var newShare = new TaskShare
-                {
-                    TaskRequestId = taskId,
-                    SharedWithUserId = sharedUserId,
-                    Permission = permission,
-                    SharedAt = DateTime.UtcNow
-                };
-
-                await _taskShareDal.AddAsync(newShare);
-            }
-
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.DataAdded);
-        }
+        
 
         [ValidationAspect(typeof(UpdateTaskRequestDtoValidator))]
         public async Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId)
