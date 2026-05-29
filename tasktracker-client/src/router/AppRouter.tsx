@@ -10,11 +10,12 @@ import ProtectedRoute from "./ProtectedRoute";
 import CreateTaskPage from "../pages/CreateTaskPage";
 import UserTasksPage from "../pages/UserTasksPage";
 
+
 function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/task/:id" element={<TaskDetailPage />} />
+      
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -53,6 +54,15 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
+        <Route
+         path="/tasks/task-detail/:taskId" 
+         element={
+          <ProtectedRoute>
+            <TaskDetailPage />
+          </ProtectedRoute>
+        }
+      />
+
     </Routes>
   );
 }
