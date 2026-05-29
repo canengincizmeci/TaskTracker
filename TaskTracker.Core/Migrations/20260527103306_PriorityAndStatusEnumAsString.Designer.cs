@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TaskTracker.Core.DataAccess;
@@ -11,9 +12,11 @@ using TaskTracker.Core.DataAccess;
 namespace TaskTracker.Core.Migrations
 {
     [DbContext(typeof(TaskTrackerDbContext))]
-    partial class TaskTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260527103306_PriorityAndStatusEnumAsString")]
+    partial class PriorityAndStatusEnumAsString
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -132,8 +135,8 @@ namespace TaskTracker.Core.Migrations
                         .HasMaxLength(10000)
                         .HasColumnType("character varying(10000)");
 
-                    b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date");
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("OwnerId")
                         .HasColumnType("integer");
@@ -177,18 +180,12 @@ namespace TaskTracker.Core.Migrations
                     b.Property<int>("Permission")
                         .HasColumnType("integer");
 
-                    b.Property<DateTime?>("RespondedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime>("SharedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<int>("SharedWithUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
                         .HasColumnType("integer");
 
                     b.Property<int>("TaskRequestId")

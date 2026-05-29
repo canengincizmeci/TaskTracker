@@ -48,7 +48,15 @@ namespace TaskTracker.Bussiness.DependencyResolvers.Autofac
                 .As<IHttpContextAccessor>()
                 .SingleInstance();
 
-          
+            builder.RegisterType<TaskRequestManager>().As<ITaskRequestService>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfTaskShareDal>().As<ITaskShareDal>().InstancePerLifetimeScope();
+
+            builder.RegisterType<EfTaskRequestDal>().As<ITaskRequestDal>().InstancePerLifetimeScope();
+
+
+
+
 
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
 

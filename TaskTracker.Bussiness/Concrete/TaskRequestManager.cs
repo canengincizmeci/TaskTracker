@@ -19,11 +19,13 @@ namespace TaskTracker.Bussiness.Concrete
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITaskShareDal _taskShareDal;
+        private readonly ITaskRequestDal _taskRequestDal;
 
-        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal)
+        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
+            _taskRequestDal = taskRequestDal;
         }
 
         [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
@@ -45,6 +47,7 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = DateTime.UtcNow,
                 SharedCount = 0
             };
+
 
             await taskRepository.AddAsync(taskRequest);
             await _unitOfWork.SaveChangesAsync();
@@ -73,68 +76,34 @@ namespace TaskTracker.Bussiness.Concrete
             return new SuccessResult(Messages.DataUpdated);
         }
 
-        public async Task<IDataResult<TaskRequest>> GetTaskById(int taskId, int currentUserId)
+        public async Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId)
         {
             var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
             var task = await taskRepository.GetByIdAsync(taskId);
 
             if (task == null || !task.Activity)
-                return new ErrorDataResult<TaskRequest>(Messages.DataNotFound);
+                return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
 
             var canView = task.OwnerId == currentUserId || task.Visibility == TaskVisibility.Public || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View);
 
             if (!canView)
-                return new ErrorDataResult<TaskRequest>(Messages.AuthorizationDenied);
+                return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
 
-            return new SuccessDataResult<TaskRequest>(task);
+            return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
+            {
+                Id = task.Id,
+                OwnerId = task.OwnerId,
+                Title = task.Title,
+                Description = task.Description,
+                Category = task.Category,
+                Priority = task.Priority.ToString(),
+                Status = task.Status.ToString(),
+                DueDate = task.DueDate,
+                
+            });
         }
 
-        public async Task<IResult> ShareTask(int taskId, int ownerUserId, int sharedUserId, TaskPermission permission)
-        {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var userRepository = _unitOfWork.GetRepository<User>();
-
-            var user = await userRepository.GetByIdAsync(sharedUserId);
-            if (user == null)
-                return new ErrorResult(Messages.UserNotFound);
-
-            var task = await taskRepository.GetByIdAsync(taskId);
-            if (task == null || !task.Activity)
-                return new ErrorResult(Messages.DataNotFound);
-
-            if (task.OwnerId != ownerUserId)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (ownerUserId == sharedUserId)
-                return new ErrorResult("Task kendinle paylaşılamaz.");
-
-            var alreadyShared = await _taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == sharedUserId);
-
-            if (alreadyShared != null)
-            {
-                alreadyShared.Permission = permission;
-                alreadyShared.SharedAt = DateTime.UtcNow;
-
-                _taskShareDal.Update(alreadyShared);
-            }
-            else
-            {
-                var newShare = new TaskShare
-                {
-                    TaskRequestId = taskId,
-                    SharedWithUserId = sharedUserId,
-                    Permission = permission,
-                    SharedAt = DateTime.UtcNow
-                };
-
-                await _taskShareDal.AddAsync(newShare);
-            }
-
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.DataAdded);
-        }
+        
 
         [ValidationAspect(typeof(UpdateTaskRequestDtoValidator))]
         public async Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId)
@@ -169,6 +138,62 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessResult(Messages.DataUpdated);
         }
+          
+
+        public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId)
+        {
+            var tasks = await _taskRequestDal.GetTasksByUserIdAsync(userId);
+
+            var mappedTasks = tasks.Select(task =>
+            {
+                var share = task.TaskShares
+                    .FirstOrDefault(ts => ts.SharedWithUserId == userId);
+
+                var isOwner = task.OwnerId == userId;
+
+                return new GetTasksDto
+                {
+                    Id = task.Id,
+                    OwnerId = task.OwnerId,
+
+                    Title = task.Title,
+                    Description = task.Description,
+                    Category = task.Category,
+
+                    Priority = task.Priority.ToString(),
+                    Status = task.Status.ToString(),
+
+                    DueDate = task.DueDate,
+
+                    IsOwner = isOwner,
+                    IsSharedWithMe = share != null,
+
+                    CanView = isOwner || share != null,
+
+                    CanEdit =
+                        isOwner ||
+                        (share != null &&
+                         share.Permission == TaskPermission.Edit),
+
+                    CanShare = isOwner,
+
+                    Visibility = task.Visibility.ToString(),
+
+                    CreatedAt = task.CreatedAt,
+
+                    SharedCount = task.SharedCount
+                };
+            }).ToList();
+
+            return new SuccessDataResult<List<GetTasksDto>>(
+                mappedTasks,
+                Messages.DataListed
+            );
+        }
+
+
+
+
         public async Task<IDataResult<List<TaskRequest>>> GetAllTasks()
         {
             var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
@@ -177,5 +202,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessDataResult<List<TaskRequest>>(tasks);
         }
+
+        
     }
 }

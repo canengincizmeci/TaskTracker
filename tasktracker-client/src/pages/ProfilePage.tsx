@@ -1,37 +1,3 @@
-// import { useAuth } from "../context/AuthContext";
-
-// function ProfilePage() {
-//   const { user } = useAuth();
-
-//   return (
-//     <main className="page public-page">
-//       <section className="auth-card">
-//         <p className="eyebrow">MY ACCOUNT</p>
-//         <h1>Profile</h1>
-
-//         <div className="profile-info">
-//           <div>
-//             <span>Name</span>
-//             <strong>{user?.name ?? "-"}</strong>
-//           </div>
-
-//           <div>
-//             <span>Email</span>
-//             <strong>{user?.email ?? "-"}</strong>
-//           </div>
-
-//           <div>
-//             <span>Role</span>
-//             <strong>{user?.role ?? "-"}</strong>
-//           </div>
-//         </div>
-//       </section>
-//     </main>
-//   );
-// }
-
-// export default ProfilePage;
-
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -64,7 +30,7 @@ function ProfilePage() {
               Dashboard
             </Link>
 
-            <Link to="/my-tasks" className="primary-button">
+            <Link to="/tasks/user-tasks" className="primary-button">
               My Tasks
             </Link>
 
@@ -119,7 +85,7 @@ function ProfilePage() {
               </div>
 
               <div className="profile-link-list">
-                <Link to="/my-tasks">
+                <Link to="tasks/user-tasks">
                   <div>
                     <strong>My Tasks</strong>
                     <span>Tasks you created and manage.</span>

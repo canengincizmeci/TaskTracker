@@ -27,6 +27,11 @@ namespace TaskTracker.Bussiness.Constanst
         public static string DataUpdated = "Veri başarıyla güncellendi";
         public static string DataDeleted = "Veri başarıyla silindi";
         public static string DataNotFound = "Veri bulunamadı";
+        public static string DataListed = "Veri başarıyla listelendi";
+        public static string TaskShared = "Görev başarıyla paylaşıldı";
+        public static string TaskAlreadyShared = "Görev zaten bu kullanıcıyla paylaşılmış";
+        public static string UserCannotShareTaskWithSelf = "Görevi kendinle paylaşamazsın";
+
 
 
     }

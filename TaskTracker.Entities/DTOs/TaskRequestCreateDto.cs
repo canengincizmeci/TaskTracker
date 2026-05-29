@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using TaskTracker.Core.Utilities.Enums;
+using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
 namespace TaskTracker.Entities.DTOs
 {
@@ -10,8 +12,8 @@ namespace TaskTracker.Entities.DTOs
         public string Title { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
-        public string Priority { get; set; }
-        public string Status { get; set; }
-        public DateTime? DueDate { get; set; }
+        public TaskPriority Priority { get; set; }
+        public TaskStatus Status { get; set; }
+        public DateOnly? DueDate { get; set; }
     }
 }

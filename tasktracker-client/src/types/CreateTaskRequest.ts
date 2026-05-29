@@ -4,4 +4,5 @@ export interface CreateTaskRequest {
   category: string;
   priority: string;
   status: string;
-};
+  dueDate: string | null;
+}

@@ -19,7 +19,15 @@ function Navbar() {
       <nav className="navbar-links">
         <Link to="/">Home</Link>
 
-        {user?.role === "Admin" && <Link to="/admin-dashboard">Dashboard</Link>}
+        {isAuthenticated && (
+          <Link to="/tasks/create-task" className="create-task-link">
+            + Create Task
+          </Link>
+        )}
+
+        {user?.role === "Admin" && (
+          <Link to="/admin-dashboard">Dashboard</Link>
+        )}
 
         {!isAuthenticated ? (
           <>

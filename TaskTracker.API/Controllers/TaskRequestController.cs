@@ -28,11 +28,7 @@ namespace TaskTracker.API.Controllers
         [Authorize(Roles = "Admin,User")]
         public async Task<IActionResult> GetTaskRequest(int id)
         {
-            //int? currentUser =  _currentUserService.UserId;
-            //if (!currentUser.HasValue)
-            //{
-            //    return BadRequest(Messages.UserNotFound);
-            //}
+
 
             var currentUserId = _currentUserService.UserId;
 
@@ -50,11 +46,7 @@ namespace TaskTracker.API.Controllers
         [HttpGet("list-alltasks")]
         public async Task<IActionResult> ListAllTaskRequests()
         {
-            //int? currentUser = _currentUserService.UserId;
-            //if (!currentUser.HasValue)
-            //{
-            //    return BadRequest(Messages.UserNotFound);
-            //}
+
 
             var result = await _taskRequestService.GetAllTasks();
 
@@ -63,16 +55,12 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Data);
         }
-         
+
         [Authorize(Roles = "User")]
         [HttpPost("add-task")]
-        public async Task<IActionResult> AddTaskRequest(TaskRequestCreateDto taskRequestDto)
+        public async Task<IActionResult> AddTaskRequest([FromBody] TaskRequestCreateDto taskRequestDto)
         {
-            //int? currentUserId = _currentUserService.UserId;
-            //if (!currentUserId.HasValue)
-            //{
-            //    return BadRequest(Messages.UserNotFound);
-            //}
+
 
             var currentUserId = _currentUserService.UserId;
 
@@ -90,11 +78,6 @@ namespace TaskTracker.API.Controllers
         [HttpDelete("delete-task/{id}")]
         public async Task<IActionResult> DeleteTaskRequest(int id)
         {
-            //int? currentUserId = _currentUserService.UserId;
-            //if (!currentUserId.HasValue)
-            //{
-            //    return BadRequest(Messages.UserNotFound);
-            //}
 
             var currentUserId = _currentUserService.UserId;
 
@@ -110,11 +93,6 @@ namespace TaskTracker.API.Controllers
         [HttpPost("update-task")]
         public async Task<IActionResult> UpdateTaskRequest(UpdateTaskRequestDto taskRequestDto)
         {
-            //int? currentUserId = _currentUserService.UserId;
-            //if (!currentUserId.HasValue)
-            //{
-            //    return BadRequest(Messages.UserNotFound);
-            //}
 
             var currentUserId = _currentUserService.UserId;
 
@@ -125,6 +103,19 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
         }
-        
+
+        [Authorize(Roles = "User")]
+        [HttpGet("list-user-tasks")]
+        public async Task<IActionResult> ListUserTasks()
+        {
+            var currentUserId = _currentUserService.UserId;
+            var result = await _taskRequestService.GetTasksByUserId(currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Data);
+        }
+
     }
 }

@@ -5,7 +5,7 @@ import type { Task } from "../types/task";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 function TaskDetailPage() {
-  const { id } = useParams();
+  const { taskId } = useParams();
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -13,19 +13,22 @@ function TaskDetailPage() {
   useEffect(() => {
     const loadTask = async () => {
       try {
-        if (!id) return;
+        if (!taskId) {
+          setLoading(false);
+          return;
+        }
 
-        const data = await getTaskById(Number(id));
+        const data = await getTaskById(Number(taskId));
         setTask(data);
       } catch (error) {
-        // console.log(error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
     };
 
     loadTask();
-  }, [id]);
+  }, [taskId]);
 
   if (loading) {
     return (
@@ -46,8 +49,8 @@ function TaskDetailPage() {
             access it.
           </p>
 
-          <Link to="/" className="primary-button">
-            Return Home
+          <Link to="/tasks/user-tasks" className="primary-button">
+            Return My Tasks
           </Link>
         </section>
       </main>
@@ -76,8 +79,7 @@ function TaskDetailPage() {
 
               <span
                 className={`priority-pill ${
-                  task.priority === "Critical" ||
-                  task.priority === "High"
+                  task.priority === "Critical" || task.priority === "High"
                     ? "priority-high"
                     : task.priority === "Medium"
                     ? "priority-medium"
@@ -89,11 +91,11 @@ function TaskDetailPage() {
             </div>
 
             <div className="task-detail-actions">
-              <button className="secondary-button">
+              <button type="button" className="secondary-button">
                 Share Task
               </button>
 
-              <button className="primary-button">
+              <button type="button" className="primary-button">
                 Edit Task
               </button>
             </div>
@@ -101,9 +103,7 @@ function TaskDetailPage() {
 
           <h1>{task.title}</h1>
 
-          <p className="task-detail-description">
-            {task.description}
-          </p>
+          <p className="task-detail-description">{task.description}</p>
 
           <section className="task-detail-section">
             <div className="task-section-header">
@@ -116,23 +116,12 @@ function TaskDetailPage() {
             <div className="shared-users-list">
               <div className="shared-user-card">
                 <div className="shared-user-avatar">
-                  <span>CE</span>
+                  <span>ME</span>
                 </div>
 
                 <div>
-                  <strong>Can Engin</strong>
-                  <span>Owner</span>
-                </div>
-              </div>
-
-              <div className="shared-user-card">
-                <div className="shared-user-avatar secondary-avatar">
-                  <span>AK</span>
-                </div>
-
-                <div>
-                  <strong>Ahmet Kaya</strong>
-                  <span>Edit access</span>
+                  <strong>You</strong>
+                  <span>{task.isOwner ? "Owner" : "Member"}</span>
                 </div>
               </div>
             </div>
@@ -148,24 +137,18 @@ function TaskDetailPage() {
 
             <div className="activity-timeline">
               <div className="timeline-item">
-                <strong>Task created</strong>
-                <span>
-                  The task was added to the workspace.
-                </span>
+                <strong>Task loaded</strong>
+                <span>The task details were loaded successfully.</span>
               </div>
 
               <div className="timeline-item">
-                <strong>Status updated</strong>
-                <span>
-                  Task status changed to {task.status}.
-                </span>
+                <strong>Current status</strong>
+                <span>Task status is {task.status}.</span>
               </div>
 
               <div className="timeline-item">
-                <strong>Collaboration enabled</strong>
-                <span>
-                  Shared task structure is ready for future updates.
-                </span>
+                <strong>Collaboration</strong>
+                <span>Task sharing structure is ready for next updates.</span>
               </div>
             </div>
           </section>
@@ -193,16 +176,27 @@ function TaskDetailPage() {
               <strong>{task.category}</strong>
             </div>
 
-            <div className="task-sidebar-info">
-              <span>Created</span>
-              <strong>
-                {new Date(task.createdAt).toLocaleDateString("tr-TR")}
-              </strong>
-            </div>
+            {task.createdAt && (
+              <div className="task-sidebar-info">
+                <span>Created</span>
+                <strong>
+                  {new Date(task.createdAt).toLocaleDateString("tr-TR")}
+                </strong>
+              </div>
+            )}
+
+            {task.dueDate && (
+              <div className="task-sidebar-info">
+                <span>Due Date</span>
+                <strong>
+                  {new Date(task.dueDate).toLocaleDateString("tr-TR")}
+                </strong>
+              </div>
+            )}
 
             <div className="task-sidebar-info">
               <span>Visibility</span>
-              <strong>Private</strong>
+              <strong>{task.visibility ?? "Private"}</strong>
             </div>
           </div>
 
@@ -213,13 +207,9 @@ function TaskDetailPage() {
             </div>
 
             <div className="task-sidebar-links">
-              <Link to="/">Dashboard</Link>
-
+              <Link to="/tasks/user-tasks">My Tasks</Link>
               <Link to="/profile">Profile</Link>
-
-              <Link to="/shared-tasks">Shared Tasks</Link>
-
-              <Link to="/create-task">Create Task</Link>
+              <Link to="/tasks/create-task">Create Task</Link>
             </div>
           </div>
         </aside>

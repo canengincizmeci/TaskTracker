@@ -12,7 +12,9 @@ namespace TaskTracker.Core.Entities.Concrete
         public int TaskRequestId { get; set; }
         public int SharedWithUserId { get; set; }
         public TaskPermission Permission { get; set; } = TaskPermission.View;
-        public DateTime? SharedAt { get; set; } 
+        public TaskShareStatus Status { get; set; } = TaskShareStatus.Pending;
+        public DateTime? SharedAt { get; set; }
+        public DateTime? RespondedAt { get; set; }
         public TaskRequest TaskRequest { get; set; } = null!;
         public User SharedWithUser { get; set; } = null!;
     }

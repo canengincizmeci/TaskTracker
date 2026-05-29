@@ -7,4 +7,11 @@ export interface Task {
   status: string;
   activity: boolean;
   createdAt: string;
+  dueDate: string | null;
+  isOwner?: boolean;
+  isSharedWithMe?: boolean;
+  canView?: boolean;
+  canEdit?: boolean;
+  canShare?: boolean;
+  visibility?: string;
 }
