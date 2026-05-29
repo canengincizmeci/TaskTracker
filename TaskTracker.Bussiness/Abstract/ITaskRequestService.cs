@@ -11,7 +11,7 @@ namespace TaskTracker.Bussiness.Abstract
     public interface ITaskRequestService 
     {
         Task<IResult> AddTaskRequestAsync(TaskRequestCreateDto dto,int currentUserId);
-        Task<IDataResult<TaskRequest>> GetTaskById(int taskId, int currentUserId);
+        Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId);
         Task<IResult> DeleteTask(int taskId, int currentUserId);
         Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId);
         Task<IDataResult<List<TaskRequest>>> GetAllTasks();

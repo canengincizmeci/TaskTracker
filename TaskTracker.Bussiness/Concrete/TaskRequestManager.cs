@@ -76,20 +76,31 @@ namespace TaskTracker.Bussiness.Concrete
             return new SuccessResult(Messages.DataUpdated);
         }
 
-        public async Task<IDataResult<TaskRequest>> GetTaskById(int taskId, int currentUserId)
+        public async Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId)
         {
             var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
             var task = await taskRepository.GetByIdAsync(taskId);
 
             if (task == null || !task.Activity)
-                return new ErrorDataResult<TaskRequest>(Messages.DataNotFound);
+                return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
 
             var canView = task.OwnerId == currentUserId || task.Visibility == TaskVisibility.Public || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View);
 
             if (!canView)
-                return new ErrorDataResult<TaskRequest>(Messages.AuthorizationDenied);
+                return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
 
-            return new SuccessDataResult<TaskRequest>(task);
+            return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
+            {
+                Id = task.Id,
+                OwnerId = task.OwnerId,
+                Title = task.Title,
+                Description = task.Description,
+                Category = task.Category,
+                Priority = task.Priority.ToString(),
+                Status = task.Status.ToString(),
+                DueDate = task.DueDate,
+                
+            });
         }
 
         
