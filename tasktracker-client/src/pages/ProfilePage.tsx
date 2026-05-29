@@ -30,7 +30,7 @@ function ProfilePage() {
               Dashboard
             </Link>
 
-            <Link to="/my-tasks" className="primary-button">
+            <Link to="/tasks/user-tasks" className="primary-button">
               My Tasks
             </Link>
 

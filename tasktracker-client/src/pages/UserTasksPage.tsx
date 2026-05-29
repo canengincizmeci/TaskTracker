@@ -54,7 +54,7 @@ function UserTasksPage() {
   }, []);
 
   const goToTaskDetail = (taskId: number) => {
-    navigate(`/tasks/${taskId}`);
+    navigate(`/tasks/task-detail/${taskId}`);
   };
 
   return (
