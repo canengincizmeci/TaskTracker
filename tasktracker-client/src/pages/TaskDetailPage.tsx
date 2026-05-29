@@ -10,22 +10,37 @@ function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
 
+  import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { getTaskById } from "../api/taskService";
+import type { Task } from "../types/task";
+import LoadingSpinner from "../components/LoadingSpinner";
+
+function TaskDetailPage() {
+  const { taskId } = useParams();
+
+  const [task, setTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const loadTask = async () => {
       try {
-        if (!id) return;
+        if (!taskId) return;
 
-        const data = await getTaskById(Number(id));
+        const data = await getTaskById(Number(taskId));
+
+        console.log("Loaded Task:", data);
+
         setTask(data);
       } catch (error) {
-        // console.log(error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
     };
 
     loadTask();
-  }, [id]);
+  }, [taskId]);
 
   if (loading) {
     return (

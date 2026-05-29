@@ -8,4 +8,10 @@ export interface Task {
   activity: boolean;
   createdAt: string;
   dueDate: string | null;
+  isOwner?: boolean;
+  isSharedWithMe?: boolean;
+  canView?: boolean;
+  canEdit?: boolean;
+  canShare?: boolean;
+  visibility?: string;
 }
