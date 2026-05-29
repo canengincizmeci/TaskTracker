@@ -53,6 +53,10 @@ function UserTasksPage() {
     loadTasks();
   }, []);
 
+  const goToTaskDetail = (taskId: number) => {
+    navigate(`/tasks/${taskId}`);
+  };
+
   return (
     <main className="utasks-page">
       <section className="utasks-hero">
@@ -107,7 +111,10 @@ function UserTasksPage() {
 
             <h2>No tasks yet</h2>
 
-            <p>You have not created any tasks yet. Start by creating your first task.</p>
+            <p>
+              You have not created any tasks yet. Start by creating your first
+              task.
+            </p>
 
             <button
               className="utasks-create-button"
@@ -121,7 +128,18 @@ function UserTasksPage() {
         {!loading && !error && tasks.length > 0 && (
           <section className="utasks-grid">
             {tasks.map((task) => (
-              <article key={task.id} className="utasks-card">
+              <article
+                key={task.id}
+                className="utasks-card"
+                onClick={() => goToTaskDetail(task.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    goToTaskDetail(task.id);
+                  }
+                }}
+              >
                 <div className="utasks-card__top">
                   <span className="utasks-pill utasks-pill--priority">
                     {task.priority}
@@ -140,6 +158,18 @@ function UserTasksPage() {
                   <span>{task.category}</span>
 
                   {task.dueDate && <span>{task.dueDate}</span>}
+                </div>
+
+                <div className="utasks-card__footer">
+                  <button
+                    className="utasks-detail-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      goToTaskDetail(task.id);
+                    }}
+                  >
+                    View Details →
+                  </button>
                 </div>
               </article>
             ))}

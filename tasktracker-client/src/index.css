@@ -2469,3 +2469,33 @@ select {
     letter-spacing: -1.6px;
   }
 }
+
+.utasks-card {
+  cursor: pointer;
+}
+
+.utasks-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 4px;
+}
+
+.utasks-card__footer {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.utasks-detail-button {
+  border: none;
+  background: transparent;
+  color: var(--brand);
+  font-weight: 900;
+  cursor: pointer;
+  padding: 0;
+}
+
+.utasks-detail-button:hover {
+  color: #1d4ed8;
+}
+
+
