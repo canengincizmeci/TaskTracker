@@ -62,7 +62,7 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
-      <Routes
+      <Route
         path="/tasks/task-share/:taskId"
         element={
           <ProtectedRoute>
