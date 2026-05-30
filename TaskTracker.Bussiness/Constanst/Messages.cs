@@ -31,6 +31,8 @@ namespace TaskTracker.Bussiness.Constanst
         public static string TaskShared = "Görev başarıyla paylaşıldı";
         public static string TaskAlreadyShared = "Görev zaten bu kullanıcıyla paylaşılmış";
         public static string UserCannotShareTaskWithSelf = "Görevi kendinle paylaşamazsın";
+        public static string TaskShareInvitationAlreadySent = "Task share invitation has already been sent.";
+        public static string TaskShareInvitationSent = "Task share invitation sent successfully.";
 
 
 
