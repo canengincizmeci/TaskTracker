@@ -9,13 +9,13 @@ import ProfilePage from "../pages/ProfilePage";
 import ProtectedRoute from "./ProtectedRoute";
 import CreateTaskPage from "../pages/CreateTaskPage";
 import UserTasksPage from "../pages/UserTasksPage";
-
+import TaskSharePage from "../pages/TaskSharePage";
 
 function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      
+
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
@@ -54,15 +54,22 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
-        <Route
-         path="/tasks/task-detail/:taskId" 
-         element={
+      <Route
+        path="/tasks/task-detail/:taskId"
+        element={
           <ProtectedRoute>
             <TaskDetailPage />
           </ProtectedRoute>
         }
       />
-
+      <Routes
+        path="/tasks/task-share/:taskId"
+        element={
+          <ProtectedRoute>
+            <TaskSharePage />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

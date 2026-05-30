@@ -70,8 +70,8 @@ function TaskDetailPage() {
                   task.status === "In Progress"
                     ? "status-in-progress"
                     : task.status === "Done"
-                    ? "status-done"
-                    : ""
+                      ? "status-done"
+                      : ""
                 }`}
               >
                 {task.status}
@@ -82,8 +82,8 @@ function TaskDetailPage() {
                   task.priority === "Critical" || task.priority === "High"
                     ? "priority-high"
                     : task.priority === "Medium"
-                    ? "priority-medium"
-                    : "priority-low"
+                      ? "priority-medium"
+                      : "priority-low"
                 }`}
               >
                 {task.priority}
@@ -91,9 +91,15 @@ function TaskDetailPage() {
             </div>
 
             <div className="task-detail-actions">
-              <button type="button" className="secondary-button">
+              {/* <button type="button" className="secondary-button">
                 Share Task
-              </button>
+              </button> */}    
+              <Link
+                to={`/tasks/task-share/${task.id}`}
+                className="secondary-button"
+              >     
+                Share Task
+              </Link>
 
               <button type="button" className="primary-button">
                 Edit Task
