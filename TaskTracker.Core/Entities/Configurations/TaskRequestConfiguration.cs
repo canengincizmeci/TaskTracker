@@ -31,22 +31,11 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(tr => tr.DueDate).HasColumnType("date");
 
+            builder.Property(x => x.Visibility).IsRequired().HasConversion<int>();
 
-            builder.Property(x => x.Visibility)
-                .IsRequired()
-                .HasConversion<int>();
+            builder.Property(x => x.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-
-            builder.Property(x => x.CreatedAt)
-                .IsRequired()
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            builder.HasOne(x => x.Owner)
-                .WithMany(x => x.OwnedTaskRequests)
-                .HasForeignKey(x => x.OwnerId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-
+            builder.HasOne(x => x.Owner).WithMany(x => x.OwnedTaskRequests).HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
 
         }
     }

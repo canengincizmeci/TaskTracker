@@ -21,8 +21,9 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskRequest> TaskRequests { get; set; }
         public DbSet<TaskShare> TaskShares { get; set; }
         public DbSet<TaskShareInvitation> TaskShareInvitations { get; set; }
-         
+        public DbSet<Notification> Notifications { get; set; }
 
+         
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
