@@ -20,7 +20,8 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<TaskRequest> TaskRequests { get; set; }
         public DbSet<TaskShare> TaskShares { get; set; }
-
+        public DbSet<TaskShareInvitation> TaskShareInvitations { get; set; }
+         
 
 
         protected override void OnModelCreating(ModelBuilder builder)
