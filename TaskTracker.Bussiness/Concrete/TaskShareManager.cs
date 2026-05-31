@@ -18,62 +18,18 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly ITaskShareDal _taskShareDal;
         private readonly ICurrentUserService _currentUserService;
         private readonly IEmailService _emailService;
+        private readonly INotificationService _notificationService;
 
-        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService)
+        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService, INotificationService notificationService)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
             _currentUserService = currentUserService;
             _emailService = emailService;
+            _notificationService = notificationService;
         }
 
-        //public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
-        //{
-        //    var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-        //    var userRepository = _unitOfWork.GetRepository<User>();
 
-        //    var user = await userRepository.GetAsync(u => u.UserName == dto.Username);
-
-        //    if (user is null)
-        //    {
-        //        return new ErrorResult(Messages.UserNotFound);
-        //    }
-
-        //    var task = await taskRepository.GetByIdAsync(dto.TaskRequestId);
-
-        //    if (task is null)
-        //    {
-        //        return new ErrorResult(Messages.DataNotFound);
-        //    }
-
-        //    var currentUserId = _currentUserService.UserId;
-
-        //    if (task.OwnerId != currentUserId)
-        //        return new ErrorResult(Messages.AuthorizationDenied);
-
-        //    if (task.OwnerId == user.Id)
-        //        return new ErrorResult(Messages.UserCannotShareTaskWithSelf);
-
-        //    var taskAlreadyShared = await _taskShareDal.GetAsync(x => x.TaskRequestId == dto.TaskRequestId && x.SharedWithUserId == user.Id);
-
-        //    if (taskAlreadyShared is not null)
-        //    {
-        //        return new ErrorResult(Messages.TaskAlreadyShared);
-        //    }
-
-
-        //    await _taskShareDal.AddAsync(new TaskShare
-        //    {
-        //        TaskRequestId = dto.TaskRequestId,
-        //        SharedWithUserId = user.Id,
-        //        Permission = dto.Permission,
-        //        SharedAt = DateTime.UtcNow,
-        //    });
-
-        //    await _unitOfWork.SaveChangesAsync();
-
-        //    return new SuccessResult(Messages.TaskShared);
-        //}
 
         public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
         {
@@ -133,6 +89,10 @@ namespace TaskTracker.Bussiness.Concrete
 
             await _unitOfWork.SaveChangesAsync();
 
+
+
+            await _notificationService.CreateTaskShareInvitationNotificationAsync(user.Id, task.Title, inviter.UserName, invitation.Id);
+
             try
             {
 
@@ -141,7 +101,7 @@ namespace TaskTracker.Bussiness.Concrete
             catch (Exception)
             {
 
-                throw;
+                
             }
 
             return new SuccessResult(Messages.TaskShareInvitationSent);
