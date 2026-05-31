@@ -5,6 +5,8 @@ using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
+using TaskTracker.Core.Utilities.Results;
+using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.Bussiness.Concrete
 {
@@ -38,6 +40,24 @@ namespace TaskTracker.Bussiness.Concrete
             });
 
             await _unitOfWork.SaveChangesAsync();
+        }
+
+        public async Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId)
+        {
+            var notificationRepository = _unitOfWork.GetRepository<Notification>();
+
+            var notifications = await notificationRepository.GetAllAsync(n => n.UserId == userId);
+
+            var notificationDtos = notifications.OrderByDescending(n => n.CreatedAt)
+                .Select(n => new NotificationDto
+                {
+                    Id = n.Id,
+                    Message = n.Message,
+                    CreatedAt = n.CreatedAt
+                })
+                .ToList();
+
+            return new SuccessDataResult<List<NotificationDto>>(notificationDtos);
         }
     }
 }
