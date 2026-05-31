@@ -12,8 +12,8 @@ namespace TaskTracker.Bussiness.Abstract
     {
         Task CreateTaskShareInvitationNotificationAsync(int userId, string taskTitle, string inviterUserName, int invitationId);
         Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId);
-
-
+        Task<IResult> MarkAsReadAsync(int notificationId);
+        Task<IResult> MarkAllAsReadAsync();
 
     }
 }

@@ -30,5 +30,28 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Data);
         }
+
+        [HttpPost("mark-as-read/{notificationId}")]
+        [Authorize(Roles = "Admin,User")]
+        public async Task<IActionResult> MarkAsRead(int notificationId)
+        {
+            var result = await _notificationService.MarkAsReadAsync(notificationId);
+            if (!result.Success)
+                return BadRequest(result.Message);
+            return Ok(result.Message);
+        }
+
+
+
+        [HttpPost("mark-all-as-read")]
+        [Authorize(Roles = "Admin,User")]
+        public async Task<IActionResult> MarkAllAsRead()
+        {
+            var currentUserId = _currentUserService.UserId;
+            var result = await _notificationService.MarkAllAsReadAsync();
+            if (!result.Success)
+                return BadRequest(result.Message);
+            return Ok(result.Message);
+        }
     }
 }

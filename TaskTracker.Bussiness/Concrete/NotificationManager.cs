@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
@@ -58,6 +59,42 @@ namespace TaskTracker.Bussiness.Concrete
                 .ToList();
 
             return new SuccessDataResult<List<NotificationDto>>(notificationDtos);
+        }
+
+
+        public async Task<IResult> MarkAsReadAsync(int notificationId)
+        {
+            var notificationRepository = _unitOfWork.GetRepository<Notification>();
+            var notification = await notificationRepository.GetAsync(n => n.Id == notificationId && n.UserId == _currentUserService.UserId);
+
+            if (notification is null)
+            {
+                return new ErrorResult(Messages.NotificationNotFound);
+            }
+
+            notification.IsRead = true;
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult();
+        }
+
+        public async Task<IResult> MarkAllAsReadAsync()
+        {
+            var notificationRepository = _unitOfWork.GetRepository<Notification>();
+            var allNotifications = await notificationRepository.GetAllAsync(nt => (nt.UserId == _currentUserService.UserId && nt.Activity == true));
+
+            if (allNotifications is null)
+            {
+                return new ErrorResult(Messages.NotificationNotFound);
+            }
+
+            foreach (var notification in allNotifications)
+            {
+                notification.IsRead = true;
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            return new SuccessResult();
         }
     }
 }
