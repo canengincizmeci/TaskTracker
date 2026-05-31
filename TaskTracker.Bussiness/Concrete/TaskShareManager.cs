@@ -17,12 +17,14 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITaskShareDal _taskShareDal;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IEmailService _emailService;
 
-        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService)
+        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
             _currentUserService = currentUserService;
+            _emailService = emailService;
         }
 
         //public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
@@ -81,6 +83,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             var user = await userRepository.GetAsync(u => u.UserName == dto.Username);
 
+
             if (user is null)
                 return new ErrorResult(Messages.UserNotFound);
 
@@ -111,8 +114,10 @@ namespace TaskTracker.Bussiness.Concrete
 
             if (pendingInvitation is not null)
                 return new ErrorResult(Messages.TaskShareInvitationAlreadySent);
-
-            await invitationRepository.AddAsync(new TaskShareInvitation
+            var inviter = await userRepository.GetByIdAsync(currentUserId);
+            if (inviter is null)
+                return new ErrorResult(Messages.UserNotFound);
+            var invitation = new TaskShareInvitation
             {
                 TaskRequestId = dto.TaskRequestId,
                 InvitedUserId = user.Id,
@@ -121,9 +126,23 @@ namespace TaskTracker.Bussiness.Concrete
                 Status = TaskShareInvitationStatus.Pending,
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddDays(7)
-            });
+            };
+
+
+            await invitationRepository.AddAsync(invitation);
 
             await _unitOfWork.SaveChangesAsync();
+
+            try
+            {
+
+                await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, $"https://canncodehub.com/invitations/{invitation.Id}");
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
 
             return new SuccessResult(Messages.TaskShareInvitationSent);
         }
