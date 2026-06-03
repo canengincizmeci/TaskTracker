@@ -11,6 +11,7 @@ import CreateTaskPage from "../pages/CreateTaskPage";
 import UserTasksPage from "../pages/UserTasksPage";
 import TaskSharePage from "../pages/TaskSharePage";
 import NotificationsPage from "../pages/NotificationsPage";
+import TaskInvitationsPage from "../pages/TaskInvitationsPage";
 
 function AppRouter() {
   return (
@@ -76,6 +77,14 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks/invitations"
+        element={
+          <ProtectedRoute>
+            <TaskInvitationsPage />
           </ProtectedRoute>
         }
       />
