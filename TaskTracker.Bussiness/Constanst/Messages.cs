@@ -34,7 +34,11 @@ namespace TaskTracker.Bussiness.Constanst
         public static string TaskShareInvitationAlreadySent = "Task share invitation has already been sent.";
         public static string TaskShareInvitationSent = "Task share invitation sent successfully.";
         public static string NotificationNotFound = "Notification not found.";
-
+        public static string InvitationNotFound = "Invitation not found.";
+        public static string TaskAccepted = "Task invitation accepted successfully.";
+        public static string TaskRejected = "Task invitation rejected successfully.";
+        public static string InvitationAlreadyResponded = "You have already responded to this invitation.";
+        public static string InvitationExpired = "This invitation has expired.";
 
 
     }

@@ -28,5 +28,30 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
         }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("accept-invitation/{invitationId}")]
+        public async Task<IActionResult> AcceptTaskInvitation(int invitationId)
+        {
+            var result = await _taskShareService.AcceptTaskInvitationAsync(invitationId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("reject-invitation/{invitationId}")]
+        public async Task<IActionResult> RejectTaskInvitation(int invitationId)
+        {
+            var result = await _taskShareService.RejectTaskInvitationAsync(invitationId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+
     }
 }

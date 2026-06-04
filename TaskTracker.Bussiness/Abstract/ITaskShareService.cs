@@ -10,7 +10,9 @@ namespace TaskTracker.Bussiness.Abstract
     public interface ITaskShareService
     {
         Task<IResult> InviteUserToTask(InviteUserToTaskDto dto);
-     
+        Task<IResult> AcceptTaskInvitationAsync(int invitationId);
+        Task<IResult> RejectTaskInvitationAsync(int invitationId);
+
 
     }
 }

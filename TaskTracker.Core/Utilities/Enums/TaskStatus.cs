@@ -9,7 +9,8 @@ namespace TaskTracker.Core.Utilities.Enums
         Pending,
         InProgress,
         Completed,
-        Cancelled
+        Cancelled,
+        
     }
 }
  

@@ -14,6 +14,7 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId);
         Task<IResult> MarkAsReadAsync(int notificationId);
         Task<IResult> MarkAllAsReadAsync();
+        //Task<IResult> GetUserPendingInivationAsync();
 
     }
 }

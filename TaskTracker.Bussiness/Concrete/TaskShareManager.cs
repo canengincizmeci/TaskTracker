@@ -29,7 +29,47 @@ namespace TaskTracker.Bussiness.Concrete
             _notificationService = notificationService;
         }
 
+      
+        public async Task<IResult> AcceptTaskInvitationAsync(int invitationId)
+        {
+            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
 
+            var invitation = await invitationRepository.GetByIdAsync(invitationId);
+
+            if (invitation is null)
+                return new ErrorResult(Messages.InvitationNotFound);
+
+            if (invitation.InvitedUserId != _currentUserService.UserId)
+                return new ErrorResult(Messages.AuthorizationDenied);
+
+            if (invitation.Status != TaskShareInvitationStatus.Pending)
+                return new ErrorResult(Messages.InvitationAlreadyResponded);
+
+            if (invitation.ExpiresAt.HasValue && invitation.ExpiresAt.Value < DateTime.UtcNow)
+                return new ErrorResult(Messages.InvitationExpired);
+
+            var taskAlreadyShared = await _taskShareDal.GetAsync(x =>
+                x.TaskRequestId == invitation.TaskRequestId &&
+                x.SharedWithUserId == invitation.InvitedUserId);
+
+            if (taskAlreadyShared is not null)
+                return new ErrorResult(Messages.TaskAlreadyShared);
+
+            await _taskShareDal.AddAsync(new TaskShare
+            {
+                TaskRequestId = invitation.TaskRequestId,
+                SharedWithUserId = invitation.InvitedUserId,
+                Permission = invitation.Permission,
+                SharedAt = DateTime.UtcNow
+            });
+
+            invitation.Status = TaskShareInvitationStatus.Accepted;
+            invitation.RespondedAt = DateTime.UtcNow;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult(Messages.TaskAccepted);
+        }
 
         public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
         {
@@ -101,11 +141,33 @@ namespace TaskTracker.Bussiness.Concrete
             catch (Exception)
             {
 
-                
+
             }
 
             return new SuccessResult(Messages.TaskShareInvitationSent);
         }
 
+        public async Task<IResult> RejectTaskInvitationAsync(int invitationId)
+        {
+            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
+
+            var invitation = await invitationRepository.GetByIdAsync(invitationId);
+
+            if (invitation is null)
+                return new ErrorResult(Messages.InvitationNotFound);
+
+            if (invitation.InvitedUserId != _currentUserService.UserId)
+                return new ErrorResult(Messages.AuthorizationDenied);
+
+            if (invitation.Status != TaskShareInvitationStatus.Pending)
+                return new ErrorResult(Messages.InvitationAlreadyResponded);
+
+            invitation.Status = TaskShareInvitationStatus.Rejected;
+            invitation.RespondedAt = DateTime.UtcNow;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult(Messages.TaskRejected);
+        }
     }
 }
