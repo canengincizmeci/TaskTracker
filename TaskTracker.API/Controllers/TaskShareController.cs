@@ -52,6 +52,30 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
         }
+        [Authorize(Roles = "User")]
+        [HttpGet("get-user-invitations")]
+        public async Task<IActionResult> GetMyPendingInvitationsAsync()
+        {
+            var result = await _taskShareService.GetMyPendingInvitationsAsync();
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpGet]
+        public async Task<IActionResult> GetMySharedTasksAsync()
+        {
+            var result = await _taskShareService.GetMySharedTasksAsync();
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
 
     }
 }
