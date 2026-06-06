@@ -3,7 +3,7 @@ import type { TaskInvitation } from "../types/taskInvitation";
 
 async function getMyPendingInvitations(): Promise<TaskInvitation[]> {
   const response = await axiosClient.get(
-    "/TaskShare/my-pending-invitations"
+    "/TaskShare/get-user-invitations"
   );
 
   return response.data;
