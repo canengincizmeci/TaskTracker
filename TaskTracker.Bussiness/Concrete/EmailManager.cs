@@ -36,7 +36,22 @@ namespace TaskTracker.Bussiness.Concrete
             var message = new MailMessage(_fromEmail, email)
             {
                 Subject = "TaskTracker - New Task Invitation",
-                Body = $@"Hello,{inviterUsername} invited you to collaborate on a task.Task:{taskTitle}You can review the invitation using the link below:{invitationUrl}This invitation may expire after a certain period.TaskTracker",
+                Body = $@"
+                        Hello,
+
+                        {inviterUsername} invited you to collaborate on a task.
+
+                        Task:
+                        {taskTitle}
+
+                        You can review the task using the link below:
+
+                        {invitationUrl}
+
+                        This invitation may expire after a certain period.
+
+                        TaskTracker
+                        ",
                 IsBodyHtml = false
             };
 

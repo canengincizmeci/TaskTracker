@@ -1,4 +1,6 @@
-﻿using System;
+﻿//using Castle.Core.Configuration;
+using System;
+using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Bussiness.Abstract;
@@ -19,14 +21,16 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly ICurrentUserService _currentUserService;
         private readonly IEmailService _emailService;
         private readonly INotificationService _notificationService;
+        private readonly IConfiguration _configuration;
 
-        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService, INotificationService notificationService)
+        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService, INotificationService notificationService, IConfiguration configuration)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
             _currentUserService = currentUserService;
             _emailService = emailService;
             _notificationService = notificationService;
+            _configuration = configuration;
         }
 
 
@@ -227,6 +231,9 @@ namespace TaskTracker.Bussiness.Concrete
 
             try
             {
+                var clientBaseUrl = _configuration["ClientApp:BaseUrl"];
+
+                var invitationUrl = $"{clientBaseUrl}/tasks/task-detail/{task.Id}";
 
                 await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, $"https://canncodehub.com/invitations/{invitation.Id}");
             }
