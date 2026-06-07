@@ -242,7 +242,7 @@ namespace TaskTracker.Bussiness.Concrete
 
                 var invitationUrl = $"{clientBaseUrl}/tasks/task-detail/{task.Id}";
 
-                await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, $"https://canncodehub.com/invitations/{invitation.Id}");
+                await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, invitationUrl);
             }
             catch (Exception)
             {
