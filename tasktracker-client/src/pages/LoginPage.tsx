@@ -1,112 +1,5 @@
-// import { useState } from "react";
-// import { useNavigate } from "react-router-dom";
-// import { login } from "../api/authService";
-// import { getRoleFromToken } from "../utils/jwtHelper";
-// import { useAuth } from "../context/AuthContext";
-// import toast from "react-hot-toast";
-
-// function LoginPage() {
-//   const navigate = useNavigate();
-
-//   const { loginToContext } = useAuth();
-
-//   const [email, setEmail] = useState("");
-//   const [password, setPassword] = useState("");
-
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState("");
-
-//   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-//     e.preventDefault();
-
-//     try {
-//       setLoading(true);
-//       setError("");
-
-//       const response = await login({
-//         email,
-//         password,
-//       });
-
-//       const token = response.data.accessToken.token;
-
-//       loginToContext(
-//         token,
-//         response.data.refreshToken,
-//         response.data.accessToken.expiration
-//       );
-
-//       toast.success("Login successful");
-
-//       const role = getRoleFromToken(token);
-
-//       if (role === "Admin") {
-//         navigate("/admin-dashboard");
-//       } else {
-//         navigate("/");
-//       }
-//     } catch (error) {
-//       //console.log(error);
-
-//       setError("Email or password is wrong.");
-
-//       toast.error("Email or password is wrong.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <main className="page auth-page">
-//       <section className="auth-card">
-//         <p className="eyebrow">TASKTRACKER ACCESS</p>
-
-//         <h1>Sign in</h1>
-
-//         <p className="auth-text">
-//           Sign in with your account. Admin and user accounts use the same login
-//           page.
-//         </p>
-
-//         <form onSubmit={handleLogin} className="auth-form">
-//           <div className="form-group">
-//             <label>Email</label>
-
-//             <input
-//               value={email}
-//               onChange={(e) => setEmail(e.target.value)}
-//               placeholder="your@email.com"
-//               type="email"
-//               required
-//             />
-//           </div>
-
-//           <div className="form-group">
-//             <label>Password</label>
-
-//             <input
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//               placeholder="Your password"
-//               type="password"
-//               required
-//             />
-//           </div>
-
-//           {error && <p className="error-message">{error}</p>}
-
-//           <button className="primary-button" type="submit" disabled={loading}>
-//             {loading ? "Signing in..." : "Sign in"}
-//           </button>
-//         </form>
-//       </section>
-//     </main>
-//   );
-// }
-
-// export default LoginPage;
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { login } from "../api/authService";
 import { getRoleFromToken } from "../utils/jwtHelper";
 import { useAuth } from "../context/AuthContext";
@@ -114,6 +7,8 @@ import toast from "react-hot-toast";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const { loginToContext } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -146,6 +41,15 @@ function LoginPage() {
 
       const role = getRoleFromToken(token);
 
+      
+      const from = location.state?.from?.pathname;
+
+      if (from) {
+        navigate(from, { replace: true });
+        return;
+      }
+
+     
       if (role === "Admin") {
         navigate("/admin-dashboard");
       } else {
