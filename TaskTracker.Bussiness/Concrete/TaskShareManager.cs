@@ -231,7 +231,14 @@ namespace TaskTracker.Bussiness.Concrete
 
             try
             {
-                var clientBaseUrl = _configuration["ClientApp:BaseUrl"];
+                var clientBaseUrl = _configuration.GetValue<string>("ClientApp:BaseUrl");
+
+                if (string.IsNullOrWhiteSpace(clientBaseUrl))
+                {
+                    clientBaseUrl = "http://localhost:5173";
+                }
+
+
 
                 var invitationUrl = $"{clientBaseUrl}/tasks/task-detail/{task.Id}";
 
