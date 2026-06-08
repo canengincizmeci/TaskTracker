@@ -11,6 +11,6 @@ namespace TaskTracker.Entities.DTOs
         public string Title { get; set; }
         public string Category { get; set; }
         public TaskPermission Permission { get; set; }
-        public DateTime SharedAt { get; set; }
+        public DateTime? SharedAt { get; set; }
     }
 }
