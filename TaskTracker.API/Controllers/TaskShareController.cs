@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Concrete;
+using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.API.Controllers
@@ -86,9 +87,9 @@ namespace TaskTracker.API.Controllers
         {
             int? currentUserId = _currentUserService.UserId;
             if (!currentUserId.HasValue)
-                return Unauthorized("User not authenticated.");
+                return Unauthorized(Messages.AuthorizationDenied);
 
-            var result = await _taskShareService.GetSharedTaskDetailsAsync(taskShareId);
+            var result = await _taskShareService.GetSharedTaskDetailsAsync(taskShareId, currentUserId.Value);
 
             if (!result.Success)
                 return BadRequest(result.Message);
