@@ -22,5 +22,11 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
         {
             return await _context.TaskShares.AnyAsync(ts => ts.TaskRequestId == taskId && ts.SharedWithUserId == userId && ts.Permission >= permission);
         }
+        public async Task<TaskShare?> GetSharedTaskDetailsAsync(int taskShareId)
+        {
+            return await _context.TaskShares
+                .Include(x => x.TaskRequest)
+                .FirstOrDefaultAsync(x => x.Id == taskShareId);
+        }
     }
 }
