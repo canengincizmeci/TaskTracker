@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { getAccessToken, clearAuthTokens } from "../utils/authStorage";
 import { getRoleFromToken, isTokenExpired } from "../utils/jwtHelper";
 
@@ -8,15 +8,29 @@ type ProtectedRouteProps = {
 };
 
 function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+  const location = useLocation();
   const token = getAccessToken();
 
+  const redirectPath = `${location.pathname}${location.search}`;
+
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(redirectPath)}`}
+        replace
+      />
+    );
   }
 
   if (isTokenExpired(token)) {
     clearAuthTokens();
-    return <Navigate to="/login" replace />;
+
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(redirectPath)}`}
+        replace
+      />
+    );
   }
 
   if (requiredRole) {
@@ -27,7 +41,7 @@ function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
     }
   }
 
-  return children;
+  return <>{children}</>;
 }
 
 export default ProtectedRoute;
