@@ -168,17 +168,22 @@ namespace TaskTracker.Bussiness.Concrete
             return new SuccessDataResult<List<SharedTaskDto>>(Messages.DataListed);
         }
 
-        public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId)
+        public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId,int currentUserId)
         {
-            var taskShareRepository = _unitOfWork.GetRepository<TaskShare>();
-            
-            var taskShare = await taskShareRepository.GetByIdAsync(taskShareId);
-
+            var taskShare =await _taskShareDal.GetSharedTaskDetailsAsync(taskShareId);
             if (taskShare is null)
             {
                 return new ErrorDataResult<SharedTaskDto>(Messages.DataNotFound);
             }
-            
+
+            if (
+                    taskShare.SharedWithUserId != currentUserId &&
+                    taskShare.TaskRequest.OwnerId != currentUserId
+                )
+            {
+                return new ErrorDataResult<SharedTaskDto>(Messages.AuthorizationDenied);
+            }
+
             var mappedTaskShare = new SharedTaskDto
             {
                 TaskId = taskShare.TaskRequestId,
@@ -264,7 +269,7 @@ namespace TaskTracker.Bussiness.Concrete
 
 
 
-                var invitationUrl = $"{clientBaseUrl}/tasks/task-detail/{task.Id}";
+                var invitationUrl = $"{clientBaseUrl}/tasks/shared-tasks{task.Id}";
 
                 await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, invitationUrl);
             }
