@@ -1,6 +1,7 @@
 ﻿//using Castle.Core.Configuration;
-using System;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Bussiness.Abstract;
@@ -165,6 +166,29 @@ namespace TaskTracker.Bussiness.Concrete
             }
 
             return new SuccessDataResult<List<SharedTaskDto>>(Messages.DataListed);
+        }
+
+        public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId)
+        {
+            var taskShareRepository = _unitOfWork.GetRepository<TaskShare>();
+            
+            var taskShare = await taskShareRepository.GetByIdAsync(taskShareId);
+
+            if (taskShare is null)
+            {
+                return new ErrorDataResult<SharedTaskDto>(Messages.DataNotFound);
+            }
+            
+            var mappedTaskShare = new SharedTaskDto
+            {
+                TaskId = taskShare.TaskRequestId,
+                Title = taskShare.TaskRequest.Title,
+                Category = taskShare.TaskRequest.Category,
+                Permission = taskShare.Permission,
+                SharedAt = taskShare.SharedAt
+            };
+
+            return new SuccessDataResult<SharedTaskDto>(mappedTaskShare, Messages.DataListed);
         }
 
         public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)

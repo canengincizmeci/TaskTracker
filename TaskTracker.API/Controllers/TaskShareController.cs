@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Bussiness.Concrete;
 using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.API.Controllers
@@ -11,10 +12,12 @@ namespace TaskTracker.API.Controllers
     public class TaskShareController : ControllerBase
     {
         private readonly ITaskShareService _taskShareService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public TaskShareController(ITaskShareService taskShareService)
+        public TaskShareController(ITaskShareService taskShareService, ICurrentUserService currentUserService)
         {
             _taskShareService = taskShareService;
+            _currentUserService = currentUserService;
         }
 
         [Authorize(Roles = "User")]
@@ -52,7 +55,7 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
         }
-        [Authorize(Roles = "User")]
+        [Authorize(Roles = "User,Admin")]
         [HttpGet("get-user-invitations")]
         public async Task<IActionResult> GetMyPendingInvitationsAsync()
         {
@@ -75,6 +78,22 @@ namespace TaskTracker.API.Controllers
                 return BadRequest(result.Message);
 
             return Ok(result.Message);
+        }
+
+        [Authorize(Roles = "User,Admin")]
+        [HttpGet("shared-task-details/{taskShareId}")]
+        public async Task<IActionResult> GetSharedTaskDetailsAsync(int taskShareId)
+        {
+            int? currentUserId = _currentUserService.UserId;
+            if (!currentUserId.HasValue)
+                return Unauthorized("User not authenticated.");
+
+            var result = await _taskShareService.GetSharedTaskDetailsAsync(taskShareId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Data);
         }
 
     }
