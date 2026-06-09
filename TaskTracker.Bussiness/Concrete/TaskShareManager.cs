@@ -269,7 +269,7 @@ namespace TaskTracker.Bussiness.Concrete
 
 
 
-                var invitationUrl = $"{clientBaseUrl}/tasks/shared-tasks{task.Id}";
+                var invitationUrl = $"{clientBaseUrl}/tasks/invitations/{invitation.Id}";
 
                 await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, invitationUrl);
             }
