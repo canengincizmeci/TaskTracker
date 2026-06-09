@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import api from "../api/axiosInstance";
+import {
+  acceptTaskInvitation,
+  rejectTaskInvitation,
+} from "../api/taskInvitationService";
 
 function TaskInvitationDetailPage() {
   const { invitationId } = useParams();
@@ -15,11 +18,10 @@ function TaskInvitationDetailPage() {
     try {
       setLoading(true);
 
-      await api.post(`/TaskShare/accept-invitation/${invitationId}`);
+      await acceptTaskInvitation(Number(invitationId));
 
       toast.success("Invitation accepted");
-
-      navigate("/", { replace: true });
+      navigate("/tasks/shared-tasks", { replace: true });
     } catch (error) {
       console.error(error);
       toast.error("Invitation could not be accepted");
@@ -34,11 +36,10 @@ function TaskInvitationDetailPage() {
     try {
       setLoading(true);
 
-      await api.post(`/TaskShare/reject-invitation/${invitationId}`);
+      await rejectTaskInvitation(Number(invitationId));
 
       toast.success("Invitation rejected");
-
-      navigate("/", { replace: true });
+      navigate("/tasks/invitations", { replace: true });
     } catch (error) {
       console.error(error);
       toast.error("Invitation could not be rejected");
