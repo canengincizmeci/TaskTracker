@@ -67,10 +67,10 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
 
-        }
+        }  
 
         [Authorize(Roles = "User")]
-        [HttpGet]
+        [HttpGet("user-shared-tasks")]
         public async Task<IActionResult> GetMySharedTasksAsync()
         {
             var result = await _taskShareService.GetMySharedTasksAsync();
