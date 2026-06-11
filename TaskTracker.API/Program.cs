@@ -9,6 +9,7 @@ using TaskTracker.Bussiness.DependencyResolvers.Autofac;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
 using TaskTracker.Core.DataAccess;
 using System.Text.Json.Serialization;
+using TaskTracker.API.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -64,6 +65,8 @@ builder.Services
 builder.Services.AddDbContext<TaskTrackerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
+builder.Services.AddSignalR();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -102,5 +105,7 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
+
 app.Run();
 
