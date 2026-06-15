@@ -30,6 +30,27 @@ type VerifyEmailRequest = {
   code: string;
 };
 
+type RefreshTokenRequest = {
+  refreshToken: string;
+};
+
+type RefreshTokenResponse = {
+  data: {
+    accessToken: string;
+    accessTokenExpiration: string;
+    refreshToken: string;
+  };
+  success: boolean;
+  message: string | null;
+};
+
+async function refreshToken(
+  data: RefreshTokenRequest
+): Promise<RefreshTokenResponse> {
+  const response = await axiosClient.post("/Auth/refresh-token", data);
+  return response.data;
+}
+
 async function login(data: LoginRequest): Promise<LoginResponse> {
   const response = await axiosClient.post("/Auth/login", data);
   return response.data;
@@ -45,4 +66,4 @@ async function verifyEmail(data: VerifyEmailRequest) {
   const response = await axiosClient.post("/Auth/verify-email", data);
   return response.data;
 }
-export { login, register, verifyEmail };
+export { login, register, verifyEmail,refreshToken };

@@ -7,18 +7,14 @@ import App from "./App.tsx";
 
 import { AuthProvider } from "./context/AuthContext.tsx";
 
-import { Toaster } from "react-hot-toast";
+
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
 
-        <Toaster
-          position="top-right"
-          reverseOrder={false}
-        />
-
+      
         <App />
 
       </AuthProvider>
