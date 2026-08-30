@@ -53,8 +53,15 @@ namespace TaskTracker.Bussiness.Concrete
                 .Select(n => new NotificationDto
                 {
                     Id = n.Id,
+                    UserId = n.UserId,
+                    Type = n.Type,
+                    Title = n.Title,
                     Message = n.Message,
-                    CreatedAt = n.CreatedAt
+                    IsRead = n.IsRead,
+                    RelatedEntityId = n.RelatedEntityId,
+                    RedirectUrl = n.RedirectUrl,
+                    CreatedAt = n.CreatedAt,
+                    ReadAt = n.ReadAt
                 })
                 .ToList();
 
@@ -73,6 +80,7 @@ namespace TaskTracker.Bussiness.Concrete
             }
 
             notification.IsRead = true;
+            notification.ReadAt = DateTime.UtcNow;
             await _unitOfWork.SaveChangesAsync();
 
             return new SuccessResult();
@@ -81,16 +89,14 @@ namespace TaskTracker.Bussiness.Concrete
         public async Task<IResult> MarkAllAsReadAsync()
         {
             var notificationRepository = _unitOfWork.GetRepository<Notification>();
-            var allNotifications = await notificationRepository.GetAllAsync(nt => (nt.UserId == _currentUserService.UserId && nt.Activity == true));
+            var unreadNotifications = await notificationRepository.GetAllAsync(nt =>
+                nt.UserId == _currentUserService.UserId && !nt.IsRead);
+            var readAt = DateTime.UtcNow;
 
-            if (allNotifications is null)
-            {
-                return new ErrorResult(Messages.NotificationNotFound);
-            }
-
-            foreach (var notification in allNotifications)
+            foreach (var notification in unreadNotifications)
             {
                 notification.IsRead = true;
+                notification.ReadAt = readAt;
             }
 
             await _unitOfWork.SaveChangesAsync();
