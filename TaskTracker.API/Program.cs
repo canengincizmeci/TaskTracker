@@ -5,11 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
+using System.Text.Json.Serialization;
+using TaskTracker.API.Hubs;
+using TaskTracker.API.Services;
+using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.DependencyResolvers.Autofac;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
 using TaskTracker.Core.DataAccess;
-using System.Text.Json.Serialization;
-using TaskTracker.API.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,10 @@ builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
 builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
 {
     containerBuilder.RegisterModule(new AutofacBusinessModule());
+
+    containerBuilder.RegisterType<SignalRNotificationManager>()
+        .As<IRealtimeNotificationService>()
+        .InstancePerLifetimeScope();
 });
 
 builder.Services.AddCors(options =>
