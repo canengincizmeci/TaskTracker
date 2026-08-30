@@ -65,7 +65,7 @@ namespace TaskTracker.API.Controllers
             if (!result.Success)
                 return BadRequest(result.Message);
 
-            return Ok(result.Message);
+            return Ok(result.Data);
 
         }  
 
@@ -78,7 +78,7 @@ namespace TaskTracker.API.Controllers
             if (!result.Success)
                 return BadRequest(result.Message);
 
-            return Ok(result.Message);
+            return Ok(result.Data);
         }
 
         [Authorize(Roles = "User,Admin")]
