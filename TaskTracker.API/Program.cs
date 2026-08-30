@@ -35,7 +35,7 @@ builder.Services.AddCors(options =>
             .AllowCredentials();
     });
 });
-
+ 
 builder.Services.AddScoped<TaskRequestValidator>();
 var tokenOptions = builder.Configuration.GetSection("TokenOptions");
 
@@ -55,6 +55,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(tokenOptions["SecurityKey"]!)),
 
             ClockSkew = TimeSpan.Zero
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/hubs/notifications"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services
