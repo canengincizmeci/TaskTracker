@@ -15,13 +15,14 @@ namespace TaskTracker.Bussiness.Concrete
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IRealtimeNotificationService _realtimeNotificationService;
 
 
-        public NotificationManager(IUnitOfWork unitOfWork, ICurrentUserService currentUserService)
+        public NotificationManager(IUnitOfWork unitOfWork, ICurrentUserService currentUserService, IRealtimeNotificationService realtimeNotificationService)
         {
             _unitOfWork = unitOfWork;
             _currentUserService = currentUserService;
-
+            _realtimeNotificationService = realtimeNotificationService;
         }
 
         public async Task CreateTaskShareInvitationNotificationAsync(int userId, string taskTitle, string inviterUserName, int invitationId)
