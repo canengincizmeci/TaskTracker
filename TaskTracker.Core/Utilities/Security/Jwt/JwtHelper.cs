@@ -43,7 +43,6 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             Console.WriteLine($"User Email: {user.Email}");
             Console.WriteLine($"User Name: {user.FirstName} {user.LastName}");
             Console.WriteLine($"Roles: {string.Join(",", operationClaims.Select(x => x.Name))}");
-            Console.WriteLine($"Token: {token}");
             Console.WriteLine("===========================");
             return new AccessToken
             {
