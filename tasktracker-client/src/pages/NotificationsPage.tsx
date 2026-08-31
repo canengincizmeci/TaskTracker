@@ -1,6 +1,56 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getUserNotifications } from "../api/notificationService";
+import { notificationHubConnection } from "../services/signalRService";
+import type { Notification } from "../types/notification";
 
 function NotificationsPage() {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const handleNotification = (notification: Notification) => {
+      setNotifications((currentNotifications) =>
+        currentNotifications.some((item) => item.id === notification.id)
+          ? currentNotifications
+          : [notification, ...currentNotifications]
+      );
+    };
+
+    notificationHubConnection.on("ReceiveNotification", handleNotification);
+
+    const loadNotifications = async () => {
+      try {
+        const initialNotifications = await getUserNotifications();
+
+        if (isActive) {
+          setNotifications((currentNotifications) => {
+            const currentIds = new Set(
+              currentNotifications.map((notification) => notification.id)
+            );
+
+            return [
+              ...currentNotifications,
+              ...initialNotifications.filter(
+                (notification) => !currentIds.has(notification.id)
+              ),
+            ];
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load notifications:", error);
+      }
+    };
+
+    void loadNotifications();
+
+    return () => {
+      isActive = false;
+      notificationHubConnection.off("ReceiveNotification", handleNotification);
+    };
+  }, []);
+
   return (
     <main className="page public-page">
       <section className="task-detail-layout">
@@ -31,21 +81,19 @@ function NotificationsPage() {
             </div>
 
             <div className="activity-timeline">
-              <div className="timeline-item">
-                <strong>Notification center is ready</strong>
-                <span>
-                  Backend notification flow is prepared. API integration will be
-                  added next.
-                </span>
-              </div>
-
-              <div className="timeline-item">
-                <strong>Task invitations</strong>
-                <span>
-                  Incoming task share invitations will be listed here with
-                  accept and reject actions.
-                </span>
-              </div>
+              {notifications.length === 0 ? (
+                <div className="timeline-item">
+                  <strong>No notifications</strong>
+                  <span>Your notifications will appear here.</span>
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <div className="timeline-item" key={notification.id}>
+                    <strong>{notification.title}</strong>
+                    <span>{notification.message}</span>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>
