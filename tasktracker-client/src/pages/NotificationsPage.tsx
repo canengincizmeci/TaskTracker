@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getUserNotifications } from "../api/notificationService";
+import {
+  getUserNotifications,
+  markAsRead,
+} from "../api/notificationService";
 import { notificationHubConnection } from "../services/signalRService";
 import type { Notification } from "../types/notification";
 
@@ -51,6 +54,23 @@ function NotificationsPage() {
     };
   }, []);
 
+  const handleMarkAsRead = async (notificationId: number) => {
+    try {
+      await markAsRead(notificationId);
+      const readAt = new Date().toISOString();
+
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((notification) =>
+          notification.id === notificationId
+            ? { ...notification, isRead: true, readAt }
+            : notification
+        )
+      );
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
+  };
+
   return (
     <main className="page public-page">
       <section className="task-detail-layout">
@@ -91,6 +111,15 @@ function NotificationsPage() {
                   <div className="timeline-item" key={notification.id}>
                     <strong>{notification.title}</strong>
                     <span>{notification.message}</span>
+                    {!notification.isRead && (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => void handleMarkAsRead(notification.id)}
+                      >
+                        Mark as read
+                      </button>
+                    )}
                   </div>
                 ))
               )}
