@@ -58,6 +58,9 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = notification.CreatedAt,
                 ReadAt = notification.ReadAt
             };
+            await _realtimeNotificationService.SendNotificationAsync(userId, notificationDto);
+
+            
         }
 
         public async Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId)
