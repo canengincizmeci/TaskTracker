@@ -1,10 +1,12 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { HubConnectionState } from "@microsoft/signalr";
 import {
   clearAuthTokens,
   getAccessToken,
   saveAuthTokens,
 } from "../utils/authStorage";
 import { decodeJwt, getRoleFromToken, isTokenExpired } from "../utils/jwtHelper";
+import { notificationHubConnection } from "../services/signalRService";
 
 type AuthUser = {
   name: string | null;
@@ -56,6 +58,7 @@ function getValidStoredToken() {
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(getValidStoredToken());
+  const connectionOperation = useRef(Promise.resolve());
 
   const user = token ? getUserFromToken(token) : null;
 
@@ -82,6 +85,32 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setToken(getValidStoredToken());
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      connectionOperation.current = connectionOperation.current
+        .then(async () => {
+          if (notificationHubConnection.state === HubConnectionState.Disconnected) {
+            await notificationHubConnection.start();
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to start notification connection:", error);
+        });
+    }
+
+    return () => {
+      connectionOperation.current = connectionOperation.current
+        .then(async () => {
+          if (notificationHubConnection.state !== HubConnectionState.Disconnected) {
+            await notificationHubConnection.stop();
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to stop notification connection:", error);
+        });
+    };
+  }, [token]);
 
   return (
     <AuthContext.Provider
