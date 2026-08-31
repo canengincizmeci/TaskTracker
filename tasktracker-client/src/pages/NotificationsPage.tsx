@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getUserNotifications,
+  markAllAsRead,
   markAsRead,
 } from "../api/notificationService";
 import { notificationHubConnection } from "../services/signalRService";
 import type { Notification } from "../types/notification";
+
+const UNREAD_COUNT_EVENT = "notification-unread-count-change";
 
 function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -66,8 +69,37 @@ function NotificationsPage() {
             : notification
         )
       );
+
+      window.dispatchEvent(
+        new CustomEvent(UNREAD_COUNT_EVENT, {
+          detail: { notificationId },
+        })
+      );
     } catch (error) {
       console.error("Failed to mark notification as read:", error);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+      const readAt = new Date().toISOString();
+
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((notification) =>
+          notification.isRead
+            ? notification
+            : { ...notification, isRead: true, readAt }
+        )
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(UNREAD_COUNT_EVENT, {
+          detail: { reset: true },
+        })
+      );
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
     }
   };
 
@@ -82,7 +114,11 @@ function NotificationsPage() {
             </div>
 
             <div className="task-detail-actions">
-              <button type="button" className="secondary-button">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void handleMarkAllAsRead()}
+              >
                 Mark all as read
               </button>
             </div>

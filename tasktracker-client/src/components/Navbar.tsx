@@ -5,6 +5,13 @@ import { useAuth } from "../context/AuthContext";
 import { notificationHubConnection } from "../services/signalRService";
 import type { Notification } from "../types/notification";
 
+const UNREAD_COUNT_EVENT = "notification-unread-count-change";
+
+type UnreadCountEventDetail = {
+  notificationId?: number;
+  reset?: boolean;
+};
+
 function Navbar() {
   const navigate = useNavigate();
   const { isAuthenticated, user, logout } = useAuth();
@@ -17,7 +24,9 @@ function Navbar() {
     }
 
     let isActive = true;
+    let allMarkedRead = false;
     const knownUnreadIds = new Set<number>();
+    const locallyReadIds = new Set<number>();
 
     const handleNotification = (notification: Notification) => {
       if (!notification.isRead && !knownUnreadIds.has(notification.id)) {
@@ -26,15 +35,44 @@ function Navbar() {
       }
     };
 
+    const handleUnreadCountChange = (event: Event) => {
+      const { notificationId, reset } = (
+        event as CustomEvent<UnreadCountEventDetail>
+      ).detail;
+
+      if (reset) {
+        allMarkedRead = true;
+        knownUnreadIds.clear();
+        locallyReadIds.clear();
+        setUnreadCount(0);
+        return;
+      }
+
+      if (notificationId !== undefined && !locallyReadIds.has(notificationId)) {
+        locallyReadIds.add(notificationId);
+        knownUnreadIds.delete(notificationId);
+        setUnreadCount((currentCount) => Math.max(0, currentCount - 1));
+      }
+    };
+
     notificationHubConnection.on("ReceiveNotification", handleNotification);
+    window.addEventListener(UNREAD_COUNT_EVENT, handleUnreadCountChange);
 
     const loadUnreadCount = async () => {
       try {
         const notifications = await getUserNotifications();
 
         if (isActive) {
+          if (allMarkedRead) {
+            return;
+          }
+
           notifications
-            .filter((notification) => notification.isRead === false)
+            .filter(
+              (notification) =>
+                notification.isRead === false &&
+                !locallyReadIds.has(notification.id)
+            )
             .forEach((notification) => knownUnreadIds.add(notification.id));
 
           setUnreadCount(knownUnreadIds.size);
@@ -49,6 +87,7 @@ function Navbar() {
     return () => {
       isActive = false;
       notificationHubConnection.off("ReceiveNotification", handleNotification);
+      window.removeEventListener(UNREAD_COUNT_EVENT, handleUnreadCountChange);
     };
   }, [isAuthenticated]);
 
