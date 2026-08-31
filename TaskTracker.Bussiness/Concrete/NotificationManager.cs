@@ -29,7 +29,7 @@ namespace TaskTracker.Bussiness.Concrete
         {
             var notificationRepository = _unitOfWork.GetRepository<Notification>();
 
-            await notificationRepository.AddAsync(new Notification
+            var notification = new Notification
             {
                 UserId = userId,
                 Type = NotificationType.TaskShareInvitation,
@@ -39,7 +39,9 @@ namespace TaskTracker.Bussiness.Concrete
                 RedirectUrl = $"/tasks/invitations/{invitationId}",
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
-            });
+            };
+
+            await notificationRepository.AddAsync(notification);
 
             await _unitOfWork.SaveChangesAsync();
         }
