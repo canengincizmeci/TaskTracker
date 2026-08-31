@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using TaskTracker.API.Hubs;
 using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.API.Services
 {
@@ -13,9 +14,9 @@ namespace TaskTracker.API.Services
         {
             _hubContext = hubContext;
         }
-        public async Task SendNotificationAsync(int userId, string message)
+        public async Task SendNotificationAsync(int userId, NotificationDto notification)
         {
-            await _hubContext.Clients.User(userId.ToString()).SendAsync("ReceiveNotification", message);
+            await _hubContext.Clients.User(userId.ToString()).SendAsync("ReceiveNotification", notification);
         }
     }
 }
