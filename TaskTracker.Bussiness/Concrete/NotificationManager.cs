@@ -44,6 +44,20 @@ namespace TaskTracker.Bussiness.Concrete
             await notificationRepository.AddAsync(notification);
 
             await _unitOfWork.SaveChangesAsync();
+
+            var notificationDto = new NotificationDto
+            {
+                Id = notification.Id,
+                UserId = notification.UserId,
+                Type = notification.Type,
+                Title = notification.Title,
+                Message = notification.Message,
+                IsRead = notification.IsRead,
+                RelatedEntityId = notification.RelatedEntityId,
+                RedirectUrl = notification.RedirectUrl,
+                CreatedAt = notification.CreatedAt,
+                ReadAt = notification.ReadAt
+            };
         }
 
         public async Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId)
