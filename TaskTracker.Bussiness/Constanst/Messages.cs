@@ -39,6 +39,7 @@ namespace TaskTracker.Bussiness.Constanst
         public static string TaskRejected = "Task invitation rejected successfully.";
         public static string InvitationAlreadyResponded = "You have already responded to this invitation.";
         public static string InvitationExpired = "This invitation has expired.";
+        public static string PasswordRecoveryInstructionsSent = "If an eligible account exists, password recovery instructions have been sent.";
 
 
     }

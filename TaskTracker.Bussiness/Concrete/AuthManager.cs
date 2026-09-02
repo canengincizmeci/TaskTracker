@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
@@ -19,12 +21,21 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITokenHelper _tokenHelper;
         private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthManager> _logger;
 
-        public AuthManager(IUnitOfWork unitOfWork, ITokenHelper tokenHelper, IEmailService emailService)
+        public AuthManager(
+            IUnitOfWork unitOfWork,
+            ITokenHelper tokenHelper,
+            IEmailService emailService,
+            IConfiguration configuration,
+            ILogger<AuthManager> logger)
         {
             _unitOfWork = unitOfWork;
             _tokenHelper = tokenHelper;
             _emailService = emailService;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user)
@@ -318,6 +329,79 @@ namespace TaskTracker.Bussiness.Concrete
                 AccessTokenExpiration = accessToken.Expiration,
                 RefreshToken = newRefreshToken.Token
             });
+        }
+
+        public async Task<IResult> ForgotPasswordAsync(ForgotPasswordDto dto)
+        {
+            const int otpLifetimeMinutes = 10;
+            const int resendCooldownSeconds = 60;
+
+            var genericResult = new SuccessResult(Messages.PasswordRecoveryInstructionsSent);
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var userRepo = _unitOfWork.GetRepository<User>();
+            var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
+
+            var user = await userRepo.GetAsync(u =>
+                u.Email.ToLower() == normalizedEmail &&
+                u.Status &&
+                u.IsVerified);
+
+            if (user is null)
+                return genericResult;
+
+            var now = DateTime.UtcNow;
+            var activeRequests = await passwordResetRepo.GetAllAsync(r =>
+                r.UserId == user.Id &&
+                r.UsedAt == null &&
+                r.InvalidatedAt == null &&
+                (r.ExpiresAt > now ||
+                 (r.ResetTokenExpiresAt.HasValue && r.ResetTokenExpiresAt.Value > now)));
+
+            if (activeRequests.Any(r => r.CreatedAt > now.AddSeconds(-resendCooldownSeconds)))
+                return genericResult;
+
+            var hmacSecret = _configuration["PasswordRecovery:HmacSecret"]!;
+
+            foreach (var activeRequest in activeRequests)
+            {
+                activeRequest.InvalidatedAt = now;
+                passwordResetRepo.Update(activeRequest);
+            }
+
+            var code = CodeGenerator.Generate6DigitCode();
+            var request = new PasswordResetRequest
+            {
+                UserId = user.Id,
+                CodeHash = PasswordResetCodeHasher.Hash(normalizedEmail, code, hmacSecret),
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(otpLifetimeMinutes),
+                FailedAttemptCount = 0
+            };
+
+            await passwordResetRepo.AddAsync(request);
+            await _unitOfWork.SaveChangesAsync();
+
+            try
+            {
+                await _emailService.SendPasswordResetCodeAsync(user.Email, code);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Password reset email delivery failed.");
+
+                try
+                {
+                    request.InvalidatedAt = DateTime.UtcNow;
+                    passwordResetRepo.Update(request);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+                catch (Exception invalidationException)
+                {
+                    _logger.LogError(invalidationException, "Failed to invalidate an undelivered password reset request.");
+                }
+            }
+
+            return genericResult;
         }
         private async Task<List<OperationClaim>> GetUserClaimsAsync(int userId)
         {
