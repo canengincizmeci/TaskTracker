@@ -23,6 +23,10 @@ namespace TaskTracker.API.Controllers
                 return BadRequest(userExists);
 
             var result = await _authService.RegisterAsync(dto);
+
+            if (!result.Success)
+                return BadRequest(result);
+
             return Ok(result);
         }
 

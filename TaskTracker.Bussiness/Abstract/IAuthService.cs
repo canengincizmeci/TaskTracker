@@ -10,7 +10,7 @@ namespace TaskTracker.Bussiness.Abstract
 {
     public interface IAuthService
     {
-        Task<IDataResult<User>> RegisterAsync(UserForRegisterDto dto);
+        Task<IResult> RegisterAsync(UserForRegisterDto dto);
         Task<IDataResult<LoginResponseDto>> LoginAsync(UserForLoginDto dto);
 
         Task<IResult> UserExistsAsync(string email);

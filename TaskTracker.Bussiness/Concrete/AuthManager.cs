@@ -136,7 +136,7 @@ namespace TaskTracker.Bussiness.Concrete
 
         //    return new SuccessDataResult<User>(user, "Kayıt başarılı, mailine gönderilen kodu gir.");
         ////}
-        public async Task<IDataResult<User>> RegisterAsync(UserForRegisterDto dto)
+        public async Task<IResult> RegisterAsync(UserForRegisterDto dto)
         {
             var userRepo = _unitOfWork.GetRepository<User>();
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
@@ -150,7 +150,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             if (existingUser != null && existingUser.IsVerified)
             {
-                return new ErrorDataResult<User>(Messages.UserAlreadyExists);
+                return new ErrorResult(Messages.UserAlreadyExists);
             }
 
             if (existingUser != null && !existingUser.IsVerified)
@@ -210,7 +210,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             await _emailService.SendVerificationCodeAsync(user.Email, code);
 
-            return new SuccessDataResult<User>(user, "Kayıt başarılı, mailine gönderilen kodu gir.");
+            return new SuccessResult("Kayıt başarılı, mailine gönderilen kodu gir.");
         }
         public async Task<Core.Utilities.Results.IResult> UserExistsAsync(string email)
         {
