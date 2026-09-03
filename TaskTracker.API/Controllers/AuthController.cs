@@ -67,6 +67,17 @@ namespace TaskTracker.API.Controllers
             return Ok(result);
         }
 
+        [HttpPost("verify-password-reset-code")]
+        public async Task<IActionResult> VerifyPasswordResetCode([FromBody] VerifyPasswordResetCodeDto dto)
+        {
+            var result = await _authService.VerifyPasswordResetCodeAsync(dto);
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
 
 
 

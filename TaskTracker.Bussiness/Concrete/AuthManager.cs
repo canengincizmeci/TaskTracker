@@ -403,6 +403,89 @@ namespace TaskTracker.Bussiness.Concrete
 
             return genericResult;
         }
+
+        public async Task<IDataResult<PasswordResetTokenDto>> VerifyPasswordResetCodeAsync(
+            VerifyPasswordResetCodeDto dto)
+        {
+            const int maximumAttempts = 5;
+            const int resetTokenLifetimeMinutes = 15;
+
+            var failureResult = new ErrorDataResult<PasswordResetTokenDto>(
+                Messages.PasswordResetCodeInvalidOrExpired);
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var userRepo = _unitOfWork.GetRepository<User>();
+            var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
+
+            var user = await userRepo.GetAsync(u =>
+                u.Email.ToLower() == normalizedEmail &&
+                u.Status &&
+                u.IsVerified);
+
+            if (user is null)
+                return failureResult;
+
+            var requests = await passwordResetRepo.GetAllAsync(r => r.UserId == user.Id);
+            var currentRequest = requests
+                .OrderByDescending(r => r.CreatedAt)
+                .ThenByDescending(r => r.Id)
+                .FirstOrDefault();
+
+            if (currentRequest is null)
+                return failureResult;
+
+            var now = DateTime.UtcNow;
+            var isUnusable =
+                currentRequest.UsedAt.HasValue ||
+                currentRequest.InvalidatedAt.HasValue ||
+                currentRequest.VerifiedAt.HasValue ||
+                currentRequest.ExpiresAt <= now ||
+                currentRequest.FailedAttemptCount >= maximumAttempts ||
+                (currentRequest.LockedUntil.HasValue && currentRequest.LockedUntil.Value > now);
+
+            if (isUnusable)
+                return failureResult;
+
+            var isValidCodeFormat =
+                dto.Code is { Length: 6 } &&
+                dto.Code.All(character => character >= '0' && character <= '9');
+            var hmacSecret = _configuration["PasswordRecovery:HmacSecret"]!;
+            var isValidCode = isValidCodeFormat && PasswordResetCodeHasher.Verify(
+                normalizedEmail,
+                dto.Code,
+                hmacSecret,
+                currentRequest.CodeHash);
+
+            if (!isValidCode)
+            {
+                currentRequest.FailedAttemptCount++;
+
+                if (currentRequest.FailedAttemptCount >= maximumAttempts)
+                {
+                    currentRequest.FailedAttemptCount = maximumAttempts;
+                    currentRequest.LockedUntil = currentRequest.ExpiresAt;
+                }
+
+                passwordResetRepo.Update(currentRequest);
+                await _unitOfWork.SaveChangesAsync();
+                return failureResult;
+            }
+
+            var resetToken = PasswordResetTokenGenerator.GenerateToken();
+            currentRequest.VerifiedAt = now;
+            currentRequest.ResetTokenHash = PasswordResetTokenGenerator.HashToken(resetToken);
+            currentRequest.ResetTokenExpiresAt = now.AddMinutes(resetTokenLifetimeMinutes);
+
+            passwordResetRepo.Update(currentRequest);
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessDataResult<PasswordResetTokenDto>(
+                new PasswordResetTokenDto
+                {
+                    ResetToken = resetToken,
+                    ExpiresAt = currentRequest.ResetTokenExpiresAt.Value
+                },
+                Messages.PasswordResetCodeVerified);
+        }
         private async Task<List<OperationClaim>> GetUserClaimsAsync(int userId)
         {
             var userOperationClaimRepo =

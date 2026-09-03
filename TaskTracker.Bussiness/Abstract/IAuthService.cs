@@ -19,5 +19,6 @@ namespace TaskTracker.Bussiness.Abstract
 
         Task<IResult> VerifyEmailAsync(EmailVerificationDto dto);
         Task<IResult> ForgotPasswordAsync(ForgotPasswordDto dto);
+        Task<IDataResult<PasswordResetTokenDto>> VerifyPasswordResetCodeAsync(VerifyPasswordResetCodeDto dto);
     }
 }
