@@ -44,6 +44,43 @@ type RefreshTokenResponse = {
   message: string | null;
 };
 
+type ForgotPasswordRequest = {
+  email: string;
+};
+
+type VerifyPasswordResetCodeRequest = {
+  email: string;
+  code: string;
+};
+
+type PasswordResetToken = {
+  resetToken: string;
+  expiresAt: string;
+};
+
+type VerifyPasswordResetCodeResponse = {
+  data: PasswordResetToken;
+  success: boolean;
+  message: string;
+};
+
+type ResetPasswordRequest = {
+  resetToken: string;
+  newPassword: string;
+  confirmNewPassword: string;
+};
+
+type ChangePasswordRequest = {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+};
+
+type ResultResponse = {
+  success: boolean;
+  message: string;
+};
+
 async function refreshToken(
   data: RefreshTokenRequest
 ): Promise<RefreshTokenResponse> {
@@ -66,4 +103,45 @@ async function verifyEmail(data: VerifyEmailRequest) {
   const response = await axiosClient.post("/Auth/verify-email", data);
   return response.data;
 }
-export { login, register, verifyEmail,refreshToken };
+
+async function forgotPassword(
+  data: ForgotPasswordRequest
+): Promise<ResultResponse> {
+  const response = await axiosClient.post("/Auth/forgot-password", data);
+  return response.data;
+}
+
+async function verifyPasswordResetCode(
+  data: VerifyPasswordResetCodeRequest
+): Promise<VerifyPasswordResetCodeResponse> {
+  const response = await axiosClient.post(
+    "/Auth/verify-password-reset-code",
+    data
+  );
+  return response.data;
+}
+
+async function resetPassword(
+  data: ResetPasswordRequest
+): Promise<ResultResponse> {
+  const response = await axiosClient.post("/Auth/reset-password", data);
+  return response.data;
+}
+
+async function changePassword(
+  data: ChangePasswordRequest
+): Promise<ResultResponse> {
+  const response = await axiosClient.post("/Auth/change-password", data);
+  return response.data;
+}
+
+export {
+  login,
+  register,
+  verifyEmail,
+  refreshToken,
+  forgotPassword,
+  verifyPasswordResetCode,
+  resetPassword,
+  changePassword,
+};
