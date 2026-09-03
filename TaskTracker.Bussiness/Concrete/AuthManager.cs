@@ -486,6 +486,91 @@ namespace TaskTracker.Bussiness.Concrete
                 },
                 Messages.PasswordResetCodeVerified);
         }
+
+        public async Task<IResult> ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.ResetToken))
+                return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
+
+            var now = DateTime.UtcNow;
+            var resetTokenHash = PasswordResetTokenGenerator.HashToken(dto.ResetToken);
+            var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
+            var userRepo = _unitOfWork.GetRepository<User>();
+            var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
+
+            var currentRequest = await passwordResetRepo.GetAsync(r =>
+                r.ResetTokenHash == resetTokenHash);
+
+            var isUsableRequest =
+                currentRequest is not null &&
+                currentRequest.VerifiedAt.HasValue &&
+                !currentRequest.UsedAt.HasValue &&
+                !currentRequest.InvalidatedAt.HasValue &&
+                currentRequest.ResetTokenHash is not null &&
+                currentRequest.ResetTokenExpiresAt.HasValue &&
+                currentRequest.ResetTokenExpiresAt.Value > now;
+
+            if (!isUsableRequest)
+                return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
+
+            var validRequest = currentRequest!;
+            var user = await userRepo.GetAsync(u =>
+                u.Id == validRequest.UserId &&
+                u.Status &&
+                u.IsVerified);
+
+            if (user is null)
+                return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
+
+            if (string.IsNullOrWhiteSpace(dto.NewPassword) ||
+                string.IsNullOrWhiteSpace(dto.ConfirmNewPassword))
+            {
+                return new ErrorResult(Messages.PasswordResetPasswordRequired);
+            }
+
+            if (dto.NewPassword.Length > 128 || dto.ConfirmNewPassword.Length > 128)
+                return new ErrorResult(Messages.PasswordResetPasswordTooLong);
+
+            if (dto.NewPassword != dto.ConfirmNewPassword)
+                return new ErrorResult(Messages.PasswordResetPasswordsDoNotMatch);
+
+            HashingHelper.CreatePasswordHash(
+                dto.NewPassword,
+                out var passwordHash,
+                out var passwordSalt);
+
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+            validRequest.UsedAt = now;
+
+            var otherResetRequests = await passwordResetRepo.GetAllAsync(r =>
+                r.UserId == user.Id &&
+                r.Id != validRequest.Id &&
+                r.UsedAt == null &&
+                r.InvalidatedAt == null);
+
+            foreach (var otherResetRequest in otherResetRequests)
+            {
+                otherResetRequest.InvalidatedAt = now;
+                passwordResetRepo.Update(otherResetRequest);
+            }
+
+            var activeRefreshTokens = await refreshTokenRepo.GetAllAsync(r =>
+                r.UserId == user.Id &&
+                !r.IsRevoked);
+
+            foreach (var refreshToken in activeRefreshTokens)
+            {
+                refreshToken.IsRevoked = true;
+                refreshTokenRepo.Update(refreshToken);
+            }
+
+            userRepo.Update(user);
+            passwordResetRepo.Update(validRequest);
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult(Messages.PasswordResetSuccessful);
+        }
         private async Task<List<OperationClaim>> GetUserClaimsAsync(int userId)
         {
             var userOperationClaimRepo =

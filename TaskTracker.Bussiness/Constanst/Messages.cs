@@ -42,6 +42,11 @@ namespace TaskTracker.Bussiness.Constanst
         public static string PasswordRecoveryInstructionsSent = "If an eligible account exists, password recovery instructions have been sent.";
         public static string PasswordResetCodeInvalidOrExpired = "Invalid or expired password reset code.";
         public static string PasswordResetCodeVerified = "Password reset code verified.";
+        public static string PasswordResetTokenInvalidOrExpired = "Invalid or expired password reset token.";
+        public static string PasswordResetPasswordRequired = "New password and confirmation are required.";
+        public static string PasswordResetPasswordsDoNotMatch = "New password and confirmation do not match.";
+        public static string PasswordResetPasswordTooLong = "New password cannot exceed 128 characters.";
+        public static string PasswordResetSuccessful = "Password has been reset successfully. Please sign in again.";
 
 
     }
