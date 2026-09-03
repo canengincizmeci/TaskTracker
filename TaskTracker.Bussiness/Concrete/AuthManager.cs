@@ -21,6 +21,7 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITokenHelper _tokenHelper;
         private readonly IEmailService _emailService;
+        private readonly ICurrentUserService _currentUserService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthManager> _logger;
 
@@ -28,12 +29,14 @@ namespace TaskTracker.Bussiness.Concrete
             IUnitOfWork unitOfWork,
             ITokenHelper tokenHelper,
             IEmailService emailService,
+            ICurrentUserService currentUserService,
             IConfiguration configuration,
             ILogger<AuthManager> logger)
         {
             _unitOfWork = unitOfWork;
             _tokenHelper = tokenHelper;
             _emailService = emailService;
+            _currentUserService = currentUserService;
             _configuration = configuration;
             _logger = logger;
         }
@@ -570,6 +573,73 @@ namespace TaskTracker.Bussiness.Concrete
             await _unitOfWork.SaveChangesAsync();
 
             return new SuccessResult(Messages.PasswordResetSuccessful);
+        }
+
+        public async Task<IResult> ChangePasswordAsync(ChangePasswordDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.CurrentPassword) ||
+                string.IsNullOrWhiteSpace(dto.NewPassword) ||
+                string.IsNullOrWhiteSpace(dto.ConfirmNewPassword))
+            {
+                return new ErrorResult(Messages.ChangePasswordFieldsRequired);
+            }
+
+            if (dto.NewPassword.Length > 128 || dto.ConfirmNewPassword.Length > 128)
+                return new ErrorResult(Messages.ChangePasswordTooLong);
+
+            if (dto.NewPassword != dto.ConfirmNewPassword)
+                return new ErrorResult(Messages.ChangePasswordPasswordsDoNotMatch);
+
+            var currentUserId = _currentUserService.UserId;
+            var userRepo = _unitOfWork.GetRepository<User>();
+            var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
+
+            var user = await userRepo.GetAsync(u =>
+                u.Id == currentUserId &&
+                u.Status &&
+                u.IsVerified);
+
+            if (user is null)
+                return new ErrorResult(Messages.ChangePasswordUnavailable);
+
+            if (!HashingHelper.VerifyPasswordHash(
+                    dto.CurrentPassword,
+                    user.PasswordHash,
+                    user.PasswordSalt))
+            {
+                return new ErrorResult(Messages.CurrentPasswordIncorrect);
+            }
+
+            if (HashingHelper.VerifyPasswordHash(
+                    dto.NewPassword,
+                    user.PasswordHash,
+                    user.PasswordSalt))
+            {
+                return new ErrorResult(Messages.NewPasswordMustBeDifferent);
+            }
+
+            HashingHelper.CreatePasswordHash(
+                dto.NewPassword,
+                out var passwordHash,
+                out var passwordSalt);
+
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+
+            var activeRefreshTokens = await refreshTokenRepo.GetAllAsync(rt =>
+                rt.UserId == user.Id &&
+                !rt.IsRevoked);
+
+            foreach (var refreshToken in activeRefreshTokens)
+            {
+                refreshToken.IsRevoked = true;
+                refreshTokenRepo.Update(refreshToken);
+            }
+
+            userRepo.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult(Messages.PasswordChangeSuccessful);
         }
         private async Task<List<OperationClaim>> GetUserClaimsAsync(int userId)
         {

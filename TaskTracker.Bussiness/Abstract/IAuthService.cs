@@ -21,5 +21,6 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IResult> ForgotPasswordAsync(ForgotPasswordDto dto);
         Task<IDataResult<PasswordResetTokenDto>> VerifyPasswordResetCodeAsync(VerifyPasswordResetCodeDto dto);
         Task<IResult> ResetPasswordAsync(ResetPasswordDto dto);
+        Task<IResult> ChangePasswordAsync(ChangePasswordDto dto);
     }
 }
