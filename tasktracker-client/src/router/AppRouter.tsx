@@ -14,6 +14,9 @@ import NotificationsPage from "../pages/NotificationsPage";
 import TaskInvitationsPage from "../pages/TaskInvitationsPage";
 import SharedTasksPage from "../pages/SharedTasksPage";
 import TaskInvitationDetailPage from "../pages/TaskInvitationDetailPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
+import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
+import ResetPasswordPage from "../pages/ResetPasswordPage";
 
 function AppRouter() {
   return (
@@ -23,6 +26,12 @@ function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route
+        path="/verify-password-reset"
+        element={<VerifyPasswordResetPage />}
+      />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         path="/profile"
         element={
