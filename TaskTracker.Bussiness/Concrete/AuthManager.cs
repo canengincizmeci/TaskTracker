@@ -593,6 +593,7 @@ namespace TaskTracker.Bussiness.Concrete
             var currentUserId = _currentUserService.UserId;
             var userRepo = _unitOfWork.GetRepository<User>();
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
+            var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
 
             var user = await userRepo.GetAsync(u =>
                 u.Id == currentUserId &&
@@ -634,6 +635,18 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 refreshToken.IsRevoked = true;
                 refreshTokenRepo.Update(refreshToken);
+            }
+
+            var now = DateTime.UtcNow;
+            var activePasswordResetRequests = await passwordResetRepo.GetAllAsync(request =>
+                request.UserId == user.Id &&
+                request.UsedAt == null &&
+                request.InvalidatedAt == null);
+
+            foreach (var passwordResetRequest in activePasswordResetRequests)
+            {
+                passwordResetRequest.InvalidatedAt = now;
+                passwordResetRepo.Update(passwordResetRequest);
             }
 
             userRepo.Update(user);
