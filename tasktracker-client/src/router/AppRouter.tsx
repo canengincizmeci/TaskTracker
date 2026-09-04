@@ -17,6 +17,7 @@ import TaskInvitationDetailPage from "../pages/TaskInvitationDetailPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
+import SecuritySettingsPage from "../pages/SecuritySettingsPage";
 
 function AppRouter() {
   return (
@@ -37,6 +38,14 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/security"
+        element={
+          <ProtectedRoute>
+            <SecuritySettingsPage />
           </ProtectedRoute>
         }
       />
