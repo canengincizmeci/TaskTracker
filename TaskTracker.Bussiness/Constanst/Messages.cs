@@ -39,6 +39,21 @@ namespace TaskTracker.Bussiness.Constanst
         public static string TaskRejected = "Task invitation rejected successfully.";
         public static string InvitationAlreadyResponded = "You have already responded to this invitation.";
         public static string InvitationExpired = "This invitation has expired.";
+        public static string PasswordRecoveryInstructionsSent = "If an eligible account exists, password recovery instructions have been sent.";
+        public static string PasswordResetCodeInvalidOrExpired = "Invalid or expired password reset code.";
+        public static string PasswordResetCodeVerified = "Password reset code verified.";
+        public static string PasswordResetTokenInvalidOrExpired = "Invalid or expired password reset token.";
+        public static string PasswordResetPasswordRequired = "New password and confirmation are required.";
+        public static string PasswordResetPasswordsDoNotMatch = "New password and confirmation do not match.";
+        public static string PasswordResetPasswordTooLong = "New password cannot exceed 128 characters.";
+        public static string PasswordResetSuccessful = "Password has been reset successfully. Please sign in again.";
+        public static string ChangePasswordFieldsRequired = "Current password, new password and confirmation are required.";
+        public static string ChangePasswordTooLong = "New password cannot exceed 128 characters.";
+        public static string ChangePasswordPasswordsDoNotMatch = "New password and confirmation do not match.";
+        public static string ChangePasswordUnavailable = "Unable to change password.";
+        public static string CurrentPasswordIncorrect = "Current password is incorrect.";
+        public static string NewPasswordMustBeDifferent = "New password must be different from the current password.";
+        public static string PasswordChangeSuccessful = "Password changed successfully. Please sign in again.";
 
 
     }

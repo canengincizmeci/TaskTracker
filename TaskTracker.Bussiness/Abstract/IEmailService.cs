@@ -7,6 +7,7 @@ namespace TaskTracker.Bussiness.Abstract
     public interface IEmailService
     {
         Task SendVerificationCodeAsync(string email, string code);
+        Task SendPasswordResetCodeAsync(string email, string code);
         Task SendTaskShareInvitationEmailAsync(string email, string taskTitle, string inviterUsername, string invitationUrl);
     }
 }

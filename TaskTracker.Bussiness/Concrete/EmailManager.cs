@@ -75,5 +75,27 @@ namespace TaskTracker.Bussiness.Concrete
 
             await client.SendMailAsync(message);
         }
+
+        public async Task SendPasswordResetCodeAsync(string email, string code)
+        {
+            using var client = new SmtpClient(_smtpHost, _smtpPort)
+            {
+                Credentials = new NetworkCredential(_smtpUser, _smtpPass),
+                EnableSsl = true
+            };
+
+            var message = new MailMessage(_fromEmail, email)
+            {
+                Subject = "TaskTracker - Password reset code",
+                Body = $@"Your password reset code is: {code}
+
+This code expires in 10 minutes.
+
+If you did not request a password reset, you can ignore this email.",
+                IsBodyHtml = false
+            };
+
+            await client.SendMailAsync(message);
+        }
     }
 }

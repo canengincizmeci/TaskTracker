@@ -41,6 +41,10 @@ function ProfilePage() {
             <Link to="/create-task" className="secondary-button">
               Create Task
             </Link>
+
+            <Link to="/settings/security" className="secondary-button">
+              Account Security
+            </Link>
           </div>
         </aside>
 

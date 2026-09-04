@@ -152,7 +152,7 @@
 
 // export default LoginPage;
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { login } from "../api/authService";
 import { getRoleFromToken } from "../utils/jwtHelper";
 import { useAuth } from "../context/AuthContext";
@@ -283,6 +283,8 @@ function LoginPage() {
                 required
               />
             </div>
+
+            <Link to="/forgot-password">Forgot password?</Link>
 
             {error && <p className="error-message">{error}</p>}
 

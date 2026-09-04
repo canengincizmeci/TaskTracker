@@ -15,6 +15,14 @@ using TaskTracker.Core.DataAccess;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+var passwordRecoveryHmacSecret = builder.Configuration["PasswordRecovery:HmacSecret"];
+if (string.IsNullOrWhiteSpace(passwordRecoveryHmacSecret) || passwordRecoveryHmacSecret.Length < 32)
+{
+    throw new InvalidOperationException(
+        "Password recovery HMAC secret is missing or must contain at least 32 characters.");
+}
+
 builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
 
 builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>

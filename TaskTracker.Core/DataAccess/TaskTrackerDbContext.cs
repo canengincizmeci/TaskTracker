@@ -22,6 +22,7 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskShare> TaskShares { get; set; }
         public DbSet<TaskShareInvitation> TaskShareInvitations { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
 
          
 
