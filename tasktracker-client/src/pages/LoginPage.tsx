@@ -205,7 +205,7 @@ function LoginPage() {
       if (role === "Admin") {
         navigate("/admin-dashboard", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        navigate("/tasks/user-tasks", { replace: true });
       }
     } catch (error) {
       setError("Email or password is wrong.");
