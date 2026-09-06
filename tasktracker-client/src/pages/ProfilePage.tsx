@@ -3,6 +3,8 @@ import { useAuth } from "../context/AuthContext";
 
 function ProfilePage() {
   const { user } = useAuth();
+  const isUser = user?.role === "User";
+  const isAdmin = user?.role === "Admin";
 
   const firstLetter =
     user?.name?.charAt(0).toUpperCase() ??
@@ -27,20 +29,24 @@ function ProfilePage() {
 
           <div className="profile-action-list">
             <Link to="/" className="secondary-button">
-              Dashboard
+              {isAdmin ? "Admin Dashboard" : "Workspace"}
             </Link>
 
-            <Link to="/tasks/user-tasks" className="primary-button">
-              My Tasks
-            </Link>
+            {isUser && (
+              <>
+                <Link to="/tasks/user-tasks" className="primary-button">
+                  My Tasks
+                </Link>
 
-            <Link to="/tasks/shared-tasks" className="secondary-button">
-              Shared Tasks
-            </Link> 
+                <Link to="/tasks/shared-tasks" className="secondary-button">
+                  Shared Tasks
+                </Link>
 
-            <Link to="/tasks/create-task" className="secondary-button">
-              Create Task
-            </Link>
+                <Link to="/tasks/create-task" className="secondary-button">
+                  Create Task
+                </Link>
+              </>
+            )}
 
             <Link to="/settings/security" className="secondary-button">
               Account Security
@@ -56,9 +62,11 @@ function ProfilePage() {
                 <h2>Your workspace</h2>
               </div>
 
-              <Link to="/tasks/create-task" className="primary-button">
-                New Task
-              </Link>
+              {isUser && (
+                <Link to="/tasks/create-task" className="primary-button">
+                  New Task
+                </Link>
+              )}
             </div>
 
             <div className="profile-stats-grid">
@@ -80,43 +88,45 @@ function ProfilePage() {
           </div>
 
           <div className="profile-grid">
-            <section className="profile-content-card">
-              <div className="profile-card-header">
-                <div>
-                  <p className="eyebrow">TASK ACCESS</p>
-                  <h3>Your task areas</h3>
+            {isUser && (
+              <section className="profile-content-card">
+                <div className="profile-card-header">
+                  <div>
+                    <p className="eyebrow">TASK ACCESS</p>
+                    <h3>Your task areas</h3>
+                  </div>
                 </div>
-              </div>
 
-              <div className="profile-link-list">
-                <Link to="/tasks/user-tasks">
-                  <div>
-                    <strong>My Tasks</strong>
-                    <span>Tasks you created and manage.</span>
-                  </div>
+                <div className="profile-link-list">
+                  <Link to="/tasks/user-tasks">
+                    <div>
+                      <strong>My Tasks</strong>
+                      <span>Tasks you created and manage.</span>
+                    </div>
 
-                  <span>→</span>
-                </Link>
+                    <span>→</span>
+                  </Link>
 
-                <Link to="/tasks/shared-tasks">
-                  <div>
-                    <strong>Shared With Me</strong>
-                    <span>Tasks where another user added you.</span>
-                  </div>
+                  <Link to="/tasks/shared-tasks">
+                    <div>
+                      <strong>Shared With Me</strong>
+                      <span>Tasks where another user added you.</span>
+                    </div>
 
-                  <span>→</span>
-                </Link>
+                    <span>→</span>
+                  </Link>
 
-                <Link to="/tasks/create-task">
-                  <div>
-                    <strong>Create Task</strong>
-                    <span>Create a new task and assign priority.</span>
-                  </div>
+                  <Link to="/tasks/create-task">
+                    <div>
+                      <strong>Create Task</strong>
+                      <span>Create a new task and assign priority.</span>
+                    </div>
 
-                  <span>→</span>
-                </Link>
-              </div>
-            </section>
+                    <span>→</span>
+                  </Link>
+                </div>
+              </section>
+            )}
 
             <section className="profile-content-card">
               <div className="profile-card-header">
