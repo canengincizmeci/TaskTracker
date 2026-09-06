@@ -103,25 +103,28 @@ function Navbar() {
       </Link>
 
       <nav className="navbar-links">
-        <Link to="/">Home</Link>
-
-        {isAuthenticated && (
-          <Link to="/tasks/create-task" className="create-task-link">
-            + Create Task
-          </Link>
-        )}
-
-        {user?.role === "Admin" && (
-          <Link to="/admin-dashboard">Dashboard</Link>
-        )}
-
         {!isAuthenticated ? (
           <>
+            <Link to="/">Home</Link>
             <Link to="/login">Login</Link>
             <Link to="/register">Register</Link>
           </>
         ) : (
           <>
+            {user?.role === "User" && (
+              <>
+                <Link to="/tasks/user-tasks">My Tasks</Link>
+                <Link to="/tasks/invitations">Invitations</Link>
+                <Link to="/tasks/create-task" className="create-task-link">
+                  + Create Task
+                </Link>
+              </>
+            )}
+
+            {user?.role === "Admin" && (
+              <Link to="/admin-dashboard">Dashboard</Link>
+            )}
+
             <Link
               to="/notifications"
               aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
