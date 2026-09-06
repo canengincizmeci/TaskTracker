@@ -3,6 +3,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { resetPassword } from "../api/authService";
+import { useAuth } from "../context/AuthContext";
 
 function getResetToken(navigationState: unknown): string | null {
   if (
@@ -22,6 +23,7 @@ function getResetToken(navigationState: unknown): string | null {
 function ResetPasswordPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [resetToken] = useState<string | null>(() =>
     getResetToken(location.state)
   );
@@ -93,6 +95,7 @@ function ResetPasswordPage() {
       setNewPassword("");
       setConfirmNewPassword("");
       toast.success(response.message);
+      logout();
       navigate("/login", { replace: true });
     } catch (requestError: unknown) {
       const message = axios.isAxiosError<{ message?: string }>(requestError)
