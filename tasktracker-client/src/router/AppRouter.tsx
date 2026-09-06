@@ -19,6 +19,7 @@ import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import SecuritySettingsPage from "../pages/SecuritySettingsPage";
+import NotFoundPage from "../pages/NotFoundPage";
 
 function AppRouter() {
   return (
@@ -133,6 +134,7 @@ function AppRouter() {
         }
       />
      
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
