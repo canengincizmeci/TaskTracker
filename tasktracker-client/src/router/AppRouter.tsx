@@ -1,12 +1,13 @@
 import { Routes, Route } from "react-router-dom";
-import HomePage from "../pages/HomePage";
+import RootRoute from "./RootRoute";
 import TaskDetailPage from "../pages/TaskDetailPage";
-import LoginPage from "../pages/LoginPage";
+import LoginRoute from "./LoginRoute";
 import RegisterPage from "../pages/RegisterPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
 import ProfilePage from "../pages/ProfilePage";
 import ProtectedRoute from "./ProtectedRoute";
+import GuestRoute from "./GuestRoute";
 import CreateTaskPage from "../pages/CreateTaskPage";
 import UserTasksPage from "../pages/UserTasksPage";
 import TaskSharePage from "../pages/TaskSharePage";
@@ -18,14 +19,22 @@ import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import SecuritySettingsPage from "../pages/SecuritySettingsPage";
+import NotFoundPage from "../pages/NotFoundPage";
 
 function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<RootRoute />} />
 
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/login" element={<LoginRoute />} />
+      <Route
+        path="/register"
+        element={
+          <GuestRoute>
+            <RegisterPage />
+          </GuestRoute>
+        }
+      />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route
@@ -125,6 +134,7 @@ function AppRouter() {
         }
       />
      
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

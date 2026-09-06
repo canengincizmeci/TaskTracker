@@ -152,20 +152,22 @@ namespace TaskTracker.Bussiness.Concrete
 
         public async Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync()
         {
-            int? userId = _currentUserService.UserId;
-            if (!userId.HasValue)
+            var userId = _currentUserService.UserId;
+            var sharedTasks = await _taskShareDal.GetAllAsync(
+                share => share.SharedWithUserId == userId &&
+                         share.TaskRequest != null && share.TaskRequest.Activity,
+                include: query => query.Include(share => share.TaskRequest));
+
+            var sharedTaskDtos = sharedTasks.Select(share => new SharedTaskDto
             {
-                return new ErrorDataResult<List<SharedTaskDto>>(Messages.AuthorizationDenied);
-            }
+                TaskId = share.TaskRequestId,
+                Title = share.TaskRequest.Title,
+                Category = share.TaskRequest.Category,
+                Permission = share.Permission,
+                SharedAt = share.SharedAt
+            }).ToList();
 
-            var sharedTasks = _taskShareDal.GetAllAsync(p => p.SharedWithUserId == userId);
-
-            if (sharedTasks is null)
-            {
-                return new SuccessDataResult<List<SharedTaskDto>>(Messages.DataNotFound);
-            }
-
-            return new SuccessDataResult<List<SharedTaskDto>>(Messages.DataListed);
+            return new SuccessDataResult<List<SharedTaskDto>>(sharedTaskDtos, Messages.DataListed);
         }
 
         public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId,int currentUserId)

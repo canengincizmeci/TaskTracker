@@ -153,6 +153,7 @@
 // export default LoginPage;
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getSafeLoginRedirect } from "../utils/loginRedirect";
 import { login } from "../api/authService";
 import { getRoleFromToken } from "../utils/jwtHelper";
 import { useAuth } from "../context/AuthContext";
@@ -164,7 +165,10 @@ function LoginPage() {
 
   const { loginToContext } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    const state = location.state as { email?: unknown } | null;
+    return typeof state?.email === "string" ? state.email : "";
+  });
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -195,7 +199,7 @@ function LoginPage() {
       const role = getRoleFromToken(token);
 
       const searchParams = new URLSearchParams(location.search);
-      const redirect = searchParams.get("redirect");
+      const redirect = getSafeLoginRedirect(searchParams.get("redirect"));
 
       if (redirect) {
         navigate(redirect, { replace: true });
@@ -205,7 +209,7 @@ function LoginPage() {
       if (role === "Admin") {
         navigate("/admin-dashboard", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        navigate("/tasks/user-tasks", { replace: true });
       }
     } catch (error) {
       setError("Email or password is wrong.");
