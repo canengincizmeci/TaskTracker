@@ -157,7 +157,7 @@ function RegisterPage() {
       setSuccessMessage("Registration successful. Please verify your email.");
 
       setTimeout(() => {
-        navigate("/verify-email");
+        navigate("/verify-email", { state: { email } });
       }, 1200);
     } catch (error) {
       setError("Registration failed.");

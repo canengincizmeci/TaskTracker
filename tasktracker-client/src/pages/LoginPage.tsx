@@ -165,7 +165,10 @@ function LoginPage() {
 
   const { loginToContext } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    const state = location.state as { email?: unknown } | null;
+    return typeof state?.email === "string" ? state.email : "";
+  });
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);

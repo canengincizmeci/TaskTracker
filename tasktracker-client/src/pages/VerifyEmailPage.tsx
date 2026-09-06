@@ -85,13 +85,17 @@
 
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { verifyEmail } from "../api/authService";
 
 function VerifyEmailPage() {
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    const state = location.state as { email?: unknown } | null;
+    return typeof state?.email === "string" ? state.email : "";
+  });
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -114,7 +118,7 @@ function VerifyEmailPage() {
       setSuccessMessage("Email verified successfully. You can now sign in.");
 
       setTimeout(() => {
-        navigate("/login");
+        navigate("/login", { state: { email } });
       }, 1200);
     } catch (error) {
       setError("Email verification failed.");
