@@ -34,7 +34,7 @@ function ProfilePage() {
               My Tasks
             </Link>
 
-            <Link to="tasks/shared-tasks" className="secondary-button">
+            <Link to="/tasks/shared-tasks" className="secondary-button">
               Shared Tasks
             </Link> 
 
@@ -98,7 +98,7 @@ function ProfilePage() {
                   <span>→</span>
                 </Link>
 
-                <Link to="/shared-tasks">
+                <Link to="/tasks/shared-tasks">
                   <div>
                     <strong>Shared With Me</strong>
                     <span>Tasks where another user added you.</span>

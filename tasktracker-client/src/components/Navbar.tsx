@@ -71,7 +71,7 @@ function Navbar() {
             .filter(
               (notification) =>
                 notification.isRead === false &&
-                !locallyReadIds.has(notification.id),
+                !locallyReadIds.has(notification.id)
             )
             .forEach((notification) => knownUnreadIds.add(notification.id));
 
@@ -111,15 +111,6 @@ function Navbar() {
           </>
         ) : (
           <>
-            {/* {user?.role === "User" && (
-              <>
-                <Link to="/tasks/user-tasks">My Tasks</Link>
-                <Link to="/tasks/invitations">Invitations</Link>
-                <Link to="/tasks/create-task" className="create-task-link">
-                  + Create Task
-                </Link>
-              </>
-            )} */}
             {user?.role === "User" && (
               <>
                 <Link to="/tasks/user-tasks">My Tasks</Link>
