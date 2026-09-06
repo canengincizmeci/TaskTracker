@@ -34,11 +34,11 @@ function ProfilePage() {
               My Tasks
             </Link>
 
-            <Link to="/shared-tasks" className="secondary-button">
+            <Link to="tasks/shared-tasks" className="secondary-button">
               Shared Tasks
-            </Link>
+            </Link> 
 
-            <Link to="/create-task" className="secondary-button">
+            <Link to="/tasks/create-task" className="secondary-button">
               Create Task
             </Link>
 
@@ -56,7 +56,7 @@ function ProfilePage() {
                 <h2>Your workspace</h2>
               </div>
 
-              <Link to="/create-task" className="primary-button">
+              <Link to="/tasks/create-task" className="primary-button">
                 New Task
               </Link>
             </div>
@@ -89,7 +89,7 @@ function ProfilePage() {
               </div>
 
               <div className="profile-link-list">
-                <Link to="tasks/user-tasks">
+                <Link to="/tasks/user-tasks">
                   <div>
                     <strong>My Tasks</strong>
                     <span>Tasks you created and manage.</span>
@@ -107,7 +107,7 @@ function ProfilePage() {
                   <span>→</span>
                 </Link>
 
-                <Link to="/create-task">
+                <Link to="/tasks/create-task">
                   <div>
                     <strong>Create Task</strong>
                     <span>Create a new task and assign priority.</span>
