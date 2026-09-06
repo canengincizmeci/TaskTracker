@@ -1,7 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import RootRoute from "./RootRoute";
 import TaskDetailPage from "../pages/TaskDetailPage";
-import LoginPage from "../pages/LoginPage";
+import LoginRoute from "./LoginRoute";
 import RegisterPage from "../pages/RegisterPage";
 import VerifyEmailPage from "../pages/VerifyEmailPage";
 import AdminDashboardPage from "../pages/AdminDashboardPage";
@@ -25,7 +25,7 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<RootRoute />} />
 
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={<LoginRoute />} />
       <Route
         path="/register"
         element={
