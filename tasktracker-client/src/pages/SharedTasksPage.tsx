@@ -9,8 +9,8 @@ type SharedTask = {
   category: string;
   priority?: string;
   status?: string;
-  permission: number;
-  sharedAt?: string;
+  permission: "View" | "Edit" | "Manage";
+  sharedAt?: string | null;
 };
 
 function SharedTasksPage() {
@@ -25,7 +25,7 @@ function SharedTasksPage() {
         setErrorMessage("");
 
         const response = await axiosClient.get<SharedTask[]>(
-          "/TaskShare/shared-tasks"
+          "/TaskShare/user-shared-tasks"
         );
 
         setSharedTasks(response.data);
@@ -50,9 +50,10 @@ function SharedTasksPage() {
     loadSharedTasks();
   }, []);
 
-  const getPermissionText = (permission: number) => {
-    if (permission === 0) return "View";
-    if (permission === 1) return "Edit";
+  const getPermissionText = (permission: SharedTask["permission"]) => {
+    if (permission === "View") return "View";
+    if (permission === "Edit") return "Edit";
+    if (permission === "Manage") return "Manage";
 
     return "Unknown";
   };
