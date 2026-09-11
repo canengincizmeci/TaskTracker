@@ -14,3 +14,6 @@ publish/
 node_modules/
 dist/
 .env
+
+
+artifacts/
