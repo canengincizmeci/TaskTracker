@@ -278,6 +278,82 @@ Production migrations are treated as a deployment operation rather than being ap
 
 ---
 
+
+## Docker
+
+The full application can be started locally with Docker Compose.
+
+### Requirements
+
+- Docker Desktop
+- Docker Compose
+
+### Configuration
+
+Create a local `.env` file from the provided example:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the required values in `.env`.
+
+The `.env` file contains local runtime secrets and is intentionally excluded from Git.
+
+### Start the stack
+
+```bash
+docker compose up -d --build
+```
+
+Docker Compose starts:
+
+- PostgreSQL
+- EF Core migration runner
+- ASP.NET Core API
+- React frontend served by Nginx
+
+The migration container waits for PostgreSQL to become healthy, applies the EF Core migration bundle, and exits successfully before the API starts.
+
+The application is then available at:
+
+```text
+http://localhost:8080
+```
+
+### Check container status
+
+```bash
+docker compose ps -a
+```
+
+Expected state:
+
+```text
+db       healthy
+migrate  Exited (0)
+api      healthy
+client   running
+```
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+The PostgreSQL named volume is preserved by default.
+
+To intentionally remove the local Docker database as well:
+
+```bash
+docker compose down -v
+```
+
+> `docker compose down -v` also removes the local PostgreSQL volume. Use it only when you intentionally want a fresh database.
+
+---
+
 ## Local Development
 
 ### Requirements
