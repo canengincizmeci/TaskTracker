@@ -35,6 +35,12 @@ services:
       context: .
       dockerfile: TaskTracker.API/Dockerfile
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     environment:
       ConnectionStrings__PostgreSql: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       TokenOptions__SecurityKey: ${TOKEN_SECURITY_KEY}
@@ -55,7 +61,9 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+   
 
 volumes:
   postgres_data:
