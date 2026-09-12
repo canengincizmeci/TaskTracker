@@ -14,6 +14,20 @@ services:
       retries: 10
       start_period: 5s
     restart: unless-stopped
+  
+  migrate:
+    build:
+      context: .
+      dockerfile: TaskTracker.API/Dockerfile
+      target: migrations
+    environment:
+      ConnectionStrings__PostgreSql: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      TokenOptions__SecurityKey: ${TOKEN_SECURITY_KEY}
+      PasswordRecovery__HmacSecret: ${PASSWORD_RECOVERY_HMAC_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
 
   api:
@@ -28,6 +42,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   client:
     build:
