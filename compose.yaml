@@ -45,6 +45,12 @@ services:
       ConnectionStrings__PostgreSql: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       TokenOptions__SecurityKey: ${TOKEN_SECURITY_KEY}
       PasswordRecovery__HmacSecret: ${PASSWORD_RECOVERY_HMAC_SECRET}
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT}
+      Smtp__User: ${SMTP_USER}
+      Smtp__Pass: ${SMTP_PASS}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL}
+      ClientApp__BaseUrl: ${CLIENT_APP_BASE_URL}
     depends_on:
       db:
         condition: service_healthy
