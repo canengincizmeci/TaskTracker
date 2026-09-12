@@ -99,6 +99,7 @@ builder.Services.AddDbContext<TaskTrackerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
 builder.Services.AddSignalR();
+builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -139,6 +140,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHealthChecks("/health");
 
 app.Run();
 

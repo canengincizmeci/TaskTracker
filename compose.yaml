@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+  
+  migrate:
+    build:
+      context: .
+      dockerfile: TaskTracker.API/Dockerfile
+      target: migrations
+    environment:
+      ConnectionStrings__PostgreSql: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      TokenOptions__SecurityKey: ${TOKEN_SECURITY_KEY}
+      PasswordRecovery__HmacSecret: ${PASSWORD_RECOVERY_HMAC_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+
+  api:
+    build:
+      context: .
+      dockerfile: TaskTracker.API/Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    environment:
+      ConnectionStrings__PostgreSql: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      TokenOptions__SecurityKey: ${TOKEN_SECURITY_KEY}
+      PasswordRecovery__HmacSecret: ${PASSWORD_RECOVERY_HMAC_SECRET}
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT}
+      Smtp__User: ${SMTP_USER}
+      Smtp__Pass: ${SMTP_PASS}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL}
+      ClientApp__BaseUrl: ${CLIENT_APP_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  client:
+    build:
+      context: ./tasktracker-client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+   
+
+volumes:
+  postgres_data:
