@@ -15,10 +15,14 @@ namespace TaskTracker.Entities.DTOs
         public string Priority { get; set; }
         public string? Visibility { get; set; }
         public string Status { get; set; }
-        public bool? MyProperty { get; set; }
         public bool Activity { get; set; }
         public int? OwnerId { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsOwner { get; set; }
+        public bool CanView { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanShare { get; set; }
+        public bool CanDelete { get; set; }
+        public DateTime CreatedAt { get; set; }
         public DateOnly? DueDate { get; set; }
     }
 }

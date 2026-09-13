@@ -84,10 +84,14 @@ namespace TaskTracker.Bussiness.Concrete
             if (task == null || !task.Activity)
                 return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
 
-            var canView = task.OwnerId == currentUserId || task.Visibility == TaskVisibility.Public || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View);
+            var isOwner = task.OwnerId == currentUserId;
+            var canView = isOwner || task.Visibility == TaskVisibility.Public || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View);
 
             if (!canView)
                 return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
+
+            var canEdit = isOwner || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.Edit);
+            var canDelete = isOwner || (canEdit && await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.Manage));
 
             return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
             {
@@ -98,8 +102,15 @@ namespace TaskTracker.Bussiness.Concrete
                 Category = task.Category,
                 Priority = task.Priority.ToString(),
                 Status = task.Status.ToString(),
+                Activity = task.Activity,
                 DueDate = task.DueDate,
-                
+                Visibility = task.Visibility.ToString(),
+                CreatedAt = task.CreatedAt,
+                IsOwner = isOwner,
+                CanView = canView,
+                CanEdit = canEdit,
+                CanShare = isOwner,
+                CanDelete = canDelete,
             });
         }
 
@@ -167,18 +178,20 @@ namespace TaskTracker.Bussiness.Concrete
 
                     Priority = task.Priority.ToString(),
                     Status = task.Status.ToString(),
+                    Activity = task.Activity,
 
                     DueDate = task.DueDate,
 
                     IsOwner = isOwner,
                     IsSharedWithMe = share != null,
 
-                    CanView = isOwner || share != null,
+                    CanView = isOwner || task.Visibility == TaskVisibility.Public ||
+                        (share != null && share.Permission >= TaskPermission.View),
 
                     CanEdit =
                         isOwner ||
                         (share != null &&
-                         share.Permission == TaskPermission.Edit),
+                         share.Permission >= TaskPermission.Edit),
 
                     CanShare = isOwner,
 
