@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 
-type TaskPermission = 0 | 1;
+type TaskPermission = "View" | "Edit";
 
 function TaskSharePage() {
   const { taskId } = useParams();
 
   const [username, setUsername] = useState("");
-  const [permission, setPermission] = useState<TaskPermission>(0);
+  const [permission, setPermission] = useState<TaskPermission>("View");
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -40,7 +40,7 @@ function TaskSharePage() {
 
       setSuccessMessage("Task shared successfully.");
       setUsername("");
-      setPermission(0);
+      setPermission("View");
     } catch (error: any) {
       console.log("Invite User Error:", error.response?.data);
 
@@ -112,11 +112,11 @@ function TaskSharePage() {
                   id="permission"
                   value={permission}
                   onChange={(event) =>
-                    setPermission(Number(event.target.value) as TaskPermission)
+                    setPermission(event.target.value as TaskPermission)
                   }
                 >
-                  <option value={0}>Read</option>
-                  <option value={1}>Write</option>
+                  <option value="View">View</option>
+                  <option value="Edit">Edit</option>
                 </select>
               </div>
 
@@ -145,13 +145,13 @@ function TaskSharePage() {
             </div>
 
             <div className="task-sidebar-info">
-              <span>Read</span>
+              <span>View</span>
               <strong>Can view task</strong>
             </div>
 
             <div className="task-sidebar-info">
-              <span>Write</span>
-              <strong>Can update task</strong>
+              <span>Edit</span>
+              <strong>Can view and update task</strong>
             </div>
           </div>
 

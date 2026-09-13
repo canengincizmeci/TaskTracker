@@ -3,7 +3,7 @@ export interface TaskInvitation {
   taskRequestId: number;
   taskTitle: string;
   inviterUserName: string;
-  permission: number;
+  permission: "View" | "Edit" | "Manage" | number;
   createdAt: string;
   expiresAt?: string | null;
 }
