@@ -1,16 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { isAxiosError } from "axios";
 import { Link, useParams } from "react-router-dom";
-import { getTaskById } from "../api/taskService";
+import { getTaskById, updateTask } from "../api/taskService";
 import type { Task } from "../types/task";
+import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import LoadingSpinner from "../components/LoadingSpinner";
+
+type EditDraft = {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  dueDate: string;
+};
+
+function getUpdateError(error: unknown): string {
+  const data: unknown = isAxiosError(error) ? error.response?.data : undefined;
+  if (typeof data === "string" && data.trim()) return data;
+  if (data && typeof data === "object") {
+    const body = data as Record<string, unknown>;
+    if (Array.isArray(body.Errors)) {
+      for (const failure of body.Errors) {
+        if (failure && typeof failure.ErrorMessage === "string" && failure.ErrorMessage.trim()) {
+          return failure.ErrorMessage;
+        }
+      }
+    }
+    if (typeof body.Message === "string" && body.Message.trim()) return body.Message;
+    if (typeof body.title === "string" && body.title.trim()) return body.title;
+  }
+  return "Task could not be updated.";
+}
 
 function TaskDetailPage() {
   const { taskId } = useParams();
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const routeVersion = useRef(0);
+  const saving = useRef(false);
 
   useEffect(() => {
+    const version = ++routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    setLoading(true);
+    setTask(null);
+    setIsEditing(false);
+    setDraft(null);
+    setEditError("");
+    setIsSaving(false);
+    saving.current = false;
     const loadTask = async () => {
       try {
         if (!taskId) {
@@ -19,16 +63,79 @@ function TaskDetailPage() {
         }
 
         const data = await getTaskById(Number(taskId));
-        setTask(data);
+        if (isCurrent()) setTask(data);
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     };
 
     loadTask();
+    return () => { routeVersion.current++; };
   }, [taskId]);
+
+  const startEditing = () => {
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || saving.current) return;
+    setDraft({
+      title: task.title,
+      description: task.description,
+      category: task.category,
+      priority: task.priority,
+      dueDate: task.dueDate ?? "",
+    });
+    setEditError("");
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    if (saving.current) return;
+    setDraft(null);
+    setEditError("");
+    setIsEditing(false);
+  };
+
+  const saveChanges = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || !isEditing || !draft || saving.current) return;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    const payload: UpdateTaskRequest = {
+      id: task.id,
+      title: draft.title,
+      description: draft.description,
+      category: draft.category,
+      priority: draft.priority,
+      status: task.status,
+      dueDate: draft.dueDate || null,
+    };
+    saving.current = true;
+    setIsSaving(true);
+    setEditError("");
+    try {
+      await updateTask(payload);
+      if (!isCurrent()) return;
+      try {
+        const refreshed = await getTaskById(task.id);
+        if (!isCurrent()) return;
+        setTask(refreshed);
+        setEditError("");
+      } catch {
+        if (!isCurrent()) return;
+        setTask({ ...task, ...payload });
+        setEditError("Changes were saved, but task details could not be refreshed.");
+      }
+      setDraft(null);
+      setIsEditing(false);
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsSaving(false);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -101,15 +208,58 @@ function TaskDetailPage() {
                 Share Task
               </Link>
 
-              <button type="button" className="primary-button">
-                Edit Task
-              </button>
+              {task.canEdit === true && !isEditing && (
+                <button type="button" className="primary-button" onClick={startEditing}>
+                  Edit Task
+                </button>
+              )}
             </div>
           </div>
 
-          <h1>{task.title}</h1>
-
-          <p className="task-detail-description">{task.description}</p>
+          {editError && <p className="error-message" role="alert">{editError}</p>}
+          {isEditing && draft ? (
+            <form className="auth-form task-detail-section" onSubmit={saveChanges} aria-busy={isSaving}>
+              <div className="form-group">
+                <label htmlFor="edit-title">Title</label>
+                <input id="edit-title" type="text" value={draft.title} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-description">Description</label>
+                <textarea id="edit-description" rows={5} value={draft.description} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-category">Category</label>
+                <input id="edit-category" type="text" value={draft.category} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, category: event.target.value })} />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-priority">Priority</label>
+                <select id="edit-priority" value={draft.priority} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, priority: event.target.value })}>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-due-date">Due Date</label>
+                <input id="edit-due-date" type="date" value={draft.dueDate} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
+              </div>
+              <div className="task-detail-actions">
+                <button type="button" className="secondary-button" disabled={isSaving} onClick={cancelEditing}>Cancel</button>
+                <button type="submit" className="primary-button" disabled={isSaving}>{isSaving ? "Saving..." : "Save Changes"}</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <h1>{task.title}</h1>
+              <p className="task-detail-description">{task.description}</p>
+            </>
+          )}
 
         </div>
 

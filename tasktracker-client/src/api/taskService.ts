@@ -1,6 +1,7 @@
 import axiosClient from "./axiosClient";
 import type { Task } from "../types/task";
 import type { CreateTaskRequest } from "../types/CreateTaskRequest";
+import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 
 async function getAllTasks(): Promise<Task[]> {
   const response = await axiosClient.get("/TaskRequest/list-alltasks");
@@ -29,4 +30,9 @@ async function getUserTasks(): Promise<Task[]> {
 
 
 
-export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks };
+async function updateTask(data: UpdateTaskRequest): Promise<string> {
+  const response = await axiosClient.post("/TaskRequest/update-task", data);
+  return response.data;
+}
+
+export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks, updateTask };
