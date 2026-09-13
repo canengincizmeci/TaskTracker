@@ -125,6 +125,11 @@ namespace TaskTracker.Bussiness.Concrete
             if (!canEdit)
                 return new ErrorResult(Messages.AuthorizationDenied);
 
+            if (taskRequest.DueDate.HasValue &&
+                taskRequest.DueDate != task.DueDate &&
+                taskRequest.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
+                return new ErrorResult("Due date must be today or later when changed.");
+
             task.Title = taskRequest.Title;
             task.Description = taskRequest.Description;
             task.Category = taskRequest.Category;

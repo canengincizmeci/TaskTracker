@@ -22,7 +22,6 @@ namespace TaskTracker.Bussiness.ValidationRules.FluentValidation
 
             RuleFor(x => x.Status).IsInEnum();
 
-            RuleFor(x => x.DueDate).GreaterThanOrEqualTo(DateOnly.FromDateTime(DateTime.UtcNow)).When(x => x.DueDate.HasValue);
         }
     }
 }
