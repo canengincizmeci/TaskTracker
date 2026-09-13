@@ -111,53 +111,6 @@ function TaskDetailPage() {
 
           <p className="task-detail-description">{task.description}</p>
 
-          <section className="task-detail-section">
-            <div className="task-section-header">
-              <div>
-                <p className="eyebrow">COLLABORATION</p>
-                <h2>Shared users</h2>
-              </div>
-            </div>
-
-            <div className="shared-users-list">
-              <div className="shared-user-card">
-                <div className="shared-user-avatar">
-                  <span>ME</span>
-                </div>
-
-                <div>
-                  <strong>You</strong>
-                  <span>{task.isOwner ? "Owner" : "Member"}</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="task-detail-section">
-            <div className="task-section-header">
-              <div>
-                <p className="eyebrow">ACTIVITY</p>
-                <h2>Recent activity</h2>
-              </div>
-            </div>
-
-            <div className="activity-timeline">
-              <div className="timeline-item">
-                <strong>Task loaded</strong>
-                <span>The task details were loaded successfully.</span>
-              </div>
-
-              <div className="timeline-item">
-                <strong>Current status</strong>
-                <span>Task status is {task.status}.</span>
-              </div>
-
-              <div className="timeline-item">
-                <strong>Collaboration</strong>
-                <span>Task sharing structure is ready for next updates.</span>
-              </div>
-            </div>
-          </section>
         </div>
 
         <aside className="task-detail-sidebar">
