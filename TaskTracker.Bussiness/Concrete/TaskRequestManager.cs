@@ -156,6 +156,28 @@ namespace TaskTracker.Bussiness.Concrete
         }
           
 
+        [ValidationAspect(typeof(UpdateTaskStatusDtoValidator))]
+        public async Task<IResult> UpdateTaskStatus(UpdateTaskStatusDto dto, int currentUserId)
+        {
+            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
+            var task = await taskRepository.GetByIdAsync(dto.Id);
+
+            if (task == null || !task.Activity)
+                return new ErrorResult(Messages.DataNotFound);
+
+            var canEdit = task.OwnerId == currentUserId ||
+                await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit);
+
+            if (!canEdit)
+                return new ErrorResult(Messages.AuthorizationDenied);
+
+            task.Status = dto.Status!.Value;
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult(Messages.DataUpdated);
+        }
+
         public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId)
         {
             var tasks = await _taskRequestDal.GetTasksByUserIdAsync(userId);

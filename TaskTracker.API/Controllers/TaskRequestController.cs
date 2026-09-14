@@ -105,6 +105,19 @@ namespace TaskTracker.API.Controllers
         }
 
         [Authorize(Roles = "User")]
+        [HttpPost("update-task-status")]
+        public async Task<IActionResult> UpdateTaskStatus(UpdateTaskStatusDto taskStatusDto)
+        {
+            var currentUserId = _currentUserService.UserId;
+            var result = await _taskRequestService.UpdateTaskStatus(taskStatusDto, currentUserId);
+
+            if (!result.Success)
+                return BadRequest(result.Message);
+
+            return Ok(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
         [HttpGet("list-user-tasks")]
         public async Task<IActionResult> ListUserTasks()
         {
