@@ -1,16 +1,65 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getTaskById } from "../api/taskService";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { isAxiosError } from "axios";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { deleteTask, getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
 import type { Task } from "../types/task";
+import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import LoadingSpinner from "../components/LoadingSpinner";
+
+type EditDraft = {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  dueDate: string;
+};
+
+function getUpdateError(error: unknown, fallback = "Task could not be updated."): string {
+  const data: unknown = isAxiosError(error) ? error.response?.data : undefined;
+  if (typeof data === "string" && data.trim()) return data;
+  if (data && typeof data === "object") {
+    const body = data as Record<string, unknown>;
+    if (Array.isArray(body.Errors)) {
+      for (const failure of body.Errors) {
+        if (failure && typeof failure.ErrorMessage === "string" && failure.ErrorMessage.trim()) {
+          return failure.ErrorMessage;
+        }
+      }
+    }
+    if (typeof body.Message === "string" && body.Message.trim()) return body.Message;
+    if (typeof body.title === "string" && body.title.trim()) return body.title;
+  }
+  return fallback;
+}
 
 function TaskDetailPage() {
   const { taskId } = useParams();
+  const navigate = useNavigate();
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [editError, setEditError] = useState("");
+  const routeVersion = useRef(0);
+  const saving = useRef(false);
 
   useEffect(() => {
+    const version = ++routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    setLoading(true);
+    setTask(null);
+    setIsEditing(false);
+    setDraft(null);
+    setEditError("");
+    setIsSaving(false);
+    setIsUpdatingStatus(false);
+    setIsDeleting(false);
+    saving.current = false;
     const loadTask = async () => {
       try {
         if (!taskId) {
@@ -19,16 +68,135 @@ function TaskDetailPage() {
         }
 
         const data = await getTaskById(Number(taskId));
-        setTask(data);
+        if (isCurrent()) setTask(data);
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
     };
 
     loadTask();
+    return () => { routeVersion.current++; };
   }, [taskId]);
+
+  const startEditing = () => {
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || saving.current) return;
+    setDraft({
+      title: task.title,
+      description: task.description,
+      category: task.category,
+      priority: task.priority,
+      dueDate: task.dueDate ?? "",
+    });
+    setEditError("");
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    if (saving.current) return;
+    setDraft(null);
+    setEditError("");
+    setIsEditing(false);
+  };
+
+  const saveChanges = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || !isEditing || !draft || saving.current) return;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    const payload: UpdateTaskRequest = {
+      id: task.id,
+      title: draft.title,
+      description: draft.description,
+      category: draft.category,
+      priority: draft.priority,
+      status: task.status,
+      dueDate: draft.dueDate || null,
+    };
+    saving.current = true;
+    setIsSaving(true);
+    setEditError("");
+    try {
+      await updateTask(payload);
+      if (!isCurrent()) return;
+      try {
+        const refreshed = await getTaskById(task.id);
+        if (!isCurrent()) return;
+        setTask(refreshed);
+        setEditError("");
+      } catch {
+        if (!isCurrent()) return;
+        setTask({ ...task, ...payload });
+        setEditError("Changes were saved, but task details could not be refreshed.");
+      }
+      setDraft(null);
+      setIsEditing(false);
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const handleStatusUpdate = async (targetStatus: string) => {
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || isEditing || saving.current) return;
+    const canComplete = (task.status === "Pending" || task.status === "InProgress") && targetStatus === "Completed";
+    const canReopen = task.status === "Completed" && targetStatus === "Pending";
+    if (!canComplete && !canReopen) return;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    const snapshot = task;
+    saving.current = true;
+    setIsUpdatingStatus(true);
+    setEditError("");
+    try {
+      await updateTaskStatus({ id: snapshot.id, status: targetStatus });
+      if (!isCurrent()) return;
+      try {
+        const refreshed = await getTaskById(snapshot.id);
+        if (!isCurrent()) return;
+        setTask(refreshed);
+      } catch {
+        if (!isCurrent()) return;
+        setTask({ ...snapshot, status: targetStatus });
+        setEditError("Status was updated, but task details could not be refreshed.");
+      }
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsUpdatingStatus(false);
+      }
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task || task.id !== Number(taskId) || task.canDelete !== true || isEditing || saving.current) return;
+    const id = task.id;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    if (!window.confirm("Delete this task? This action cannot be undone.")) return;
+    if (!isCurrent() || saving.current) return;
+    saving.current = true;
+    setIsDeleting(true);
+    setEditError("");
+    try {
+      await deleteTask(id);
+      if (isCurrent()) navigate("/tasks/user-tasks", { replace: true });
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error, "Task could not be deleted."));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsDeleting(false);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -101,63 +269,77 @@ function TaskDetailPage() {
                 Share Task
               </Link>
 
-              <button type="button" className="primary-button">
-                Edit Task
-              </button>
+              {task.canEdit === true && !isEditing && (
+                <button type="button" className="primary-button" disabled={isUpdatingStatus || isDeleting} onClick={startEditing}>
+                  Edit Task
+                </button>
+              )}
+              {task.canEdit === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") && (
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={() => handleStatusUpdate("Completed")}>
+                  {isUpdatingStatus ? "Completing..." : "Complete"}
+                </button>
+              )}
+              {task.canEdit === true && !isEditing && task.status === "Completed" && (
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={() => handleStatusUpdate("Pending")}>
+                  {isUpdatingStatus ? "Reopening..." : "Reopen"}
+                </button>
+              )}
+              {task.canDelete === true && !isEditing && (
+                <button type="button" className="danger-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={handleDeleteTask}>
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </button>
+              )}
             </div>
           </div>
 
-          <h1>{task.title}</h1>
-
-          <p className="task-detail-description">{task.description}</p>
-
-          <section className="task-detail-section">
-            <div className="task-section-header">
-              <div>
-                <p className="eyebrow">COLLABORATION</p>
-                <h2>Shared users</h2>
+          {editError && <p className="error-message" role="alert">{editError}</p>}
+          {isEditing && draft ? (
+            <form className="auth-form task-detail-section" onSubmit={saveChanges} aria-busy={isSaving}>
+              <div className="form-group">
+                <label htmlFor="edit-title">Title</label>
+                <input id="edit-title" type="text" value={draft.title} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
               </div>
-            </div>
-
-            <div className="shared-users-list">
-              <div className="shared-user-card">
-                <div className="shared-user-avatar">
-                  <span>ME</span>
-                </div>
-
-                <div>
-                  <strong>You</strong>
-                  <span>{task.isOwner ? "Owner" : "Member"}</span>
-                </div>
+              <div className="form-group">
+                <label htmlFor="edit-description">Description</label>
+                <textarea id="edit-description" rows={5} value={draft.description} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
               </div>
-            </div>
-          </section>
-
-          <section className="task-detail-section">
-            <div className="task-section-header">
-              <div>
-                <p className="eyebrow">ACTIVITY</p>
-                <h2>Recent activity</h2>
+              <div className="form-group">
+                <label htmlFor="edit-category">Category</label>
+                <input id="edit-category" type="text" value={draft.category} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, category: event.target.value })} />
               </div>
-            </div>
-
-            <div className="activity-timeline">
-              <div className="timeline-item">
-                <strong>Task loaded</strong>
-                <span>The task details were loaded successfully.</span>
+              <div className="form-group">
+                <label htmlFor="edit-priority">Priority</label>
+                <select id="edit-priority" value={draft.priority} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, priority: event.target.value })}>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
               </div>
-
-              <div className="timeline-item">
-                <strong>Current status</strong>
-                <span>Task status is {task.status}.</span>
+              <div className="form-group">
+                <label htmlFor="edit-due-date">Due Date</label>
+                <input id="edit-due-date" type="date" value={draft.dueDate} disabled={isSaving}
+                  onChange={(event) => setDraft({ ...draft, dueDate: event.target.value })} />
               </div>
-
-              <div className="timeline-item">
-                <strong>Collaboration</strong>
-                <span>Task sharing structure is ready for next updates.</span>
+              <div className="task-detail-actions">
+                <button type="button" className="secondary-button" disabled={isSaving} onClick={cancelEditing}>Cancel</button>
+                <button type="submit" className="primary-button" disabled={isSaving}>{isSaving ? "Saving..." : "Save Changes"}</button>
               </div>
-            </div>
-          </section>
+            </form>
+          ) : (
+            <>
+              <h1>{task.title}</h1>
+              <p className="task-detail-description">{task.description}</p>
+            </>
+          )}
+
         </div>
 
         <aside className="task-detail-sidebar">

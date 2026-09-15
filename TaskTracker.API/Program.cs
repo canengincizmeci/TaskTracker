@@ -12,6 +12,7 @@ using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.DependencyResolvers.Autofac;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
 using TaskTracker.Core.DataAccess;
+using TaskTracker.Core.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -133,6 +134,8 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = string.Empty;
     });
 }
+
+app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");

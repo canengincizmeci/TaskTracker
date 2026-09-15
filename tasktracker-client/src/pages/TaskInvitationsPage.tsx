@@ -62,9 +62,10 @@ function TaskInvitationsPage() {
     }
   };
 
-  const getPermissionText = (permission: number) => {
-    if (permission === 0) return "View";
-    if (permission === 1) return "Edit";
+  const getPermissionText = (permission: TaskInvitation["permission"]) => {
+    if (permission === "View") return "View";
+    if (permission === "Edit") return "Edit";
+    if (permission === "Manage") return "Manage";
 
     return "Unknown";
   };

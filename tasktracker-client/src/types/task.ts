@@ -13,5 +13,6 @@ export interface Task {
   canView?: boolean;
   canEdit?: boolean;
   canShare?: boolean;
+  canDelete?: boolean;
   visibility?: string;
 }

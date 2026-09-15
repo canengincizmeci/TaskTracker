@@ -53,6 +53,9 @@ namespace TaskTracker.Bussiness.Concrete
             if (invitation.ExpiresAt.HasValue && invitation.ExpiresAt.Value < DateTime.UtcNow)
                 return new ErrorResult(Messages.InvitationExpired);
 
+            if (!Enum.IsDefined(typeof(TaskPermission), invitation.Permission))
+                return new ErrorResult(Messages.InvalidTaskPermission);
+
             var taskAlreadyShared = await _taskShareDal.GetAsync(x =>
                 x.TaskRequestId == invitation.TaskRequestId &&
                 x.SharedWithUserId == invitation.InvitedUserId);
@@ -240,6 +243,9 @@ namespace TaskTracker.Bussiness.Concrete
             var inviter = await userRepository.GetByIdAsync(currentUserId);
             if (inviter is null)
                 return new ErrorResult(Messages.UserNotFound);
+            if (!Enum.IsDefined(typeof(TaskPermission), dto.Permission))
+                return new ErrorResult(Messages.InvalidTaskPermission);
+
             var invitation = new TaskShareInvitation
             {
                 TaskRequestId = dto.TaskRequestId,
