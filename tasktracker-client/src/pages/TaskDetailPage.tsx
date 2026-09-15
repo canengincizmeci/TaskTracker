@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { isAxiosError } from "axios";
 import { Link, useParams } from "react-router-dom";
-import { getTaskById, updateTask } from "../api/taskService";
+import { getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
 import type { Task } from "../types/task";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -41,6 +41,7 @@ function TaskDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [editError, setEditError] = useState("");
   const routeVersion = useRef(0);
   const saving = useRef(false);
@@ -54,6 +55,7 @@ function TaskDetailPage() {
     setDraft(null);
     setEditError("");
     setIsSaving(false);
+    setIsUpdatingStatus(false);
     saving.current = false;
     const loadTask = async () => {
       try {
@@ -137,6 +139,39 @@ function TaskDetailPage() {
     }
   };
 
+  const handleStatusUpdate = async (targetStatus: string) => {
+    if (!task || task.id !== Number(taskId) || task.canEdit !== true || isEditing || saving.current) return;
+    const canComplete = (task.status === "Pending" || task.status === "InProgress") && targetStatus === "Completed";
+    const canReopen = task.status === "Completed" && targetStatus === "Pending";
+    if (!canComplete && !canReopen) return;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    const snapshot = task;
+    saving.current = true;
+    setIsUpdatingStatus(true);
+    setEditError("");
+    try {
+      await updateTaskStatus({ id: snapshot.id, status: targetStatus });
+      if (!isCurrent()) return;
+      try {
+        const refreshed = await getTaskById(snapshot.id);
+        if (!isCurrent()) return;
+        setTask(refreshed);
+      } catch {
+        if (!isCurrent()) return;
+        setTask({ ...snapshot, status: targetStatus });
+        setEditError("Status was updated, but task details could not be refreshed.");
+      }
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsUpdatingStatus(false);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <main className="page public-page">
@@ -209,8 +244,20 @@ function TaskDetailPage() {
               </Link>
 
               {task.canEdit === true && !isEditing && (
-                <button type="button" className="primary-button" onClick={startEditing}>
+                <button type="button" className="primary-button" disabled={isUpdatingStatus} onClick={startEditing}>
                   Edit Task
+                </button>
+              )}
+              {task.canEdit === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") && (
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus}
+                  onClick={() => handleStatusUpdate("Completed")}>
+                  {isUpdatingStatus ? "Completing..." : "Complete"}
+                </button>
+              )}
+              {task.canEdit === true && !isEditing && task.status === "Completed" && (
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus}
+                  onClick={() => handleStatusUpdate("Pending")}>
+                  {isUpdatingStatus ? "Reopening..." : "Reopen"}
                 </button>
               )}
             </div>
