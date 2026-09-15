@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { isAxiosError } from "axios";
-import { Link, useParams } from "react-router-dom";
-import { getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { deleteTask, getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
 import type { Task } from "../types/task";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -15,7 +15,7 @@ type EditDraft = {
   dueDate: string;
 };
 
-function getUpdateError(error: unknown): string {
+function getUpdateError(error: unknown, fallback = "Task could not be updated."): string {
   const data: unknown = isAxiosError(error) ? error.response?.data : undefined;
   if (typeof data === "string" && data.trim()) return data;
   if (data && typeof data === "object") {
@@ -30,11 +30,12 @@ function getUpdateError(error: unknown): string {
     if (typeof body.Message === "string" && body.Message.trim()) return body.Message;
     if (typeof body.title === "string" && body.title.trim()) return body.title;
   }
-  return "Task could not be updated.";
+  return fallback;
 }
 
 function TaskDetailPage() {
   const { taskId } = useParams();
+  const navigate = useNavigate();
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ function TaskDetailPage() {
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editError, setEditError] = useState("");
   const routeVersion = useRef(0);
   const saving = useRef(false);
@@ -56,6 +58,7 @@ function TaskDetailPage() {
     setEditError("");
     setIsSaving(false);
     setIsUpdatingStatus(false);
+    setIsDeleting(false);
     saving.current = false;
     const loadTask = async () => {
       try {
@@ -172,6 +175,29 @@ function TaskDetailPage() {
     }
   };
 
+  const handleDeleteTask = async () => {
+    if (!task || task.id !== Number(taskId) || task.canDelete !== true || isEditing || saving.current) return;
+    const id = task.id;
+    const version = routeVersion.current;
+    const isCurrent = () => routeVersion.current === version;
+    if (!window.confirm("Delete this task? This action cannot be undone.")) return;
+    if (!isCurrent() || saving.current) return;
+    saving.current = true;
+    setIsDeleting(true);
+    setEditError("");
+    try {
+      await deleteTask(id);
+      if (isCurrent()) navigate("/tasks/user-tasks", { replace: true });
+    } catch (error) {
+      if (isCurrent()) setEditError(getUpdateError(error, "Task could not be deleted."));
+    } finally {
+      if (isCurrent()) {
+        saving.current = false;
+        setIsDeleting(false);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <main className="page public-page">
@@ -244,20 +270,26 @@ function TaskDetailPage() {
               </Link>
 
               {task.canEdit === true && !isEditing && (
-                <button type="button" className="primary-button" disabled={isUpdatingStatus} onClick={startEditing}>
+                <button type="button" className="primary-button" disabled={isUpdatingStatus || isDeleting} onClick={startEditing}>
                   Edit Task
                 </button>
               )}
               {task.canEdit === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") && (
-                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus}
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
                   onClick={() => handleStatusUpdate("Completed")}>
                   {isUpdatingStatus ? "Completing..." : "Complete"}
                 </button>
               )}
               {task.canEdit === true && !isEditing && task.status === "Completed" && (
-                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus}
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
                   onClick={() => handleStatusUpdate("Pending")}>
                   {isUpdatingStatus ? "Reopening..." : "Reopen"}
+                </button>
+              )}
+              {task.canDelete === true && !isEditing && (
+                <button type="button" className="danger-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={handleDeleteTask}>
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </button>
               )}
             </div>
