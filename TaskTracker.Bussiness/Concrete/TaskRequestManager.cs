@@ -111,6 +111,7 @@ namespace TaskTracker.Bussiness.Concrete
                 CanEdit = canEdit,
                 CanShare = isOwner,
                 CanDelete = canDelete,
+                CanViewParticipants = isOwner || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View),
             });
         }
 
