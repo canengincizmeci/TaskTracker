@@ -1,6 +1,10 @@
 import axiosClient from "./axiosClient";
 import type { TaskInvitation } from "../types/taskInvitation";
 
+export async function getTaskInvitation(id: number): Promise<TaskInvitation> {
+  return (await axiosClient.get(`/TaskShare/invitation-details/${id}`)).data;
+}
+
 async function getMyPendingInvitations(): Promise<TaskInvitation[]> {
   const response = await axiosClient.get(
     "/TaskShare/get-user-invitations"

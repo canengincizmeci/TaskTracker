@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 
-type TaskPermission = "View" | "Edit";
+import type { TaskPermission } from "../types/taskPermission";
+import { errorMessage as getErrorMessage } from "../api/errorMessage";
 
 function TaskSharePage() {
   const { taskId } = useParams();
@@ -38,24 +39,11 @@ function TaskSharePage() {
         permission,
       });
 
-      setSuccessMessage("Task shared successfully.");
+      setSuccessMessage("Invitation sent successfully.");
       setUsername("");
       setPermission("View");
-    } catch (error: any) {
-      console.log("Invite User Error:", error.response?.data);
-
-      const data = error.response?.data;
-
-      const message =
-        typeof data === "string"
-          ? data
-          : data?.message
-          ? data.message
-          : data?.title
-          ? data.title
-          : "An error occurred while sharing the task.";
-
-      setErrorMessage(message);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error, "Could not send invitation."));
     } finally {
       setLoading(false);
     }
@@ -131,7 +119,7 @@ function TaskSharePage() {
                 className="primary-button"
                 disabled={loading}
               >
-                {loading ? "Sharing..." : "Share Task"}
+                {loading ? "Sending..." : "Send Invitation"}
               </button>
             </form>
           </section>

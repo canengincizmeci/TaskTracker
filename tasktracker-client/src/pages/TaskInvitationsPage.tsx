@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   acceptTaskInvitation,
   getMyPendingInvitations,
   rejectTaskInvitation,
 } from "../api/taskInvitationService";
+import { errorMessage as getErrorMessage } from "../api/errorMessage";
+import { permissionText } from "../types/taskPermission";
 import type { TaskInvitation } from "../types/taskInvitation";
 
 function TaskInvitationsPage() {
@@ -12,62 +14,35 @@ function TaskInvitationsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadInvitations = async () => {
-    try {
-      setLoading(true);
-      setErrorMessage("");
-
-      const data = await getMyPendingInvitations();
-
-      setInvitations(data);
-    } catch (error: any) {
-      const data = error.response?.data;
-
-      const message =
-        typeof data === "string"
-          ? data
-          : data?.message
-          ? data.message
-          : data?.title
-          ? data.title
-          : "An error occurred while loading invitations.";
-
-      setErrorMessage(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadInvitations();
+    let cancelled = false;
+    getMyPendingInvitations().then((data) => {
+      if (!cancelled) setInvitations(data);
+    }).catch((error: unknown) => {
+      if (!cancelled) setErrorMessage(getErrorMessage(error, "Could not load invitations."));
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, []);
 
-  const handleAccept = async (invitationId: number) => {
+  const activeRequests = useRef(new Set<number>());
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+
+  const respond = async (id: number, accept: boolean) => {
+    if (activeRequests.current.has(id)) return;
+    activeRequests.current.add(id);
+    setBusyIds(new Set(activeRequests.current));
+    setErrorMessage("");
     try {
-      await acceptTaskInvitation(invitationId);
-
-      await loadInvitations();
-    } catch (error) {
-      console.error(error);
+      await (accept ? acceptTaskInvitation(id) : rejectTaskInvitation(id));
+      setInvitations((current) => current.filter((item) => item.id !== id));
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error, "Could not respond to invitation."));
+    } finally {
+      activeRequests.current.delete(id);
+      setBusyIds(new Set(activeRequests.current));
     }
-  };
-
-  const handleReject = async (invitationId: number) => {
-    try {
-      await rejectTaskInvitation(invitationId);
-
-      await loadInvitations();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const getPermissionText = (permission: TaskInvitation["permission"]) => {
-    if (permission === "View") return "View";
-    if (permission === "Edit") return "Edit";
-    if (permission === "Manage") return "Manage";
-
-    return "Unknown";
   };
 
   if (loading) {
@@ -105,7 +80,7 @@ function TaskInvitationsPage() {
           </p>
 
           {errorMessage && (
-            <div className="error-message">{errorMessage}</div>
+            <div role="alert" className="error-message">{errorMessage}</div>
           )}
 
           <section className="task-detail-section">
@@ -133,6 +108,7 @@ function TaskInvitationsPage() {
                     className="timeline-item"
                   >
                     <strong>{invitation.taskTitle}</strong>
+                    {invitation.unavailableReason && <p role="alert">{invitation.unavailableReason}</p>}
 
                     <span>
                       Invited by: {invitation.inviterUserName}
@@ -140,7 +116,7 @@ function TaskInvitationsPage() {
 
                     <span>
                       Permission:{" "}
-                      {getPermissionText(invitation.permission)}
+                      {permissionText(invitation.permission)}
                     </span>
 
                     <span>
@@ -158,8 +134,9 @@ function TaskInvitationsPage() {
                     >
                       <button
                         className="primary-button"
+                        disabled={busyIds.has(invitation.id) || !invitation.canAccept}
                         onClick={() =>
-                          handleAccept(invitation.id)
+                          respond(invitation.id, true)
                         }
                       >
                         Accept
@@ -167,8 +144,9 @@ function TaskInvitationsPage() {
 
                       <button
                         className="secondary-button"
+                        disabled={busyIds.has(invitation.id) || !invitation.canReject}
                         onClick={() =>
-                          handleReject(invitation.id)
+                          respond(invitation.id, false)
                         }
                       >
                         Reject
