@@ -220,6 +220,103 @@ namespace TaskTracker.Core.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskActivity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActivityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("InvitationId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ReviewId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SubmissionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TargetUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ToStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("InvitationId");
+
+                    b.HasIndex("ReviewId");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.ToTable("TaskActivities", (string)null);
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("SenderUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.ToTable("TaskMessages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TaskMessages_Content", "length(trim(\"Content\")) > 0 AND length(\"Content\") <= 4000");
+                        });
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -232,6 +329,9 @@ namespace TaskTracker.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<int?>("AssigneeUserId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -272,10 +372,18 @@ namespace TaskTracker.Core.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<int>("Visibility")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssigneeUserId");
 
                     b.HasIndex("OwnerId");
 
@@ -357,6 +465,91 @@ namespace TaskTracker.Core.Migrations
                     b.HasIndex("TaskRequestId", "InvitedUserId", "Status");
 
                     b.ToTable("TaskShareInvitations");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskSubmission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SubmittedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("TaskRequestId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.ToTable("TaskSubmissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TaskSubmissions_Content", "length(trim(\"Content\")) > 0");
+
+                            t.HasCheckConstraint("CK_TaskSubmissions_RevisionNumber", "\"RevisionNumber\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskSubmissionReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<int>("ReviewerUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskSubmissionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerUserId");
+
+                    b.HasIndex("TaskSubmissionId")
+                        .IsUnique();
+
+                    b.ToTable("TaskSubmissionReviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TaskSubmissionReviews_Decision", "\"Decision\" IN ('Approved', 'ChangesRequested')");
+
+                            t.HasCheckConstraint("CK_TaskSubmissionReviews_Feedback", "\"Decision\" <> 'ChangesRequested' OR (\"Feedback\" IS NOT NULL AND length(trim(\"Feedback\")) > 0)");
+                        });
                 });
 
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.User", b =>
@@ -491,13 +684,86 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskActivity", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskShareInvitation", "Invitation")
+                        .WithMany()
+                        .HasForeignKey("InvitationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskSubmissionReview", "Review")
+                        .WithMany()
+                        .HasForeignKey("ReviewId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskSubmission", "Submission")
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "TargetUser")
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Invitation");
+
+                    b.Navigation("Review");
+
+                    b.Navigation("Submission");
+
+                    b.Navigation("TargetUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMessage", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "SenderUser")
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SenderUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskRequest", b =>
                 {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TaskTracker.Core.Entities.Concrete.User", "Owner")
                         .WithMany("OwnedTaskRequests")
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Assignee");
 
                     b.Navigation("Owner");
                 });
@@ -546,6 +812,44 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("InvitedUser");
 
                     b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskSubmission", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "SubmittedByUser")
+                        .WithMany()
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SubmittedByUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskSubmissionReview", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "ReviewerUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskSubmission", "TaskSubmission")
+                        .WithOne()
+                        .HasForeignKey("TaskTracker.Core.Entities.Concrete.TaskSubmissionReview", "TaskSubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewerUser");
+
+                    b.Navigation("TaskSubmission");
                 });
 
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.UserOperationClaim", b =>

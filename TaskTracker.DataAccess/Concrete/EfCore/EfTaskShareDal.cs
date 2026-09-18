@@ -20,8 +20,11 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
 
         public async Task<bool> HasPermissionAsync(int taskId, int userId, TaskPermission permission)
         {
-            return await _context.TaskShares.AnyAsync(ts => ts.TaskRequestId == taskId && ts.SharedWithUserId == userId && ts.Permission >= permission);
+            return await _context.TaskShares.AnyAsync(ts => ts.TaskRequestId == taskId && ts.SharedWithUserId == userId && ts.Permission >= permission && ts.Permission <= TaskPermission.Manage);
         }
+        // Coordinate invitation writes with other changes to this task in the same SaveChanges transaction.
+        public void TouchTask(TaskRequest task) => _context.Entry(task).Property(x => x.Version).IsModified = true;
+        public Task ReloadInvitationAsync(TaskShareInvitation invitation) => _context.Entry(invitation).ReloadAsync();
         public async Task<TaskShare?> GetSharedTaskDetailsAsync(int taskShareId)
         {
             return await _context.TaskShares

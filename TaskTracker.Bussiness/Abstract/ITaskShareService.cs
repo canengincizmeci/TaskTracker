@@ -13,6 +13,8 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IResult> AcceptTaskInvitationAsync(int invitationId);
         Task<IResult> RejectTaskInvitationAsync(int invitationId);
         Task<IDataResult<List<TaskInvitationDto>>> GetMyPendingInvitationsAsync();
+        Task<IDataResult<TaskInvitationDto>> GetInvitationAsync(int invitationId);
+        Task<IDataResult<List<TaskParticipantDto>>> GetParticipantsAsync(int taskId);
         Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync();
         Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId,int currentUserId);
 

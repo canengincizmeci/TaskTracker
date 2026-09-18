@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -20,12 +20,17 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IUnitOfWork _unitOfWork;
         private readonly ITaskShareDal _taskShareDal;
         private readonly ITaskRequestDal _taskRequestDal;
+        private readonly ITaskActivityWriter _activityWriter;
+        private readonly ITaskWorkspaceService _workspaceService;
 
-        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal)
+        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
+            ITaskActivityWriter activityWriter, ITaskWorkspaceService workspaceService)
         {
             _unitOfWork = unitOfWork;
             _taskShareDal = taskShareDal;
             _taskRequestDal = taskRequestDal;
+            _activityWriter = activityWriter;
+            _workspaceService = workspaceService;
         }
 
         [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
@@ -50,7 +55,9 @@ namespace TaskTracker.Bussiness.Concrete
 
 
             await taskRepository.AddAsync(taskRequest);
+            var activity = await _activityWriter.WriteAsync(taskRequest, currentUserId, TaskActivityType.TaskCreated);
             await _unitOfWork.SaveChangesAsync();
+            await _workspaceService.PublishActivityAsync(activity);
 
             return new SuccessResult(Messages.DataAdded);
         }
@@ -111,6 +118,7 @@ namespace TaskTracker.Bussiness.Concrete
                 CanEdit = canEdit,
                 CanShare = isOwner,
                 CanDelete = canDelete,
+                CanViewParticipants = isOwner || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View),
             });
         }
 
@@ -141,6 +149,11 @@ namespace TaskTracker.Bussiness.Concrete
                 taskRequest.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
                 return new ErrorResult("Due date must be today or later when changed.");
 
+            var detailsChanged = task.Title != taskRequest.Title || task.Description != taskRequest.Description ||
+                task.Category != taskRequest.Category || task.Priority != taskRequest.Priority ||
+                task.Status != taskRequest.Status || task.DueDate != taskRequest.DueDate;
+            if (!detailsChanged) return new SuccessResult(Messages.DataUpdated);
+
             task.Title = taskRequest.Title;
             task.Description = taskRequest.Description;
             task.Category = taskRequest.Category;
@@ -149,8 +162,9 @@ namespace TaskTracker.Bussiness.Concrete
             task.DueDate = taskRequest.DueDate;
 
             taskRepository.Update(task);
-
+            var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated);
             await _unitOfWork.SaveChangesAsync();
+            await _workspaceService.PublishActivityAsync(activity);
 
             return new SuccessResult(Messages.DataUpdated);
         }
@@ -185,7 +199,7 @@ namespace TaskTracker.Bussiness.Concrete
             var mappedTasks = tasks.Select(task =>
             {
                 var share = task.TaskShares
-                    .FirstOrDefault(ts => ts.SharedWithUserId == userId);
+                    .FirstOrDefault(ts => ts.SharedWithUserId == userId && Enum.IsDefined(ts.Permission));
 
                 var isOwner = task.OwnerId == userId;
 

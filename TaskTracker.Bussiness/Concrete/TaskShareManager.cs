@@ -1,9 +1,6 @@
-﻿//using Castle.Core.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.Extensions.Logging;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
@@ -12,305 +9,222 @@ using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
 using TaskTracker.DataAccess.Abstract;
 using TaskTracker.Entities.DTOs;
+using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
-namespace TaskTracker.Bussiness.Concrete
+namespace TaskTracker.Bussiness.Concrete;
+
+public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal,
+    ICurrentUserService currentUserService, IEmailService emailService,
+    INotificationService notificationService, IConfiguration configuration,
+    ILogger<TaskShareManager> logger, ITaskActivityWriter activityWriter,
+    ITaskWorkspaceService workspaceService) : ITaskShareService
 {
-    public class TaskShareManager : ITaskShareService
+    private const string TaskUnavailable = "This task is inactive or completed/cancelled and cannot receive participants.";
+    private const string ConcurrentChange = "The task or invitation changed. Refresh and retry.";
+
+    private static bool CanJoin(TaskRequest? task) => task is { Activity: true } &&
+        task.Status is not TaskStatus.Completed and not TaskStatus.Cancelled;
+    private static bool IsExpired(TaskShareInvitation invitation, DateTime now) =>
+        invitation.ExpiresAt.HasValue && invitation.ExpiresAt.Value <= now;
+    // Null represents invalid historical data. Never normalize it to a valid permission.
+    private static string? PermissionName(TaskPermission permission) =>
+        Enum.IsDefined(permission) ? permission.ToString() : null;
+
+    public Task<IResult> AcceptTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, true);
+    public Task<IResult> RejectTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, false);
+
+    private async Task<IResult> RespondAsync(int invitationId, bool accept)
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly ITaskShareDal _taskShareDal;
-        private readonly ICurrentUserService _currentUserService;
-        private readonly IEmailService _emailService;
-        private readonly INotificationService _notificationService;
-        private readonly IConfiguration _configuration;
-
-        public TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ICurrentUserService currentUserService, IEmailService emailService, INotificationService notificationService, IConfiguration configuration)
+        var invitation = await unitOfWork.GetRepository<TaskShareInvitation>().GetByIdAsync(invitationId);
+        if (invitation is null) return new ErrorResult(Messages.InvitationNotFound);
+        if (invitation.InvitedUserId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(invitation.TaskRequestId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        // Read the decision AFTER the task version: a response committed between these reads
+        // must either be observed here or invalidate our subsequent version check.
+        await taskShareDal.ReloadInvitationAsync(invitation);
+        var target = accept ? TaskShareInvitationStatus.Accepted : TaskShareInvitationStatus.Rejected;
+        var message = accept ? Messages.TaskAccepted : Messages.TaskRejected;
+        if (invitation.Status == target) return new SuccessResult(message);
+        if (invitation.Status != TaskShareInvitationStatus.Pending) return new ErrorResult(Messages.InvitationAlreadyResponded);
+        var now = DateTime.UtcNow;
+        if (IsExpired(invitation, now)) return new ErrorResult(Messages.InvitationExpired);
+        if (accept)
         {
-            _unitOfWork = unitOfWork;
-            _taskShareDal = taskShareDal;
-            _currentUserService = currentUserService;
-            _emailService = emailService;
-            _notificationService = notificationService;
-            _configuration = configuration;
-        }
-
-
-        public async Task<IResult> AcceptTaskInvitationAsync(int invitationId)
-        {
-            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
-
-            var invitation = await invitationRepository.GetByIdAsync(invitationId);
-
-            if (invitation is null)
-                return new ErrorResult(Messages.InvitationNotFound);
-
-            if (invitation.InvitedUserId != _currentUserService.UserId)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (invitation.Status != TaskShareInvitationStatus.Pending)
-                return new ErrorResult(Messages.InvitationAlreadyResponded);
-
-            if (invitation.ExpiresAt.HasValue && invitation.ExpiresAt.Value < DateTime.UtcNow)
-                return new ErrorResult(Messages.InvitationExpired);
-
-            if (!Enum.IsDefined(typeof(TaskPermission), invitation.Permission))
-                return new ErrorResult(Messages.InvalidTaskPermission);
-
-            var taskAlreadyShared = await _taskShareDal.GetAsync(x =>
-                x.TaskRequestId == invitation.TaskRequestId &&
-                x.SharedWithUserId == invitation.InvitedUserId);
-
-            if (taskAlreadyShared is not null)
+            if (!CanJoin(task)) return new ErrorResult(TaskUnavailable);
+            if (!Enum.IsDefined(invitation.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
+            if (await taskShareDal.GetAsync(x => x.TaskRequestId == task.Id && x.SharedWithUserId == invitation.InvitedUserId) is not null)
                 return new ErrorResult(Messages.TaskAlreadyShared);
-
-            await _taskShareDal.AddAsync(new TaskShare
+            await taskShareDal.AddAsync(new TaskShare
             {
-                TaskRequestId = invitation.TaskRequestId,
-                SharedWithUserId = invitation.InvitedUserId,
-                Permission = invitation.Permission,
-                SharedAt = DateTime.UtcNow
+                TaskRequestId = task.Id, SharedWithUserId = invitation.InvitedUserId,
+                Permission = invitation.Permission, SharedAt = now
             });
-
-            invitation.Status = TaskShareInvitationStatus.Accepted;
-            invitation.RespondedAt = DateTime.UtcNow;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.TaskAccepted);
         }
+        invitation.Status = target;
+        invitation.RespondedAt = now;
+        var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
+            accept ? TaskActivityType.InvitationAccepted : TaskActivityType.InvitationRejected,
+            invitation: invitation);
+        var result = await SaveInvitationChange(task, message);
+        if (result.Success) await workspaceService.PublishActivityAsync(activity);
+        return result;
+    }
 
-        //public async Task<IDataResult<List<TaskInvitationDto>>> GetMyPendingInvitationsAsync()
-        //{
-        //    int? userId = _currentUserService.UserId;
-        //    if (!userId.HasValue)
-        //    {
-        //        return new ErrorDataResult<List<TaskInvitationDto>>(Messages.UserNotFound);
-        //    }
-
-        //    var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
-        //    var invitations = await invitationRepository.GetAllAsync(
-        //        x => x.InvitedUserId == userId.Value && x.Status == TaskShareInvitationStatus.Pending);
-
-        //    if (invitations is null)
-        //    {
-        //        return new ErrorDataResult<List<TaskInvitationDto>>(Messages.InvitationNotFound);
-
-        //    }
-
-
-
-        //    List<TaskShareInvitation> taskShareInvitations = new List<TaskShareInvitation>();
-        //    foreach (var item in invitations)
-        //    {
-        //        taskShareInvitations.Add(new TaskShareInvitation
-        //        {
-        //            Id=item.Id,
-        //            TaskRequestId=item.TaskRequestId,
-        //            CreatedAt=item.CreatedAt,
-        //            ExpiresAt=item.ExpiresAt,
-        //            InvitedByUserId=item.InvitedUserId,
-        //            Permission = item.Permission,
-        //            RespondedAt=item.RespondedAt,
-        //            Status=item.Status
-        //        });
-
-        //    }
-
-        //    return new SuccessDataResult<List<TaskInvitationDto>>(invitations);
-        //}
-
-        public async Task<IDataResult<List<TaskInvitationDto>>> GetMyPendingInvitationsAsync()
+    private async Task<IResult> SaveInvitationChange(TaskRequest task, string message)
+    {
+        taskShareDal.TouchTask(task);
+        try
         {
-            var userId = _currentUserService.UserId;
-
-            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var userRepository = _unitOfWork.GetRepository<User>();
-
-            var invitations = await invitationRepository.GetAllAsync(x =>
-                x.InvitedUserId == userId &&
-                x.Status == TaskShareInvitationStatus.Pending);
-
-            var invitationDtos = new List<TaskInvitationDto>();
-
-            foreach (var invitation in invitations)
-            {
-                var task = await taskRepository.GetByIdAsync(invitation.TaskRequestId);
-                var inviter = await userRepository.GetByIdAsync(invitation.InvitedByUserId);
-
-                invitationDtos.Add(new TaskInvitationDto
-                {
-                    Id = invitation.Id,
-                    TaskRequestId = invitation.TaskRequestId,
-                    TaskTitle = task?.Title ?? "Unknown Task",
-                    InviterUserName = inviter?.UserName ?? "Unknown User",
-                    Permission = invitation.Permission,
-                    CreatedAt = invitation.CreatedAt,
-                    ExpiresAt = invitation.ExpiresAt
-                });
-            }
-
-            return new SuccessDataResult<List<TaskInvitationDto>>(invitationDtos);
+            // One transaction persists membership, invitation and version. Competing writes roll back.
+            await unitOfWork.SaveChangesAsync();
+            return new SuccessResult(message);
         }
-
-        public async Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync()
+        catch (DbUpdateConcurrencyException)
         {
-            var userId = _currentUserService.UserId;
-            var sharedTasks = await _taskShareDal.GetAllAsync(
-                share => share.SharedWithUserId == userId &&
-                         share.TaskRequest != null && share.TaskRequest.Activity,
-                include: query => query.Include(share => share.TaskRequest));
-
-            var sharedTaskDtos = sharedTasks.Select(share => new SharedTaskDto
-            {
-                TaskId = share.TaskRequestId,
-                Title = share.TaskRequest.Title,
-                Category = share.TaskRequest.Category,
-                Permission = share.Permission,
-                SharedAt = share.SharedAt
-            }).ToList();
-
-            return new SuccessDataResult<List<SharedTaskDto>>(sharedTaskDtos, Messages.DataListed);
+            return new ErrorResult(ConcurrentChange);
         }
-
-        public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId,int currentUserId)
+        catch (DbUpdateException ex)
         {
-            var taskShare =await _taskShareDal.GetSharedTaskDetailsAsync(taskShareId);
-            if (taskShare is null)
-            {
-                return new ErrorDataResult<SharedTaskDto>(Messages.DataNotFound);
-            }
-
-            if (
-                    taskShare.SharedWithUserId != currentUserId &&
-                    taskShare.TaskRequest.OwnerId != currentUserId
-                )
-            {
-                return new ErrorDataResult<SharedTaskDto>(Messages.AuthorizationDenied);
-            }
-
-            var mappedTaskShare = new SharedTaskDto
-            {
-                TaskId = taskShare.TaskRequestId,
-                Title = taskShare.TaskRequest.Title,
-                Category = taskShare.TaskRequest.Category,
-                Permission = taskShare.Permission,
-                SharedAt = taskShare.SharedAt
-            };
-
-            return new SuccessDataResult<SharedTaskDto>(mappedTaskShare, Messages.DataListed);
+            logger.LogWarning(ex, "Invitation change could not be saved for task {TaskId}", task.Id);
+            return new ErrorResult("The invitation change could not be saved. Refresh and retry.");
         }
+    }
 
-        public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
+    public async Task<IDataResult<List<TaskInvitationDto>>> GetMyPendingInvitationsAsync()
+    {
+        var now = DateTime.UtcNow;
+        var invitations = await unitOfWork.GetRepository<TaskShareInvitation>().GetAllAsync(x =>
+            x.InvitedUserId == currentUserService.UserId && x.Status == TaskShareInvitationStatus.Pending &&
+            (!x.ExpiresAt.HasValue || x.ExpiresAt > now) && x.TaskRequest.Activity &&
+            x.TaskRequest.Status != TaskStatus.Completed && x.TaskRequest.Status != TaskStatus.Cancelled,
+            include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
+        return new SuccessDataResult<List<TaskInvitationDto>>(invitations.OrderByDescending(x => x.CreatedAt)
+            .Select(x => MapInvitation(x, now)).ToList());
+    }
+
+    public async Task<IDataResult<TaskInvitationDto>> GetInvitationAsync(int invitationId)
+    {
+        var invitation = await unitOfWork.GetRepository<TaskShareInvitation>().GetAsync(x =>
+            x.Id == invitationId && x.InvitedUserId == currentUserService.UserId,
+            include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
+        return invitation is null
+            ? new ErrorDataResult<TaskInvitationDto>(Messages.InvitationNotFound)
+            : new SuccessDataResult<TaskInvitationDto>(MapInvitation(invitation, DateTime.UtcNow));
+    }
+
+    private static TaskInvitationDto MapInvitation(TaskShareInvitation invitation, DateTime now)
+    {
+        var pending = invitation.Status == TaskShareInvitationStatus.Pending;
+        var expired = pending && IsExpired(invitation, now);
+        var available = pending && !expired && CanJoin(invitation.TaskRequest);
+        var permission = PermissionName(invitation.Permission);
+        return new TaskInvitationDto
         {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var userRepository = _unitOfWork.GetRepository<User>();
-            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
+            Id = invitation.Id, TaskRequestId = invitation.TaskRequestId,
+            TaskTitle = invitation.TaskRequest.Title, InviterUserName = invitation.InvitedByUser.UserName,
+            Permission = permission, CreatedAt = invitation.CreatedAt, ExpiresAt = invitation.ExpiresAt,
+            Status = expired ? "Expired" : invitation.Status.ToString(),
+            CanAccept = available && permission is not null, CanReject = pending && !expired,
+            UnavailableReason = !pending ? Messages.InvitationAlreadyResponded : expired ? Messages.InvitationExpired :
+                !CanJoin(invitation.TaskRequest) ? TaskUnavailable : permission is null ? Messages.InvalidTaskPermission : null
+        };
+    }
 
-            var user = await userRepository.GetAsync(u => u.UserName == dto.Username);
-
-
-            if (user is null)
-                return new ErrorResult(Messages.UserNotFound);
-
-            var task = await taskRepository.GetByIdAsync(dto.TaskRequestId);
-
-            if (task is null)
-                return new ErrorResult(Messages.DataNotFound);
-
-            var currentUserId = _currentUserService.UserId;
-
-            if (task.OwnerId != currentUserId)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (task.OwnerId == user.Id)
-                return new ErrorResult(Messages.UserCannotShareTaskWithSelf);
-
-            var taskAlreadyShared = await _taskShareDal.GetAsync(x =>
-                x.TaskRequestId == dto.TaskRequestId &&
-                x.SharedWithUserId == user.Id);
-
-            if (taskAlreadyShared is not null)
-                return new ErrorResult(Messages.TaskAlreadyShared);
-
-            var pendingInvitation = await invitationRepository.GetAsync(x =>
-                x.TaskRequestId == dto.TaskRequestId &&
-                x.InvitedUserId == user.Id &&
-                x.Status == TaskShareInvitationStatus.Pending);
-
-            if (pendingInvitation is not null)
-                return new ErrorResult(Messages.TaskShareInvitationAlreadySent);
-            var inviter = await userRepository.GetByIdAsync(currentUserId);
-            if (inviter is null)
-                return new ErrorResult(Messages.UserNotFound);
-            if (!Enum.IsDefined(typeof(TaskPermission), dto.Permission))
-                return new ErrorResult(Messages.InvalidTaskPermission);
-
-            var invitation = new TaskShareInvitation
+    public async Task<IDataResult<List<TaskParticipantDto>>> GetParticipantsAsync(int taskId)
+    {
+        var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
+        if (task is null || !task.Activity) return new ErrorDataResult<List<TaskParticipantDto>>(Messages.DataNotFound);
+        if (task.OwnerId != currentUserService.UserId &&
+            !await taskShareDal.HasPermissionAsync(taskId, currentUserService.UserId, TaskPermission.View))
+            return new ErrorDataResult<List<TaskParticipantDto>>(Messages.AuthorizationDenied);
+        var shares = await taskShareDal.GetAllAsync(x => x.TaskRequestId == taskId,
+            include: q => q.Include(x => x.SharedWithUser));
+        return new SuccessDataResult<List<TaskParticipantDto>>(shares.OrderBy(x => x.SharedAt).ThenBy(x => x.Id)
+            .Select(x => new TaskParticipantDto
             {
-                TaskRequestId = dto.TaskRequestId,
-                InvitedUserId = user.Id,
-                InvitedByUserId = currentUserId,
-                Permission = dto.Permission,
-                Status = TaskShareInvitationStatus.Pending,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(7)
-            };
+                UserId = x.SharedWithUserId, UserName = x.SharedWithUser.UserName,
+                Permission = PermissionName(x.Permission), SharedAt = x.SharedAt
+            }).ToList());
+    }
 
+    public async Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync()
+    {
+        var shares = await taskShareDal.GetAllAsync(x => x.SharedWithUserId == currentUserService.UserId && x.TaskRequest.Activity &&
+            x.Permission >= TaskPermission.View && x.Permission <= TaskPermission.Manage,
+            include: q => q.Include(x => x.TaskRequest));
+        return new SuccessDataResult<List<SharedTaskDto>>(shares.Select(MapShare).ToList(), Messages.DataListed);
+    }
 
-            await invitationRepository.AddAsync(invitation);
+    private static SharedTaskDto MapShare(TaskShare share) => new()
+    {
+        TaskId = share.TaskRequestId, Title = share.TaskRequest.Title, Category = share.TaskRequest.Category,
+        Permission = PermissionName(share.Permission), SharedAt = share.SharedAt
+    };
 
-            await _unitOfWork.SaveChangesAsync();
+    public async Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId, int currentUserId)
+    {
+        var share = await taskShareDal.GetSharedTaskDetailsAsync(taskShareId);
+        if (share is null || !share.TaskRequest.Activity) return new ErrorDataResult<SharedTaskDto>(Messages.DataNotFound);
+        if (share.TaskRequest.OwnerId != currentUserId &&
+            (share.SharedWithUserId != currentUserId || !Enum.IsDefined(share.Permission)))
+            return new ErrorDataResult<SharedTaskDto>(Messages.AuthorizationDenied);
+        return new SuccessDataResult<SharedTaskDto>(MapShare(share), Messages.DataListed);
+    }
 
-
-
-            await _notificationService.CreateTaskShareInvitationNotificationAsync(user.Id, task.Title, inviter.UserName, invitation.Id);
-
-            try
-            {
-                var clientBaseUrl = _configuration.GetValue<string>("ClientApp:BaseUrl");
-
-                if (string.IsNullOrWhiteSpace(clientBaseUrl))
-                {
-                    clientBaseUrl = "http://localhost:5173";
-                }
-
-
-
-                var invitationUrl = $"{clientBaseUrl}/tasks/invitations/{invitation.Id}";
-
-                await _emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName, invitationUrl);
-            }
-            catch (Exception)
-            {
-
-
-            }
-
-            return new SuccessResult(Messages.TaskShareInvitationSent);
-        }
-
-        public async Task<IResult> RejectTaskInvitationAsync(int invitationId)
+    public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
+    {
+        var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(dto.TaskRequestId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!CanJoin(task)) return new ErrorResult(TaskUnavailable);
+        if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
+        if (string.IsNullOrWhiteSpace(dto.Username)) return new ErrorResult("Username is required.");
+        var users = unitOfWork.GetRepository<User>();
+        var user = await users.GetAsync(x => x.UserName == dto.Username.Trim());
+        if (user is null) return new ErrorResult(Messages.UserNotFound);
+        if (user.Id == task.OwnerId) return new ErrorResult(Messages.UserCannotShareTaskWithSelf);
+        if (await taskShareDal.GetAsync(x => x.TaskRequestId == task.Id && x.SharedWithUserId == user.Id) is not null)
+            return new ErrorResult(Messages.TaskAlreadyShared);
+        var invitations = unitOfWork.GetRepository<TaskShareInvitation>();
+        var now = DateTime.UtcNow;
+        if (await invitations.GetAsync(x => x.TaskRequestId == task.Id && x.InvitedUserId == user.Id &&
+            x.Status == TaskShareInvitationStatus.Pending && (!x.ExpiresAt.HasValue || x.ExpiresAt > now)) is not null)
+            return new ErrorResult(Messages.TaskShareInvitationAlreadySent);
+        var inviter = await users.GetByIdAsync(currentUserService.UserId);
+        if (inviter is null) return new ErrorResult(Messages.UserNotFound);
+        var invitation = new TaskShareInvitation
         {
-            var invitationRepository = _unitOfWork.GetRepository<TaskShareInvitation>();
-
-            var invitation = await invitationRepository.GetByIdAsync(invitationId);
-
-            if (invitation is null)
-                return new ErrorResult(Messages.InvitationNotFound);
-
-            if (invitation.InvitedUserId != _currentUserService.UserId)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (invitation.Status != TaskShareInvitationStatus.Pending)
-                return new ErrorResult(Messages.InvitationAlreadyResponded);
-
-            invitation.Status = TaskShareInvitationStatus.Rejected;
-            invitation.RespondedAt = DateTime.UtcNow;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.TaskRejected);
+            TaskRequestId = task.Id, InvitedUserId = user.Id, InvitedByUserId = inviter.Id,
+            Permission = dto.Permission, Status = TaskShareInvitationStatus.Pending,
+            CreatedAt = now, ExpiresAt = now.AddDays(7)
+        };
+        await invitations.AddAsync(invitation);
+        var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
+            TaskActivityType.UserInvited, user.Id, invitation);
+        var result = await SaveInvitationChange(task, Messages.TaskShareInvitationSent);
+        if (!result.Success) return result;
+        await workspaceService.PublishActivityAsync(activity);
+        // Delivery is best effort after commit; it cannot turn a persisted invitation into a failed request.
+        try
+        {
+            await notificationService.CreateTaskShareInvitationNotificationAsync(user.Id, task.Title, inviter.UserName, invitation.Id);
         }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Notification delivery failed for persisted invitation {InvitationId}", invitation.Id);
+        }
+        try
+        {
+            var clientUrl = configuration["ClientApp:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(clientUrl)) clientUrl = "http://localhost:5173";
+            await emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName,
+                $"{clientUrl.TrimEnd('/')}/tasks/invitations/{invitation.Id}");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Email delivery failed for persisted invitation {InvitationId}", invitation.Id);
+        }
+        return result;
     }
 }

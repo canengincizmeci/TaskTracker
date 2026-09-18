@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { deleteTask, getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
 import type { Task } from "../types/task";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
+import TaskParticipants from "../components/TaskParticipants";
+import TaskWorkspace from "../components/TaskWorkspace";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 type EditDraft = {
@@ -340,6 +342,10 @@ function TaskDetailPage() {
             </>
           )}
 
+          {task.canViewParticipants && <>
+            <TaskParticipants key={`participants-${task.id}`} taskId={task.id} />
+            <TaskWorkspace key={`workspace-${task.id}`} taskId={task.id} />
+          </>}
         </div>
 
         <aside className="task-detail-sidebar">

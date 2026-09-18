@@ -28,6 +28,7 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.Property(tr => tr.Status).IsRequired().HasMaxLength(50).HasConversion<string>().HasMaxLength(50);
 
             builder.Property(tr => tr.Activity).IsRequired().HasDefaultValue(true);
+            builder.Property(tr => tr.Version).IsConcurrencyToken().HasDefaultValue(0L);
 
             builder.Property(tr => tr.DueDate).HasColumnType("date");
 
@@ -36,6 +37,7 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.Property(x => x.CreatedAt).IsRequired().HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             builder.HasOne(x => x.Owner).WithMany(x => x.OwnedTaskRequests).HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeUserId).OnDelete(DeleteBehavior.Restrict);
 
         }
     }

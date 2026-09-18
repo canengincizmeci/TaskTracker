@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using TaskTracker.Core.Utilities.Enums;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -33,9 +34,9 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
 
         public async Task<List<TaskRequest>> GetTasksByUserIdAsync(int userId)
         {
-            var tasks =await _context.TaskRequests.Include(t => t.TaskShares).Where(t=>t.Activity==true && (t.OwnerId==userId || t.TaskShares.Any(ts => ts.SharedWithUserId == userId))).OrderByDescending(t => t.CreatedAt).ToListAsync();
+            var tasks =await _context.TaskRequests.Include(t => t.TaskShares).Where(t=>t.Activity==true && (t.OwnerId==userId || t.TaskShares.Any(ts => ts.SharedWithUserId == userId && ts.Permission >= TaskPermission.View && ts.Permission <= TaskPermission.Manage))).OrderByDescending(t => t.CreatedAt).ToListAsync();
               
             return tasks;
         }  
     }
-} 
+}

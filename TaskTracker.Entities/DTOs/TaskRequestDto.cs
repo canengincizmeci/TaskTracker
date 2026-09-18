@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Core.Entities;
@@ -22,13 +22,8 @@ namespace TaskTracker.Entities.DTOs
         public bool CanEdit { get; set; }
         public bool CanShare { get; set; }
         public bool CanDelete { get; set; }
+        public bool CanViewParticipants { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateOnly? DueDate { get; set; }
     }
 }
-
-
-
-
-
- 

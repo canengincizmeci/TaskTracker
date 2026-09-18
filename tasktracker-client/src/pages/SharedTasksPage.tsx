@@ -3,13 +3,16 @@ import { Link } from "react-router-dom";
 import axiosClient from "../api/axiosClient";
 import LoadingSpinner from "../components/LoadingSpinner";
 
+import { permissionText, type TaskPermission } from "../types/taskPermission";
+import { errorMessage as getErrorMessage } from "../api/errorMessage";
+
 type SharedTask = {
   taskId: number;
   title: string;
   category: string;
   priority?: string;
   status?: string;
-  permission: "View" | "Edit" | "Manage";
+  permission: TaskPermission | null;
   sharedAt?: string | null;
 };
 
@@ -29,19 +32,8 @@ function SharedTasksPage() {
         );
 
         setSharedTasks(response.data);
-      } catch (error: any) {
-        const data = error.response?.data;
-
-        const message =
-          typeof data === "string"
-            ? data
-            : data?.message
-            ? data.message
-            : data?.title
-            ? data.title
-            : "An error occurred while loading shared tasks.";
-
-        setErrorMessage(message);
+      } catch (error: unknown) {
+        setErrorMessage(getErrorMessage(error, "Could not load shared tasks."));
       } finally {
         setLoading(false);
       }
@@ -49,14 +41,6 @@ function SharedTasksPage() {
 
     loadSharedTasks();
   }, []);
-
-  const getPermissionText = (permission: SharedTask["permission"]) => {
-    if (permission === "View") return "View";
-    if (permission === "Edit") return "Edit";
-    if (permission === "Manage") return "Manage";
-
-    return "Unknown";
-  };
 
   if (loading) {
     return (
@@ -122,7 +106,7 @@ function SharedTasksPage() {
                       </div>
 
                       <span className="task-category">
-                        {getPermissionText(task.permission)}
+                        {permissionText(task.permission)}
                       </span>
                     </div>
 

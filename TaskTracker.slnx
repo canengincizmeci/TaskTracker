@@ -4,4 +4,5 @@
   <Project Path="TaskTracker.Core/TaskTracker.Core.csproj" Id="9fc3b2a9-c208-4798-931a-dd07cc01fff3" />
   <Project Path="TaskTracker.DataAccess/TaskTracker.DataAccess.csproj" Id="5a8fc460-8187-4ecb-b240-f28efee7d13e" />
   <Project Path="TaskTracker.Entities/TaskTracker.Entities.csproj" Id="30ec02f6-345a-40ed-9453-86423fa2f1f1" />
+  <Project Path="TaskTracker.Tests/TaskTracker.Tests.csproj" />
 </Solution>

@@ -33,6 +33,9 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
     containerBuilder.RegisterType<SignalRNotificationManager>()
         .As<IRealtimeNotificationService>()
         .InstancePerLifetimeScope();
+    containerBuilder.RegisterType<SignalRTaskWorkspaceService>()
+        .As<ITaskWorkspaceRealtimeService>()
+        .InstancePerLifetimeScope();
 });
 
 builder.Services.AddCors(options =>
@@ -80,7 +83,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var path = context.HttpContext.Request.Path;
 
                 if (!string.IsNullOrWhiteSpace(accessToken) &&
-                    path.StartsWithSegments("/hubs/notifications"))
+                    (path.StartsWithSegments("/hubs/notifications") || path.StartsWithSegments("/hubs/task-workspace")))
                 {
                     context.Token = accessToken;
                 }
@@ -143,6 +146,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<TaskWorkspaceHub>("/hubs/task-workspace", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHealthChecks("/health");
 
 app.Run();
