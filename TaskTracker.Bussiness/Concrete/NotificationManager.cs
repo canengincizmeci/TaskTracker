@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 using System.Text;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
@@ -16,13 +17,15 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICurrentUserService _currentUserService;
         private readonly IRealtimeNotificationService _realtimeNotificationService;
+        private readonly ILogger<NotificationManager> _logger;
 
 
-        public NotificationManager(IUnitOfWork unitOfWork, ICurrentUserService currentUserService, IRealtimeNotificationService realtimeNotificationService)
+        public NotificationManager(IUnitOfWork unitOfWork, ICurrentUserService currentUserService, IRealtimeNotificationService realtimeNotificationService, ILogger<NotificationManager> logger)
         {
             _unitOfWork = unitOfWork;
             _currentUserService = currentUserService;
             _realtimeNotificationService = realtimeNotificationService;
+            _logger = logger;
         }
 
         public async Task CreateTaskShareInvitationNotificationAsync(int userId, string taskTitle, string inviterUserName, int invitationId)
@@ -58,7 +61,14 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = notification.CreatedAt,
                 ReadAt = notification.ReadAt
             };
-            await _realtimeNotificationService.SendNotificationAsync(userId, notificationDto);
+            try
+            {
+                await _realtimeNotificationService.SendNotificationAsync(userId, notificationDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Realtime delivery failed for persisted notification {NotificationId}", notification.Id);
+            }
 
             
         }
