@@ -185,7 +185,7 @@ namespace TaskTracker.Bussiness.Concrete
             var mappedTasks = tasks.Select(task =>
             {
                 var share = task.TaskShares
-                    .FirstOrDefault(ts => ts.SharedWithUserId == userId);
+                    .FirstOrDefault(ts => ts.SharedWithUserId == userId && Enum.IsDefined(ts.Permission));
 
                 var isOwner = task.OwnerId == userId;
 
