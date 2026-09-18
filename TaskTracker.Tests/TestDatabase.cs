@@ -18,8 +18,8 @@ internal sealed class TestDatabase : IDisposable
         context.SaveChanges();
     }
 
-    public TaskTrackerDbContext CreateContext() => new(new DbContextOptionsBuilder<TaskTrackerDbContext>()
-        .UseSqlite(connection).Options);
+    public TaskTrackerDbContext CreateContext(params Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<TaskTrackerDbContext>()
+        .UseSqlite(connection).AddInterceptors(interceptors).Options);
 
     public static TaskRequest Task(int id = 1) => new()
     {

@@ -27,7 +27,7 @@ public class TaskAccessTests
         });
         await context.SaveChangesAsync();
         using var unitOfWork = new UnitOfWork(context);
-        var manager = new TaskRequestManager(unitOfWork, new EfTaskShareDal(context), new EfTaskRequestDal(context));
+        var manager = WorkspaceTestServices.TaskRequests(context);
 
         var result = await manager.GetTaskById(1, userId);
 
@@ -48,7 +48,7 @@ public class TaskAccessTests
         using var database = new TestDatabase();
         using var context = database.CreateContext();
         using var unitOfWork = new UnitOfWork(context);
-        var manager = new TaskRequestManager(unitOfWork, new EfTaskShareDal(context), new EfTaskRequestDal(context));
+        var manager = WorkspaceTestServices.TaskRequests(context);
         var result = await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "New task", Description = "Default lifecycle", Category = "Tests"
