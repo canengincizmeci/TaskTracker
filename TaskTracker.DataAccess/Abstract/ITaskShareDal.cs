@@ -12,5 +12,7 @@ namespace TaskTracker.DataAccess.Abstract
         
         Task<bool> HasPermissionAsync(int taskId, int userId, TaskPermission permission);
         Task<TaskShare?> GetSharedTaskDetailsAsync(int taskShareId);
+        void TouchTask(TaskRequest task);
+        Task ReloadInvitationAsync(TaskShareInvitation invitation);
     }
 }
