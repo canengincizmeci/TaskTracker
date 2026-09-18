@@ -70,6 +70,22 @@ namespace TaskTracker.API.Controllers
         }  
 
         [Authorize(Roles = "User")]
+        [HttpGet("invitation-details/{invitationId}")]
+        public async Task<IActionResult> GetInvitation(int invitationId)
+        {
+            var result = await _taskShareService.GetInvitationAsync(invitationId);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        [Authorize(Roles = "User,Admin")]
+        [HttpGet("task-participants/{taskId}")]
+        public async Task<IActionResult> GetParticipants(int taskId)
+        {
+            var result = await _taskShareService.GetParticipantsAsync(taskId);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
         [HttpGet("user-shared-tasks")]
         public async Task<IActionResult> GetMySharedTasksAsync()
         {

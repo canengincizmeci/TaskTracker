@@ -10,7 +10,7 @@ namespace TaskTracker.Entities.DTOs
         public int TaskId { get; set; }
         public string Title { get; set; }
         public string Category { get; set; }
-        public TaskPermission Permission { get; set; }
+        public string? Permission { get; set; }
         public DateTime? SharedAt { get; set; }
     }
 }

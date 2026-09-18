@@ -12,7 +12,11 @@ namespace TaskTracker.Entities.DTOs
         public int TaskRequestId { get; set; }
         public string TaskTitle { get; set; } = null!;
         public string InviterUserName { get; set; } = null!;
-        public TaskPermission Permission { get; set; }
+        public string? Permission { get; set; }
+        public string Status { get; set; } = null!;
+        public bool CanAccept { get; set; }
+        public bool CanReject { get; set; }
+        public string? UnavailableReason { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? ExpiresAt { get; set; }
     }
