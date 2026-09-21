@@ -13,7 +13,8 @@ namespace TaskTracker.Entities.DTOs
         public string Description { get; set; }
         public string Category { get; set; }
         public TaskPriority Priority { get; set; }
-        public TaskStatus Status { get; set; }
+        // Workflow state is changed only by dedicated commands.
+        public long Version { get; set; }
         public bool Activity { get; set; }
         public DateOnly? DueDate { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

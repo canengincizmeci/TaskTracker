@@ -17,12 +17,19 @@ namespace TaskTracker.Entities.DTOs
         public string Status { get; set; }
         public bool Activity { get; set; }
         public int? OwnerId { get; set; }
+        public string OwnerUserName { get; set; } = null!;
+        public int? AssigneeUserId { get; set; }
+        public string? AssigneeUserName { get; set; }
+        public long Version { get; set; }
         public bool IsOwner { get; set; }
+        public bool IsAssignee { get; set; }
         public bool CanView { get; set; }
         public bool CanEdit { get; set; }
         public bool CanShare { get; set; }
         public bool CanDelete { get; set; }
         public bool CanViewParticipants { get; set; }
+        public bool CanManageResponsibility { get; set; }
+        public string? CurrentUserPermission { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateOnly? DueDate { get; set; }
     }

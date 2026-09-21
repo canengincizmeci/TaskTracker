@@ -17,6 +17,10 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<List<TaskParticipantDto>>> GetParticipantsAsync(int taskId);
         Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync();
         Task<IDataResult<SharedTaskDto>> GetSharedTaskDetailsAsync(int taskShareId,int currentUserId);
+        Task<IDataResult<List<OutgoingTaskInvitationDto>>> GetOutgoingInvitationsAsync(int taskId);
+        Task<IResult> CancelInvitationAsync(int invitationId, long version);
+        Task<IResult> UpdateParticipantPermissionAsync(int taskId, int userId, UpdateParticipantPermissionDto dto);
+        Task<IResult> RemoveParticipantAsync(int taskId, int userId, long version);
 
 
     }

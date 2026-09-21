@@ -14,5 +14,9 @@ public enum TaskActivityType
     SubmissionApproved = 10,
     TaskCompleted = 11,
     TaskCancelled = 12,
-    TaskDetailsUpdated = 13
+    TaskDetailsUpdated = 13,
+    TaskReopened = 14,
+    ParticipantRemoved = 15,
+    ParticipantPermissionChanged = 16,
+    InvitationCancelled = 17
 }

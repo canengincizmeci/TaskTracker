@@ -11,6 +11,9 @@ namespace TaskTracker.Entities.DTOs
     {
         public int Id { get; set; }
         public int OwnerId { get; set; }
+        public string OwnerUserName { get; set; } = null!;
+        public int? AssigneeUserId { get; set; }
+        public string? AssigneeUserName { get; set; }
         public bool IsOwner { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
@@ -26,5 +29,6 @@ namespace TaskTracker.Entities.DTOs
         public bool CanView { get; set; }
         public bool CanEdit { get; set; }
         public bool CanShare { get; set; }
+        public long Version { get; set; }
     }
 }

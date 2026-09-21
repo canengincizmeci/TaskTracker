@@ -13,6 +13,7 @@ namespace TaskTracker.DataAccess.Abstract
         Task<bool> CanEditAsync(int taskId, int userId);
         Task<bool> CanManageAsync(int taskId, int userId);
         Task<List<TaskRequest>> GetTasksByUserIdAsync(int userId);
+        Task<List<TaskRequest>> GetAssignedTasksAsync(int userId);
         
 
 

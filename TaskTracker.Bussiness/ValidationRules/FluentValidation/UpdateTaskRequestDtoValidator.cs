@@ -20,8 +20,6 @@ namespace TaskTracker.Bussiness.ValidationRules.FluentValidation
 
             RuleFor(x => x.Priority).IsInEnum();
 
-            RuleFor(x => x.Status).IsInEnum();
-
         }
     }
 }

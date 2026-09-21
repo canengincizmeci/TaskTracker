@@ -11,4 +11,6 @@ public interface ITaskWorkspaceService
     Task<IDataResult<List<TaskMessageDto>>> GetMessagesAsync(int taskId, int userId);
     Task<IDataResult<TaskMessageDto>> SendMessageAsync(int taskId, int userId, string? content);
     Task PublishActivityAsync(TaskActivity activity);
+    Task PublishTaskChangedAsync(int taskId);
+    Task RevokeAccessAsync(int taskId, int userId);
 }

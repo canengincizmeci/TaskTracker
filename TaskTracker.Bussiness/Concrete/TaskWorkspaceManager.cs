@@ -84,6 +84,20 @@ public class TaskWorkspaceManager : ITaskWorkspaceService
         }
     }
 
+    public async Task PublishTaskChangedAsync(int taskId)
+    {
+        try
+        {
+            await _realtime.TaskChangedAsync(taskId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Realtime task refresh delivery failed for task {TaskId}", taskId);
+        }
+    }
+
+    public Task RevokeAccessAsync(int taskId, int userId) => _realtime.AccessRevokedAsync(taskId, userId);
+
     private static TaskActivityDto MapActivity(TaskActivity activity) => new()
     {
         Id = activity.Id, ActivityType = activity.ActivityType.ToString(), ActorUserId = activity.ActorUserId,

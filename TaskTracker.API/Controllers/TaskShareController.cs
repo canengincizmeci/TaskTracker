@@ -113,5 +113,37 @@ namespace TaskTracker.API.Controllers
             return Ok(result.Data);
         }
 
+        [Authorize(Roles = "User")]
+        [HttpGet("task/{taskId:int}/outgoing-invitations")]
+        public async Task<IActionResult> GetOutgoingInvitations(int taskId)
+        {
+            var result = await _taskShareService.GetOutgoingInvitationsAsync(taskId);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("invitations/{invitationId:int}/cancel")]
+        public async Task<IActionResult> CancelInvitation(int invitationId, TaskWorkflowCommandDto dto)
+        {
+            var result = await _taskShareService.CancelInvitationAsync(invitationId, dto.Version);
+            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPut("task/{taskId:int}/participants/{userId:int}/permission")]
+        public async Task<IActionResult> UpdatePermission(int taskId, int userId, UpdateParticipantPermissionDto dto)
+        {
+            var result = await _taskShareService.UpdateParticipantPermissionAsync(taskId, userId, dto);
+            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("task/{taskId:int}/participants/{userId:int}/remove")]
+        public async Task<IActionResult> RemoveParticipant(int taskId, int userId, TaskWorkflowCommandDto dto)
+        {
+            var result = await _taskShareService.RemoveParticipantAsync(taskId, userId, dto.Version);
+            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+        }
+
     }
 }

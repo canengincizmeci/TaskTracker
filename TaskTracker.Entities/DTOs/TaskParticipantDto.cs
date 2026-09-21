@@ -6,4 +6,5 @@ public class TaskParticipantDto
     public string UserName { get; set; } = null!;
     public string? Permission { get; set; }
     public DateTime? SharedAt { get; set; }
+    public bool IsAssignee { get; set; }
 }

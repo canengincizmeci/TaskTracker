@@ -6,4 +6,6 @@ public interface ITaskWorkspaceRealtimeService
 {
     Task ActivityCreatedAsync(int taskId, TaskActivityDto activity);
     Task MessageCreatedAsync(int taskId, TaskMessageDto message);
+    Task TaskChangedAsync(int taskId);
+    Task AccessRevokedAsync(int taskId, int userId);
 }

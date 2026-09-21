@@ -73,6 +73,46 @@ namespace TaskTracker.Bussiness.Concrete
             
         }
 
+        public async Task CreateTaskNotificationAsync(int userId, NotificationType type, string title, string message,
+            int taskId, string? redirectUrl = null)
+        {
+            var notification = new Notification
+            {
+                UserId = userId,
+                Type = type,
+                Title = title,
+                Message = message,
+                RelatedEntityId = taskId,
+                RedirectUrl = redirectUrl ?? $"/tasks/task-detail/{taskId}",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _unitOfWork.GetRepository<Notification>().AddAsync(notification);
+            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _realtimeNotificationService.SendNotificationAsync(userId, Map(notification));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Realtime delivery failed for persisted notification {NotificationId}", notification.Id);
+            }
+        }
+
+        private static NotificationDto Map(Notification notification) => new()
+        {
+            Id = notification.Id,
+            UserId = notification.UserId,
+            Type = notification.Type,
+            Title = notification.Title,
+            Message = notification.Message,
+            IsRead = notification.IsRead,
+            RelatedEntityId = notification.RelatedEntityId,
+            RedirectUrl = notification.RedirectUrl,
+            CreatedAt = notification.CreatedAt,
+            ReadAt = notification.ReadAt
+        };
+
         public async Task<IDataResult<List<NotificationDto>>> GetNotificationsForUserAsync(int userId)
         {
             var notificationRepository = _unitOfWork.GetRepository<Notification>();

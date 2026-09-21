@@ -10,7 +10,9 @@ namespace TaskTracker.Core.Utilities.Enums
         TaskUpdated = 1,
         TaskCommentAdded = 2,
         MessageReceived = 3,
-        System = 4
+        System = 4,
+        TaskAssignment = 5,
+        TaskAccessChanged = 6
     }
 }
   

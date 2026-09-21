@@ -14,9 +14,15 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId);
         Task<IResult> DeleteTask(int taskId, int currentUserId);
         Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId);
-        Task<IResult> UpdateTaskStatus(UpdateTaskStatusDto dto, int currentUserId);
+        Task<IResult> AssignTaskAsync(int taskId, AssignTaskDto dto, int currentUserId);
+        Task<IResult> UnassignTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
+        Task<IResult> StartTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
+        Task<IResult> CompleteTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
+        Task<IResult> CancelTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
+        Task<IResult> ReopenTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
         Task<IDataResult<List<TaskRequest>>> GetAllTasks();
         Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId);
+        Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId);
 
 
 

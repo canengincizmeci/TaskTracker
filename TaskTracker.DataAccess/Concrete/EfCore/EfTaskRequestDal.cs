@@ -34,9 +34,16 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
 
         public async Task<List<TaskRequest>> GetTasksByUserIdAsync(int userId)
         {
-            var tasks =await _context.TaskRequests.Include(t => t.TaskShares).Where(t=>t.Activity==true && (t.OwnerId==userId || t.TaskShares.Any(ts => ts.SharedWithUserId == userId && ts.Permission >= TaskPermission.View && ts.Permission <= TaskPermission.Manage))).OrderByDescending(t => t.CreatedAt).ToListAsync();
+            var tasks =await _context.TaskRequests.AsNoTracking().Include(t => t.Owner).Include(t => t.Assignee)
+                .Include(t => t.TaskShares).Where(t=>t.Activity==true && (t.OwnerId==userId || t.TaskShares.Any(ts => ts.SharedWithUserId == userId && ts.Permission >= TaskPermission.View && ts.Permission <= TaskPermission.Manage))).OrderByDescending(t => t.CreatedAt).ToListAsync();
               
             return tasks;
         }  
+
+        public Task<List<TaskRequest>> GetAssignedTasksAsync(int userId) => _context.TaskRequests.AsNoTracking()
+            .Include(t => t.Owner).Include(t => t.Assignee).Include(t => t.TaskShares)
+            .Where(t => t.Activity && t.AssigneeUserId == userId)
+            .OrderBy(t => t.DueDate == null).ThenBy(t => t.DueDate).ThenByDescending(t => t.CreatedAt)
+            .ToListAsync();
     }
 }

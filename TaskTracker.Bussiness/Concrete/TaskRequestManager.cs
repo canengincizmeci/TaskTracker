@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Microsoft.Extensions.Logging;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
@@ -12,251 +10,283 @@ using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
 using TaskTracker.DataAccess.Abstract;
 using TaskTracker.Entities.DTOs;
+using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
-namespace TaskTracker.Bussiness.Concrete
+namespace TaskTracker.Bussiness.Concrete;
+
+public class TaskRequestManager : ITaskRequestService
 {
-    public class TaskRequestManager : ITaskRequestService
+    private const string ConcurrentChange = "The task changed. Refresh and retry.";
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly ITaskShareDal _taskShareDal;
+    private readonly ITaskRequestDal _taskRequestDal;
+    private readonly ITaskActivityWriter _activityWriter;
+    private readonly ITaskWorkspaceService _workspace;
+    private readonly INotificationService _notifications;
+    private readonly ILogger<TaskRequestManager> _logger;
+
+    public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
+        ITaskActivityWriter activityWriter, ITaskWorkspaceService workspace, INotificationService notifications,
+        ILogger<TaskRequestManager> logger)
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly ITaskShareDal _taskShareDal;
-        private readonly ITaskRequestDal _taskRequestDal;
-        private readonly ITaskActivityWriter _activityWriter;
-        private readonly ITaskWorkspaceService _workspaceService;
+        _unitOfWork = unitOfWork;
+        _taskShareDal = taskShareDal;
+        _taskRequestDal = taskRequestDal;
+        _activityWriter = activityWriter;
+        _workspace = workspace;
+        _notifications = notifications;
+        _logger = logger;
+    }
 
-        public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
-            ITaskActivityWriter activityWriter, ITaskWorkspaceService workspaceService)
+    [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
+    public async Task<IResult> AddTaskRequestAsync(TaskRequestCreateDto dto, int currentUserId)
+    {
+        var task = new TaskRequest
         {
-            _unitOfWork = unitOfWork;
-            _taskShareDal = taskShareDal;
-            _taskRequestDal = taskRequestDal;
-            _activityWriter = activityWriter;
-            _workspaceService = workspaceService;
-        }
+            Title = dto.Title, Description = dto.Description, Category = dto.Category,
+            Priority = dto.Priority, Status = TaskStatus.Pending, DueDate = dto.DueDate,
+            OwnerId = currentUserId, Activity = true, Visibility = TaskVisibility.Private,
+            CreatedAt = DateTime.UtcNow, SharedCount = 0
+        };
+        await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
+        await _unitOfWork.SaveChangesAsync();
+        await _workspace.PublishActivityAsync(activity);
+        return new SuccessResult(Messages.DataAdded);
+    }
 
-        [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
-        public async Task<IResult> AddTaskRequestAsync(TaskRequestCreateDto dto, int currentUserId)
+    public async Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId)
+    {
+        var task = await _unitOfWork.GetRepository<TaskRequest>().GetAsync(x => x.Id == taskId,
+            q => q.Include(x => x.Owner).Include(x => x.Assignee));
+        if (task is null || !task.Activity) return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
+        var share = task.OwnerId == currentUserId ? null : await _taskShareDal.GetAsync(x =>
+            x.TaskRequestId == taskId && x.SharedWithUserId == currentUserId);
+        var validShare = share is not null && Enum.IsDefined(share.Permission);
+        var isOwner = task.OwnerId == currentUserId;
+        var canView = isOwner || task.Visibility == TaskVisibility.Public || validShare;
+        if (!canView) return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
+        var canEdit = isOwner || validShare && share!.Permission >= TaskPermission.Edit;
+        return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
         {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
+            Id = task.Id, OwnerId = task.OwnerId, OwnerUserName = task.Owner.UserName,
+            AssigneeUserId = task.AssigneeUserId, AssigneeUserName = task.Assignee?.UserName,
+            Version = task.Version, Title = task.Title, Description = task.Description,
+            Category = task.Category, Priority = task.Priority.ToString(), Status = task.Status.ToString(),
+            Activity = task.Activity, DueDate = task.DueDate, Visibility = task.Visibility.ToString(),
+            CreatedAt = task.CreatedAt, IsOwner = isOwner, IsAssignee = task.AssigneeUserId == currentUserId,
+            CanView = canView, CanEdit = canEdit,
+            CanShare = isOwner, CanDelete = isOwner, CanViewParticipants = isOwner || validShare,
+            CanManageResponsibility = isOwner,
+            CurrentUserPermission = isOwner ? "Owner" : validShare ? share!.Permission.ToString() : null
+        });
+    }
 
-            var taskRequest = new TaskRequest
-            {
-                Title = dto.Title,
-                Description = dto.Description,
-                Category = dto.Category,
-                Priority = dto.Priority,
-                Status = dto.Status,
-                DueDate = dto.DueDate,
-                OwnerId = currentUserId,
-                Activity = true,
-                Visibility = TaskVisibility.Private,
-                CreatedAt = DateTime.UtcNow,
-                SharedCount = 0
-            };
+    [ValidationAspect(typeof(UpdateTaskRequestDtoValidator))]
+    public async Task<IResult> UpdateTask(UpdateTaskRequestDto dto, int currentUserId)
+    {
+        var task = await _unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(dto.Id);
+        if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.Status is TaskStatus.Completed or TaskStatus.Cancelled or TaskStatus.InReview)
+            return new ErrorResult("Task details cannot be changed in the current state.");
+        if (task.OwnerId != currentUserId && !await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
+            return new ErrorResult(Messages.AuthorizationDenied);
+        if (dto.DueDate.HasValue && dto.DueDate != task.DueDate &&
+            dto.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
+            return new ErrorResult("Due date must be today or later when changed.");
+        if (task.Title == dto.Title && task.Description == dto.Description && task.Category == dto.Category &&
+            task.Priority == dto.Priority && task.DueDate == dto.DueDate) return new SuccessResult(Messages.DataUpdated);
+        task.Title = dto.Title; task.Description = dto.Description; task.Category = dto.Category;
+        task.Priority = dto.Priority; task.DueDate = dto.DueDate;
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated);
+        return await SaveTaskChange(task, activity, Messages.DataUpdated);
+    }
 
+    public async Task<IResult> AssignTaskAsync(int taskId, AssignTaskDto dto, int currentUserId)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.Status is TaskStatus.Completed or TaskStatus.Cancelled or TaskStatus.InReview)
+            return new ErrorResult("Responsibility cannot be changed in the current state.");
+        if (dto.AssigneeUserId != task.OwnerId &&
+            !await _taskShareDal.HasPermissionAsync(task.Id, dto.AssigneeUserId, TaskPermission.Edit))
+            return new ErrorResult("Assignee must be the owner or an accepted collaborator with Edit access.");
+        if (task.AssigneeUserId == dto.AssigneeUserId) return new SuccessResult("Task is already assigned to this user.");
+        var previous = task.AssigneeUserId;
+        if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
+        task.AssigneeUserId = dto.AssigneeUserId;
+        TaskActivity? previousActivity = null;
+        if (previous.HasValue)
+            previousActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserAssigned, dto.AssigneeUserId);
+        var result = await SaveTaskChange(task, activity, "Task assigned successfully.", publishActivity: false);
+        if (!result.Success) return result;
+        if (previousActivity is not null) await _workspace.PublishActivityAsync(previousActivity);
+        await _workspace.PublishActivityAsync(activity);
+        await NotifyAssignment(task, previous, dto.AssigneeUserId);
+        return result;
+    }
 
-            await taskRepository.AddAsync(taskRequest);
-            var activity = await _activityWriter.WriteAsync(taskRequest, currentUserId, TaskActivityType.TaskCreated);
-            await _unitOfWork.SaveChangesAsync();
-            await _workspaceService.PublishActivityAsync(activity);
+    public async Task<IResult> UnassignTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.Status == TaskStatus.InReview) return new ErrorResult("A task under review cannot be unassigned.");
+        if (!task.AssigneeUserId.HasValue) return new SuccessResult("Task is already unassigned.");
+        var previous = task.AssigneeUserId.Value;
+        task.AssigneeUserId = null;
+        if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous);
+        var result = await SaveTaskChange(task, activity, "Task unassigned successfully.");
+        if (result.Success && previous != task.OwnerId)
+            await TryNotify(previous, NotificationType.TaskAssignment, "Task unassigned",
+                $"You are no longer assigned to '{task.Title}'.", task.Id);
+        return result;
+    }
 
-            return new SuccessResult(Messages.DataAdded);
-        }
+    public Task<IResult> StartTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId) =>
+        ChangeStatus(taskId, dto.Version, currentUserId, TaskStatus.Pending, TaskStatus.InProgress,
+            TaskActivityType.WorkStarted, "Work started.");
 
-        public async Task<IResult> DeleteTask(int taskId, int currentUserId)
+    public async Task<IResult> CompleteTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId)
+            return new ErrorResult("Delegated work will be completed through submission and review.");
+        if (task.Status is not (TaskStatus.Pending or TaskStatus.InProgress))
+            return new ErrorResult("Only pending or in-progress personal work can be completed.");
+        return await ApplyStatus(task, currentUserId, TaskStatus.Completed, TaskActivityType.TaskCompleted, "Task completed.");
+    }
+
+    public async Task<IResult> CancelTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.Status is not (TaskStatus.Pending or TaskStatus.InProgress))
+            return new ErrorResult("Only pending or in-progress tasks can be cancelled.");
+        return await ApplyStatus(task, currentUserId, TaskStatus.Cancelled, TaskActivityType.TaskCancelled, "Task cancelled.");
+    }
+
+    public async Task<IResult> ReopenTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.Status is not (TaskStatus.Completed or TaskStatus.Cancelled))
+            return new ErrorResult("Only completed or cancelled tasks can be reopened.");
+        return await ApplyStatus(task, currentUserId, TaskStatus.Pending, TaskActivityType.TaskReopened, "Task reopened.");
+    }
+
+    private async Task<IResult> ChangeStatus(int taskId, long version, int actorId, TaskStatus from, TaskStatus to,
+        TaskActivityType activityType, string message)
+    {
+        var task = await GetActiveTask(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.Version != version) return new ErrorResult(ConcurrentChange);
+        if (task.Status != from) return new ErrorResult($"Task must be {from} for this action.");
+        var allowed = task.AssigneeUserId.HasValue ? task.AssigneeUserId == actorId : task.OwnerId == actorId;
+        if (!allowed) return new ErrorResult(Messages.AuthorizationDenied);
+        return await ApplyStatus(task, actorId, to, activityType, message);
+    }
+
+    private async Task<IResult> ApplyStatus(TaskRequest task, int actorId, TaskStatus to,
+        TaskActivityType type, string message)
+    {
+        var from = task.Status;
+        task.Status = to;
+        var activity = await _activityWriter.WriteAsync(task, actorId, type, fromStatus: from, toStatus: to);
+        var result = await SaveTaskChange(task, activity, message);
+        if (!result.Success) return result;
+        if (type == TaskActivityType.WorkStarted && actorId != task.OwnerId)
+            await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Work started",
+                $"Work started on '{task.Title}'.", task.Id);
+        if (type is TaskActivityType.TaskCancelled or TaskActivityType.TaskReopened &&
+            task.AssigneeUserId.HasValue && task.AssigneeUserId != actorId)
+            await TryNotify(task.AssigneeUserId.Value, NotificationType.TaskUpdated,
+                type == TaskActivityType.TaskCancelled ? "Task cancelled" : "Task reopened",
+                $"'{task.Title}' was {(type == TaskActivityType.TaskCancelled ? "cancelled" : "reopened")}.", task.Id);
+        return result;
+    }
+
+    public async Task<IResult> DeleteTask(int taskId, int currentUserId)
+    {
+        var task = await _unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
+        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        task.Activity = false;
+        try { await _unitOfWork.SaveChangesAsync(); return new SuccessResult(Messages.DataUpdated); }
+        catch (DbUpdateConcurrencyException) { return new ErrorResult(ConcurrentChange); }
+    }
+
+    public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId) =>
+        new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetTasksByUserIdAsync(userId))
+            .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);
+
+    public async Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId) =>
+        new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetAssignedTasksAsync(userId))
+            .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);
+
+    private static GetTasksDto MapList(TaskRequest task, int userId)
+    {
+        var share = task.TaskShares.FirstOrDefault(x => x.SharedWithUserId == userId && Enum.IsDefined(x.Permission));
+        var owner = task.OwnerId == userId;
+        return new GetTasksDto
         {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
+            Id = task.Id, OwnerId = task.OwnerId, OwnerUserName = task.Owner.UserName,
+            AssigneeUserId = task.AssigneeUserId, AssigneeUserName = task.Assignee?.UserName,
+            Title = task.Title, Description = task.Description, Category = task.Category,
+            Priority = task.Priority.ToString(), Status = task.Status.ToString(), Activity = task.Activity,
+            DueDate = task.DueDate, IsOwner = owner, IsSharedWithMe = share is not null,
+            CanView = owner || share is not null, CanEdit = owner || share?.Permission >= TaskPermission.Edit,
+            CanShare = owner, Visibility = task.Visibility.ToString(), CreatedAt = task.CreatedAt,
+            SharedCount = task.SharedCount, Version = task.Version
+        };
+    }
 
-            var task = await taskRepository.GetByIdAsync(taskId);
+    public async Task<IDataResult<List<TaskRequest>>> GetAllTasks() =>
+        new SuccessDataResult<List<TaskRequest>>(await _unitOfWork.GetRepository<TaskRequest>().GetAllAsync(x => x.Activity));
 
-            if (task == null)
-                return new ErrorResult(Messages.DataNotFound);
+    private Task<TaskRequest?> GetActiveTask(int taskId) => _unitOfWork.GetRepository<TaskRequest>().GetAsync(
+        x => x.Id == taskId && x.Activity, q => q.Include(x => x.Owner).Include(x => x.Assignee));
 
-            var canManage = task.OwnerId == currentUserId || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.Manage);
+    private async Task<IResult> SaveTaskChange(TaskRequest task, TaskActivity activity, string message,
+        bool publishActivity = true)
+    {
+        try { await _unitOfWork.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException) { return new ErrorResult(ConcurrentChange); }
+        if (publishActivity) await _workspace.PublishActivityAsync(activity);
+        await _workspace.PublishTaskChangedAsync(task.Id);
+        return new SuccessResult(message);
+    }
 
-            if (!canManage)
-                return new ErrorResult(Messages.AuthorizationDenied);
+    private async Task NotifyAssignment(TaskRequest task, int? previous, int current)
+    {
+        if (previous.HasValue && previous != current && previous != task.OwnerId)
+            await TryNotify(previous.Value, NotificationType.TaskAssignment, "Task reassigned",
+                $"You are no longer assigned to '{task.Title}'.", task.Id);
+        if (current != task.OwnerId)
+            await TryNotify(current, NotificationType.TaskAssignment, "Task assigned to you",
+                $"You are now responsible for '{task.Title}'.", task.Id);
+    }
 
-            task.Activity = false;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.DataUpdated);
-        }
-
-        public async Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId)
+    private async Task TryNotify(int userId, NotificationType type, string title, string message, int taskId)
+    {
+        try { await _notifications.CreateTaskNotificationAsync(userId, type, title, message, taskId); }
+        catch (Exception ex)
         {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var task = await taskRepository.GetByIdAsync(taskId);
-
-            if (task == null || !task.Activity)
-                return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
-
-            var isOwner = task.OwnerId == currentUserId;
-            var canView = isOwner || task.Visibility == TaskVisibility.Public || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View);
-
-            if (!canView)
-                return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
-
-            var canEdit = isOwner || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.Edit);
-            var canDelete = isOwner || (canEdit && await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.Manage));
-
-            return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
-            {
-                Id = task.Id,
-                OwnerId = task.OwnerId,
-                Title = task.Title,
-                Description = task.Description,
-                Category = task.Category,
-                Priority = task.Priority.ToString(),
-                Status = task.Status.ToString(),
-                Activity = task.Activity,
-                DueDate = task.DueDate,
-                Visibility = task.Visibility.ToString(),
-                CreatedAt = task.CreatedAt,
-                IsOwner = isOwner,
-                CanView = canView,
-                CanEdit = canEdit,
-                CanShare = isOwner,
-                CanDelete = canDelete,
-                CanViewParticipants = isOwner || await _taskShareDal.HasPermissionAsync(taskId, currentUserId, TaskPermission.View),
-            });
+            _logger.LogWarning(ex, "Task notification delivery failed for task {TaskId} and user {UserId}",
+                taskId, userId);
         }
-
-        
-
-        [ValidationAspect(typeof(UpdateTaskRequestDtoValidator))]
-        public async Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId)
-        {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-
-            var task = await taskRepository.GetByIdAsync(taskRequest.Id);
-
-            if (task == null || !task.Activity)
-                return new ErrorResult(Messages.DataNotFound);
-
-            var canEdit =
-                task.OwnerId == currentUserId ||
-                await _taskShareDal.HasPermissionAsync(
-                    task.Id,
-                    currentUserId,
-                    TaskPermission.Edit);
-
-            if (!canEdit)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            if (taskRequest.DueDate.HasValue &&
-                taskRequest.DueDate != task.DueDate &&
-                taskRequest.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
-                return new ErrorResult("Due date must be today or later when changed.");
-
-            var detailsChanged = task.Title != taskRequest.Title || task.Description != taskRequest.Description ||
-                task.Category != taskRequest.Category || task.Priority != taskRequest.Priority ||
-                task.Status != taskRequest.Status || task.DueDate != taskRequest.DueDate;
-            if (!detailsChanged) return new SuccessResult(Messages.DataUpdated);
-
-            task.Title = taskRequest.Title;
-            task.Description = taskRequest.Description;
-            task.Category = taskRequest.Category;
-            task.Priority = taskRequest.Priority;
-            task.Status = taskRequest.Status;
-            task.DueDate = taskRequest.DueDate;
-
-            taskRepository.Update(task);
-            var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated);
-            await _unitOfWork.SaveChangesAsync();
-            await _workspaceService.PublishActivityAsync(activity);
-
-            return new SuccessResult(Messages.DataUpdated);
-        }
-          
-
-        [ValidationAspect(typeof(UpdateTaskStatusDtoValidator))]
-        public async Task<IResult> UpdateTaskStatus(UpdateTaskStatusDto dto, int currentUserId)
-        {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-            var task = await taskRepository.GetByIdAsync(dto.Id);
-
-            if (task == null || !task.Activity)
-                return new ErrorResult(Messages.DataNotFound);
-
-            var canEdit = task.OwnerId == currentUserId ||
-                await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit);
-
-            if (!canEdit)
-                return new ErrorResult(Messages.AuthorizationDenied);
-
-            task.Status = dto.Status!.Value;
-
-            await _unitOfWork.SaveChangesAsync();
-
-            return new SuccessResult(Messages.DataUpdated);
-        }
-
-        public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId)
-        {
-            var tasks = await _taskRequestDal.GetTasksByUserIdAsync(userId);
-
-            var mappedTasks = tasks.Select(task =>
-            {
-                var share = task.TaskShares
-                    .FirstOrDefault(ts => ts.SharedWithUserId == userId && Enum.IsDefined(ts.Permission));
-
-                var isOwner = task.OwnerId == userId;
-
-                return new GetTasksDto
-                {
-                    Id = task.Id,
-                    OwnerId = task.OwnerId,
-
-                    Title = task.Title,
-                    Description = task.Description,
-                    Category = task.Category,
-
-                    Priority = task.Priority.ToString(),
-                    Status = task.Status.ToString(),
-                    Activity = task.Activity,
-
-                    DueDate = task.DueDate,
-
-                    IsOwner = isOwner,
-                    IsSharedWithMe = share != null,
-
-                    CanView = isOwner || task.Visibility == TaskVisibility.Public ||
-                        (share != null && share.Permission >= TaskPermission.View),
-
-                    CanEdit =
-                        isOwner ||
-                        (share != null &&
-                         share.Permission >= TaskPermission.Edit),
-
-                    CanShare = isOwner,
-
-                    Visibility = task.Visibility.ToString(),
-
-                    CreatedAt = task.CreatedAt,
-
-                    SharedCount = task.SharedCount
-                };
-            }).ToList();
-
-            return new SuccessDataResult<List<GetTasksDto>>(
-                mappedTasks,
-                Messages.DataListed
-            );
-        }
-
-
-
-
-        public async Task<IDataResult<List<TaskRequest>>> GetAllTasks()
-        {
-            var taskRepository = _unitOfWork.GetRepository<TaskRequest>();
-
-            var tasks = await taskRepository.GetAllAsync(x => x.Activity);
-
-            return new SuccessDataResult<List<TaskRequest>>(tasks);
-        }
-
-        
     }
 }

@@ -105,17 +105,34 @@ namespace TaskTracker.API.Controllers
         }
 
         [Authorize(Roles = "User")]
-        [HttpPost("update-task-status")]
-        public async Task<IActionResult> UpdateTaskStatus(UpdateTaskStatusDto taskStatusDto)
-        {
-            var currentUserId = _currentUserService.UserId;
-            var result = await _taskRequestService.UpdateTaskStatus(taskStatusDto, currentUserId);
+        [HttpPost("{taskId:int}/assign")]
+        public async Task<IActionResult> Assign(int taskId, AssignTaskDto dto) =>
+            ToActionResult(await _taskRequestService.AssignTaskAsync(taskId, dto, _currentUserService.UserId));
 
-            if (!result.Success)
-                return BadRequest(result.Message);
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/unassign")]
+        public async Task<IActionResult> Unassign(int taskId, TaskWorkflowCommandDto dto) =>
+            ToActionResult(await _taskRequestService.UnassignTaskAsync(taskId, dto, _currentUserService.UserId));
 
-            return Ok(result.Message);
-        }
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/start")]
+        public async Task<IActionResult> Start(int taskId, TaskWorkflowCommandDto dto) =>
+            ToActionResult(await _taskRequestService.StartTaskAsync(taskId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/complete")]
+        public async Task<IActionResult> Complete(int taskId, TaskWorkflowCommandDto dto) =>
+            ToActionResult(await _taskRequestService.CompleteTaskAsync(taskId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/cancel")]
+        public async Task<IActionResult> Cancel(int taskId, TaskWorkflowCommandDto dto) =>
+            ToActionResult(await _taskRequestService.CancelTaskAsync(taskId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/reopen")]
+        public async Task<IActionResult> Reopen(int taskId, TaskWorkflowCommandDto dto) =>
+            ToActionResult(await _taskRequestService.ReopenTaskAsync(taskId, dto, _currentUserService.UserId));
 
         [Authorize(Roles = "User")]
         [HttpGet("list-user-tasks")]
@@ -129,6 +146,17 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Data);
         }
+
+        [Authorize(Roles = "User")]
+        [HttpGet("assigned-to-me")]
+        public async Task<IActionResult> AssignedToMe()
+        {
+            var result = await _taskRequestService.GetAssignedTasksAsync(_currentUserService.UserId);
+            return result.Success ? Ok(result.Data) : BadRequest(result.Message);
+        }
+
+        private IActionResult ToActionResult(TaskTracker.Core.Utilities.Results.IResult result) =>
+            result.Success ? Ok(result.Message) : BadRequest(result.Message);
 
     }
 }
