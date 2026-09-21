@@ -2,7 +2,6 @@ import axiosClient from "./axiosClient";
 import type { Task } from "../types/task";
 import type { CreateTaskRequest } from "../types/CreateTaskRequest";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
-import type { UpdateTaskStatusRequest } from "../types/UpdateTaskStatusRequest";
 
 async function getAllTasks(): Promise<Task[]> {
   const response = await axiosClient.get("/TaskRequest/list-alltasks");
@@ -26,7 +25,11 @@ async function deleteTask(id: number): Promise<string> {
 
 async function getUserTasks(): Promise<Task[]> {
   const response = await axiosClient.get("/TaskRequest/list-user-tasks");
-  return response.data;
+  return response.data.filter((task: Task) => task.isOwner === true);
+}
+
+async function getAssignedTasks(): Promise<Task[]> {
+  return (await axiosClient.get("/TaskRequest/assigned-to-me")).data;
 }
 
 
@@ -36,9 +39,12 @@ async function updateTask(data: UpdateTaskRequest): Promise<string> {
   return response.data;
 }
 
-async function updateTaskStatus(data: UpdateTaskStatusRequest): Promise<string> {
-  const response = await axiosClient.post("/TaskRequest/update-task-status", data);
-  return response.data;
+async function assignTask(taskId: number, assigneeUserId: number, version: number): Promise<string> {
+  return (await axiosClient.post(`/TaskRequest/${taskId}/assign`, { assigneeUserId, version })).data;
 }
 
-export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks, updateTask, updateTaskStatus };
+async function taskAction(taskId: number, action: "unassign" | "start" | "complete" | "cancel" | "reopen", version: number): Promise<string> {
+  return (await axiosClient.post(`/TaskRequest/${taskId}/${action}`, { version })).data;
+}
+
+export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks, getAssignedTasks, updateTask, assignTask, taskAction };

@@ -63,11 +63,10 @@ function UserTasksPage() {
         <div className="utasks-hero__content">
           <p className="utasks-hero__eyebrow">Workspace</p>
 
-          <h1>My Tasks</h1>
+            <h1>Owned Tasks</h1>
 
           <p>
-            View, track and manage the tasks you created in your personal
-            workspace.
+            View, track and manage the tasks you created.
           </p>
         </div>
 

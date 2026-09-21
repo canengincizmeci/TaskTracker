@@ -12,6 +12,8 @@ const UNREAD_COUNT_EVENT = "notification-unread-count-change";
 
 function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failure, setFailure] = useState("");
 
   useEffect(() => {
     let isActive = true;
@@ -46,6 +48,9 @@ function NotificationsPage() {
         }
       } catch (error) {
         console.error("Failed to load notifications:", error);
+        if (isActive) setFailure("Notifications could not be loaded.");
+      } finally {
+        if (isActive) setLoading(false);
       }
     };
 
@@ -136,8 +141,10 @@ function NotificationsPage() {
               </div>
             </div>
 
+            {failure && <p role="alert" className="error-message">{failure}</p>}
+            {loading && <p>Loading notifications...</p>}
             <div className="activity-timeline">
-              {notifications.length === 0 ? (
+              {!loading && !failure && notifications.length === 0 ? (
                 <div className="timeline-item">
                   <strong>No notifications</strong>
                   <span>Your notifications will appear here.</span>
@@ -147,6 +154,9 @@ function NotificationsPage() {
                   <div className="timeline-item" key={notification.id}>
                     <strong>{notification.title}</strong>
                     <span>{notification.message}</span>
+                    {notification.redirectUrl && <Link to={notification.redirectUrl} onClick={() => {
+                      if (!notification.isRead) void handleMarkAsRead(notification.id);
+                    }}>Open</Link>}
                     {!notification.isRead && (
                       <button
                         type="button"

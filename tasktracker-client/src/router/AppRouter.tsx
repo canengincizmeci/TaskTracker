@@ -20,6 +20,7 @@ import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import SecuritySettingsPage from "../pages/SecuritySettingsPage";
 import NotFoundPage from "../pages/NotFoundPage";
+import AssignedTasksPage from "../pages/AssignedTasksPage";
 
 function AppRouter() {
   return (
@@ -85,6 +86,7 @@ function AppRouter() {
           </ProtectedRoute>
         }
       />
+      <Route path="/tasks/assigned-to-me" element={<ProtectedRoute><AssignedTasksPage /></ProtectedRoute>} />
       <Route
         path="/tasks/task-detail/:taskId"
         element={

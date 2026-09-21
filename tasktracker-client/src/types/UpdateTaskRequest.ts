@@ -4,6 +4,6 @@ export interface UpdateTaskRequest {
   description: string;
   category: string;
   priority: string;
-  status: string;
+  version: number;
   dueDate: string | null;
 }

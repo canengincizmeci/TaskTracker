@@ -31,7 +31,7 @@ function InvitationDetails({ id }: { id: number }) {
     try {
       await (accept ? acceptTaskInvitation(id) : rejectTaskInvitation(id));
       toast.success(accept ? "Invitation accepted" : "Invitation rejected");
-      navigate(accept ? "/tasks/shared-tasks" : "/tasks/invitations", { replace: true });
+      navigate(accept && invitation ? `/tasks/task-detail/${invitation.taskRequestId}` : "/tasks/invitations", { replace: true });
     } catch (reason: unknown) {
       setError(errorMessage(reason, "Could not respond to invitation."));
     } finally {

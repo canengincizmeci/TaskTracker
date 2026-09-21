@@ -12,6 +12,9 @@ type SharedTask = {
   category: string;
   priority?: string;
   status?: string;
+  dueDate?: string | null;
+  ownerUserName: string;
+  assigneeUserName?: string | null;
   permission: TaskPermission | null;
   sharedAt?: string | null;
 };
@@ -85,7 +88,7 @@ function SharedTasksPage() {
               </div>
             </div>
 
-            {sharedTasks.length === 0 ? (
+            {!errorMessage && sharedTasks.length === 0 ? (
               <div className="activity-timeline">
                 <div className="timeline-item">
                   <strong>No shared tasks yet</strong>
@@ -114,6 +117,9 @@ function SharedTasksPage() {
                       {task.category && <span>{task.category}</span>}
                       {task.priority && <span>{task.priority}</span>}
                       {task.status && <span>{task.status}</span>}
+                      <span>Owner: {task.ownerUserName}</span>
+                      <span>Assignee: {task.assigneeUserName ?? "Unassigned"}</span>
+                      {task.dueDate && <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>}
                     </div>
 
                     {task.sharedAt && (

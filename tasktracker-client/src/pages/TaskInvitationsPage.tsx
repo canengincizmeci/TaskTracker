@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   acceptTaskInvitation,
   getMyPendingInvitations,
@@ -10,6 +10,7 @@ import { permissionText } from "../types/taskPermission";
 import type { TaskInvitation } from "../types/taskInvitation";
 
 function TaskInvitationsPage() {
+  const navigate = useNavigate();
   const [invitations, setInvitations] = useState<TaskInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -36,7 +37,9 @@ function TaskInvitationsPage() {
     setErrorMessage("");
     try {
       await (accept ? acceptTaskInvitation(id) : rejectTaskInvitation(id));
+      const acceptedTask = invitations.find((item) => item.id === id)?.taskRequestId;
       setInvitations((current) => current.filter((item) => item.id !== id));
+      if (accept && acceptedTask) navigate(`/tasks/task-detail/${acceptedTask}`);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error, "Could not respond to invitation."));
     } finally {

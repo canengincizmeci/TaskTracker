@@ -9,6 +9,15 @@ function activityText(activity: TaskActivity): string {
     case "UserInvited": return `${actor} invited ${target}`;
     case "InvitationAccepted": return `${actor} accepted the invitation`;
     case "InvitationRejected": return `${actor} rejected the invitation`;
+    case "InvitationCancelled": return `${actor} cancelled the invitation for ${target}`;
+    case "UserAssigned": return `${actor} assigned ${target}`;
+    case "UserUnassigned": return `${actor} unassigned ${target}`;
+    case "WorkStarted": return `${actor} started work`;
+    case "TaskCompleted": return `${actor} completed the task`;
+    case "TaskCancelled": return `${actor} cancelled the task`;
+    case "TaskReopened": return `${actor} reopened the task`;
+    case "ParticipantRemoved": return `${actor} removed ${target}`;
+    case "ParticipantPermissionChanged": return `${actor} changed ${target}'s permission`;
     default: return `${actor}: ${activity.activityType}`;
   }
 }

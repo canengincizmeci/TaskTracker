@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { isAxiosError } from "axios";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { deleteTask, getTaskById, updateTask, updateTaskStatus } from "../api/taskService";
+import { deleteTask, getTaskById, taskAction, updateTask } from "../api/taskService";
 import type { Task } from "../types/task";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
-import TaskParticipants from "../components/TaskParticipants";
+import TaskResponsibility from "../components/TaskResponsibility";
 import TaskWorkspace from "../components/TaskWorkspace";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -49,6 +49,14 @@ function TaskDetailPage() {
   const [editError, setEditError] = useState("");
   const routeVersion = useRef(0);
   const saving = useRef(false);
+
+  const refreshTask = useCallback(async () => {
+    if (taskId) setTask(await getTaskById(Number(taskId)));
+  }, [taskId]);
+
+  const handleAccessRevoked = useCallback(() => {
+    navigate("/tasks/shared-tasks", { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     const version = ++routeVersion.current;
@@ -113,7 +121,7 @@ function TaskDetailPage() {
       description: draft.description,
       category: draft.category,
       priority: draft.priority,
-      status: task.status,
+      version: task.version,
       dueDate: draft.dueDate || null,
     };
     saving.current = true;
@@ -144,11 +152,8 @@ function TaskDetailPage() {
     }
   };
 
-  const handleStatusUpdate = async (targetStatus: string) => {
+  const handleStatusUpdate = async (action: "start" | "complete" | "cancel" | "reopen") => {
     if (!task || task.id !== Number(taskId) || task.canEdit !== true || isEditing || saving.current) return;
-    const canComplete = (task.status === "Pending" || task.status === "InProgress") && targetStatus === "Completed";
-    const canReopen = task.status === "Completed" && targetStatus === "Pending";
-    if (!canComplete && !canReopen) return;
     const version = routeVersion.current;
     const isCurrent = () => routeVersion.current === version;
     const snapshot = task;
@@ -156,7 +161,7 @@ function TaskDetailPage() {
     setIsUpdatingStatus(true);
     setEditError("");
     try {
-      await updateTaskStatus({ id: snapshot.id, status: targetStatus });
+      await taskAction(snapshot.id, action, snapshot.version);
       if (!isCurrent()) return;
       try {
         const refreshed = await getTaskById(snapshot.id);
@@ -164,8 +169,7 @@ function TaskDetailPage() {
         setTask(refreshed);
       } catch {
         if (!isCurrent()) return;
-        setTask({ ...snapshot, status: targetStatus });
-        setEditError("Status was updated, but task details could not be refreshed.");
+        setEditError("The action succeeded, but task details could not be refreshed.");
       }
     } catch (error) {
       if (isCurrent()) setEditError(getUpdateError(error));
@@ -237,9 +241,9 @@ function TaskDetailPage() {
 
               <span
                 className={`task-status ${
-                  task.status === "In Progress"
+                  task.status === "InProgress"
                     ? "status-in-progress"
-                    : task.status === "Done"
+                    : task.status === "Completed"
                       ? "status-done"
                       : ""
                 }`}
@@ -264,30 +268,37 @@ function TaskDetailPage() {
               {/* <button type="button" className="secondary-button">
                 Share Task
               </button> */}    
-              <Link
+              {task.canShare === true && <Link
                 to={`/tasks/task-share/${task.id}`}
                 className="secondary-button"
               >     
                 Share Task
-              </Link>
+              </Link>}
 
               {task.canEdit === true && !isEditing && (
                 <button type="button" className="primary-button" disabled={isUpdatingStatus || isDeleting} onClick={startEditing}>
                   Edit Task
                 </button>
               )}
-              {task.canEdit === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") && (
+              {(task.isAssignee === true || (task.isOwner === true && !task.assigneeUserId)) && !isEditing && task.status === "Pending" && (
                 <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
-                  onClick={() => handleStatusUpdate("Completed")}>
+                  onClick={() => handleStatusUpdate("start")}>
+                  {isUpdatingStatus ? "Starting..." : "Start work"}
+                </button>
+              )}
+              {task.isOwner === true && !isEditing && (!task.assigneeUserId || task.assigneeUserId === task.ownerId) &&
+                (task.status === "Pending" || task.status === "InProgress") && (
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={() => handleStatusUpdate("complete")}>
                   {isUpdatingStatus ? "Completing..." : "Complete"}
                 </button>
               )}
-              {task.canEdit === true && !isEditing && task.status === "Completed" && (
+              {task.isOwner === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") &&
                 <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
-                  onClick={() => handleStatusUpdate("Pending")}>
-                  {isUpdatingStatus ? "Reopening..." : "Reopen"}
-                </button>
-              )}
+                  onClick={() => handleStatusUpdate("cancel")}>Cancel task</button>}
+              {task.isOwner === true && !isEditing && (task.status === "Completed" || task.status === "Cancelled") &&
+                <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
+                  onClick={() => handleStatusUpdate("reopen")}>Reopen task</button>}
               {task.canDelete === true && !isEditing && (
                 <button type="button" className="danger-button" disabled={isSaving || isUpdatingStatus || isDeleting}
                   onClick={handleDeleteTask}>
@@ -343,8 +354,9 @@ function TaskDetailPage() {
           )}
 
           {task.canViewParticipants && <>
-            <TaskParticipants key={`participants-${task.id}`} taskId={task.id} />
-            <TaskWorkspace key={`workspace-${task.id}`} taskId={task.id} />
+            <TaskResponsibility key={`responsibility-${task.id}-${task.version}`} task={task} onChanged={refreshTask} />
+            <TaskWorkspace key={`workspace-${task.id}`} taskId={task.id} onTaskChanged={refreshTask}
+              onAccessRevoked={handleAccessRevoked} />
           </>}
         </div>
 

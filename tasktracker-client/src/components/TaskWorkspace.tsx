@@ -12,7 +12,11 @@ function mergeHistory<T extends { id: number; createdAt: string }>(current: T[],
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id - b.id).slice(-100);
 }
 
-export default function TaskWorkspace({ taskId }: { taskId: number }) {
+export default function TaskWorkspace({ taskId, onTaskChanged, onAccessRevoked }: {
+  taskId: number;
+  onTaskChanged?: () => void | Promise<void>;
+  onAccessRevoked?: () => void;
+}) {
   const [activities, setActivities] = useState<TaskActivity[]>([]);
   const [messages, setMessages] = useState<TaskMessage[]>([]);
   const [activityError, setActivityError] = useState("");
@@ -49,6 +53,16 @@ export default function TaskWorkspace({ taskId }: { taskId: number }) {
     });
     connection.on("TaskMessageCreated", (item: TaskMessage) => {
       if (!disposed) setMessages((current) => mergeHistory(current, [item]));
+    });
+    connection.on("TaskChanged", () => {
+      if (!disposed) void Promise.resolve(onTaskChanged?.()).catch(() => {
+        if (!disposed) setLiveError("Task changed, but the latest details could not be loaded. Refresh to retry.");
+      });
+    });
+    connection.on("TaskAccessRevoked", async () => {
+      if (!disposed) setLiveError("Your access to this task was removed.");
+      await connection.stop();
+      onAccessRevoked?.();
     });
 
     const joinAndSync = async () => {
@@ -91,7 +105,7 @@ export default function TaskWorkspace({ taskId }: { taskId: number }) {
       // Closing this component's connection also leaves its task group.
       void connection.stop();
     };
-  }, [taskId]);
+  }, [taskId, onTaskChanged, onAccessRevoked]);
 
   return <>
     {liveError && <p role="status">{liveError}</p>}
