@@ -14,6 +14,10 @@ namespace TaskTracker.DataAccess.Abstract
         Task<bool> CanManageAsync(int taskId, int userId);
         Task<List<TaskRequest>> GetTasksByUserIdAsync(int userId);
         Task<List<TaskRequest>> GetAssignedTasksAsync(int userId);
+        Task<int> GetLatestRevisionNumberAsync(int taskId);
+        Task<TaskSubmission?> GetLatestSubmissionAsync(int taskId);
+        Task<List<TaskSubmissionDto>> GetSubmissionHistoryAsync(int taskId);
+        Task<List<AwaitingReviewTaskDto>> GetAwaitingReviewAsync(int ownerId);
         
 
 

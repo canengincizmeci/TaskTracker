@@ -89,7 +89,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         }
         catch (DbUpdateConcurrencyException)
         {
-            return new ErrorResult(ConcurrentChange);
+            return new ConflictResult(ConcurrentChange);
         }
         catch (DbUpdateException ex)
         {
@@ -267,7 +267,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(invitation.TaskRequestId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
-        if (task.Version != version) return new ErrorResult(ConcurrentChange);
+        if (task.Version != version) return new ConflictResult(ConcurrentChange);
         await taskShareDal.ReloadInvitationAsync(invitation);
         if (invitation.Status != TaskShareInvitationStatus.Pending)
             return new ErrorResult("Only a pending invitation can be cancelled.");
@@ -290,11 +290,14 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
         if (userId == task.OwnerId) return new ErrorResult("The owner is not a removable participant.");
-        if (task.Version != dto.Version) return new ErrorResult(ConcurrentChange);
+        if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
         if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
         var share = await taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == userId);
         if (share is null) return new ErrorResult("Participant not found.");
         if (share.Permission == dto.Permission) return new SuccessResult("Permission is already set.");
+        if (task.Status == TaskStatus.InReview && task.AssigneeUserId == userId &&
+            dto.Permission < TaskPermission.Edit)
+            return new ConflictResult("The current assignee's working access cannot be reduced while the task is under review.");
         share.Permission = dto.Permission;
         TaskActivity? unassigned = null;
         if (task.AssigneeUserId == userId && dto.Permission < TaskPermission.Edit)
@@ -321,7 +324,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
         if (userId == task.OwnerId) return new ErrorResult("The task owner cannot be removed.");
-        if (task.Version != version) return new ErrorResult(ConcurrentChange);
+        if (task.Version != version) return new ConflictResult(ConcurrentChange);
         if (task.Status == TaskStatus.InReview) return new ErrorResult("Participants cannot be removed while a task is under review.");
         var share = await taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == userId);
         if (share is null) return new ErrorResult("Participant not found.");

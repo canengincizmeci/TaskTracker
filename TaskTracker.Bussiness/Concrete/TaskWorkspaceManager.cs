@@ -103,7 +103,9 @@ public class TaskWorkspaceManager : ITaskWorkspaceService
         Id = activity.Id, ActivityType = activity.ActivityType.ToString(), ActorUserId = activity.ActorUserId,
         ActorUserName = activity.ActorUser.UserName, TargetUserId = activity.TargetUserId,
         TargetUserName = activity.TargetUser?.UserName, FromStatus = activity.FromStatus?.ToString(),
-        ToStatus = activity.ToStatus?.ToString(), CreatedAt = activity.CreatedAt
+        ToStatus = activity.ToStatus?.ToString(), SubmissionId = activity.SubmissionId,
+        ReviewId = activity.ReviewId, RevisionNumber = activity.Submission?.RevisionNumber,
+        CreatedAt = activity.CreatedAt
     };
 
     private static TaskMessageDto MapMessage(TaskMessage message) => new()

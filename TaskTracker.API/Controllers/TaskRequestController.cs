@@ -7,6 +7,7 @@ using TaskTracker.Bussiness.ValidationRules.FluentValidation;
 using TaskTracker.Core.DataAccess;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Entities.DTOs;
+using TaskTracker.Core.Utilities.Results;
 
 namespace TaskTracker.API.Controllers
 {
@@ -98,10 +99,7 @@ namespace TaskTracker.API.Controllers
 
             var result = await _taskRequestService.UpdateTask(taskRequestDto, currentUserId);
 
-            if (!result.Success)
-                return BadRequest(result.Message);
-
-            return Ok(result.Message);
+            return ToActionResult(result);
         }
 
         [Authorize(Roles = "User")]
@@ -155,8 +153,41 @@ namespace TaskTracker.API.Controllers
             return result.Success ? Ok(result.Data) : BadRequest(result.Message);
         }
 
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/submissions")]
+        public async Task<IActionResult> Submit(int taskId, CreateTaskSubmissionDto dto) =>
+            ToDataActionResult(await _taskRequestService.SubmitAsync(taskId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpGet("{taskId:int}/submissions")]
+        public async Task<IActionResult> SubmissionHistory(int taskId) =>
+            ToDataActionResult(await _taskRequestService.GetSubmissionHistoryAsync(taskId, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpPost("{taskId:int}/submissions/{submissionId:int}/review")]
+        public async Task<IActionResult> Review(int taskId, int submissionId, ReviewTaskSubmissionDto dto) =>
+            ToDataActionResult(await _taskRequestService.ReviewAsync(taskId, submissionId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "User")]
+        [HttpGet("awaiting-review")]
+        public async Task<IActionResult> AwaitingReview() =>
+            ToDataActionResult(await _taskRequestService.GetAwaitingReviewAsync(_currentUserService.UserId));
+
         private IActionResult ToActionResult(TaskTracker.Core.Utilities.Results.IResult result) =>
-            result.Success ? Ok(result.Message) : BadRequest(result.Message);
+            result.Success ? Ok(result.Message) : result switch
+            {
+                IConflictResult => Conflict(new { code = "conflict", message = result.Message }),
+                _ when result.Message == Messages.AuthorizationDenied => StatusCode(403, result.Message),
+                _ => BadRequest(result.Message)
+            };
+
+        private IActionResult ToDataActionResult<T>(IDataResult<T> result) => result.Success ? Ok(result.Data) :
+            result switch
+            {
+                IConflictResult => Conflict(new { code = "conflict", message = result.Message }),
+                _ when result.Message == Messages.AuthorizationDenied => StatusCode(403, result.Message),
+                _ => BadRequest(result.Message)
+            };
 
     }
 }

@@ -10,5 +10,8 @@ public class TaskActivityDto
     public string? TargetUserName { get; set; }
     public string? FromStatus { get; set; }
     public string? ToStatus { get; set; }
+    public int? SubmissionId { get; set; }
+    public int? ReviewId { get; set; }
+    public int? RevisionNumber { get; set; }
     public DateTime CreatedAt { get; set; }
 }
