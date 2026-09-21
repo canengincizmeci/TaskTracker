@@ -334,4 +334,21 @@ public class ResponsibilityTests
             new() { AssigneeUserId = 2, Version = 0 }, 1)).Success);
         Assert.Equal(2, (await context.TaskRequests.SingleAsync()).AssigneeUserId);
     }
+
+    [Fact]
+    public async Task In_review_blocks_assignee_permission_downgrade()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        var task = TestDatabase.Task(); task.AssigneeUserId = 2; task.Status = TaskStatus.InReview;
+        context.TaskRequests.Add(task);
+        context.TaskShares.Add(new() { TaskRequestId = 1, SharedWithUserId = 2, Permission = TaskPermission.Edit });
+        await context.SaveChangesAsync();
+
+        var result = await Shares(context).UpdateParticipantPermissionAsync(1, 2,
+            new() { Permission = TaskPermission.View, Version = 0 });
+
+        Assert.IsAssignableFrom<IConflictResult>(result);
+        Assert.Equal(2, task.AssigneeUserId);
+        Assert.Equal(TaskPermission.Edit, (await context.TaskShares.SingleAsync()).Permission);
+    }
 }

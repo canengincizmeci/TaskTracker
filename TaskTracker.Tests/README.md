@@ -26,3 +26,16 @@ dotnet ef database update --project TaskTracker.Core --startup-project TaskTrack
 
 This applies migrations to the disposable database. Stop the disposable instance
 when verification is complete.
+
+## PostgreSQL workflow concurrency tests
+
+Set `TASKTRACKER_TEST_DATABASE` to a PostgreSQL server connection whose role may
+create and drop databases, then run:
+
+```powershell
+dotnet test TaskTracker.Tests/TaskTracker.Tests.csproj --filter FullyQualifiedName~PostgreSqlSubmissionConcurrencyTests
+```
+
+Each test creates a uniquely named database, applies the existing migrations,
+and drops the database after the test. When the variable is absent these tests
+are reported as skipped; the SQLite business suite continues to run normally.
