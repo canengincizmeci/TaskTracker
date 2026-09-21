@@ -22,6 +22,8 @@ export interface Task {
   canDelete?: boolean;
   canViewParticipants?: boolean;
   canManageResponsibility?: boolean;
+  canSubmit?: boolean;
+  canReview?: boolean;
   currentUserPermission?: string | null;
   visibility?: string;
 }

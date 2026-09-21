@@ -8,6 +8,7 @@ import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import TaskResponsibility from "../components/TaskResponsibility";
 import TaskWorkspace from "../components/TaskWorkspace";
 import LoadingSpinner from "../components/LoadingSpinner";
+import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 
 type EditDraft = {
   title: string;
@@ -153,7 +154,7 @@ function TaskDetailPage() {
   };
 
   const handleStatusUpdate = async (action: "start" | "complete" | "cancel" | "reopen") => {
-    if (!task || task.id !== Number(taskId) || task.canEdit !== true || isEditing || saving.current) return;
+    if (!task || task.id !== Number(taskId) || isEditing || saving.current) return;
     const version = routeVersion.current;
     const isCurrent = () => routeVersion.current === version;
     const snapshot = task;
@@ -248,7 +249,7 @@ function TaskDetailPage() {
                       : ""
                 }`}
               >
-                {task.status}
+                {task.status === "InReview" ? "Waiting for review" : task.status}
               </span>
 
               <span
@@ -275,7 +276,7 @@ function TaskDetailPage() {
                 Share Task
               </Link>}
 
-              {task.canEdit === true && !isEditing && (
+              {task.canEdit === true && task.status !== "InReview" && !isEditing && (
                 <button type="button" className="primary-button" disabled={isUpdatingStatus || isDeleting} onClick={startEditing}>
                   Edit Task
                 </button>
@@ -293,7 +294,7 @@ function TaskDetailPage() {
                   {isUpdatingStatus ? "Completing..." : "Complete"}
                 </button>
               )}
-              {task.isOwner === true && !isEditing && (task.status === "Pending" || task.status === "InProgress") &&
+              {task.isOwner === true && !isEditing && (task.status === "Pending" || task.status === "InProgress" || task.status === "InReview") &&
                 <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
                   onClick={() => handleStatusUpdate("cancel")}>Cancel task</button>}
               {task.isOwner === true && !isEditing && (task.status === "Completed" || task.status === "Cancelled") &&
@@ -355,6 +356,7 @@ function TaskDetailPage() {
 
           {task.canViewParticipants && <>
             <TaskResponsibility key={`responsibility-${task.id}-${task.version}`} task={task} onChanged={refreshTask} />
+            <TaskSubmissionPanel task={task} onChanged={refreshTask} />
             <TaskWorkspace key={`workspace-${task.id}`} taskId={task.id} onTaskChanged={refreshTask}
               onAccessRevoked={handleAccessRevoked} />
           </>}

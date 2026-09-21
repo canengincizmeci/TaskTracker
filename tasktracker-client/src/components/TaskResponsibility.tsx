@@ -53,7 +53,7 @@ export default function TaskResponsibility({ task, onChanged }: {
     {failure && <p role="alert" className="error-message">{failure}</p>}
     {loading && <p>Loading participants...</p>}
 
-    {task.isOwner && !loading && <div className="task-detail-actions">
+    {task.isOwner && task.status !== "InReview" && !loading && <div className="task-detail-actions">
       <select aria-label="Assignee" value={selected} disabled={busy}
         onChange={(event) => setSelected(event.target.value)}>
         <option value="">Unassigned</option>
@@ -75,7 +75,7 @@ export default function TaskResponsibility({ task, onChanged }: {
     <ul className="activity-timeline">{participants.map((participant) => <li className="timeline-item" key={participant.userId}>
       <strong>{participant.userName}{participant.isAssignee ? " · Assignee" : ""}</strong>
       <span>Access: {participant.permission ?? "Invalid"}</span>
-      {task.isOwner && <div className="task-detail-actions">
+      {task.isOwner && task.status !== "InReview" && <div className="task-detail-actions">
         <select aria-label={`Permission for ${participant.userName}`} value={participant.permission ?? "View"} disabled={busy}
           onChange={(event) => void mutate(() => updateParticipantPermission(task.id, participant.userId,
             event.target.value as TaskPermission, task.version))}>

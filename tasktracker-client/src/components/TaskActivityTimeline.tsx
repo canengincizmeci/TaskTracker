@@ -13,6 +13,9 @@ function activityText(activity: TaskActivity): string {
     case "UserAssigned": return `${actor} assigned ${target}`;
     case "UserUnassigned": return `${actor} unassigned ${target}`;
     case "WorkStarted": return `${actor} started work`;
+    case "SubmissionCreated": return `${actor} submitted revision ${activity.revisionNumber ?? ""} for review`.trim();
+    case "ChangesRequested": return `${actor} requested changes to revision ${activity.revisionNumber ?? ""}`.trim();
+    case "SubmissionApproved": return `${actor} approved revision ${activity.revisionNumber ?? ""}`.trim();
     case "TaskCompleted": return `${actor} completed the task`;
     case "TaskCancelled": return `${actor} cancelled the task`;
     case "TaskReopened": return `${actor} reopened the task`;

@@ -7,6 +7,9 @@ export interface TaskActivity {
   targetUserName: string | null;
   fromStatus: string | null;
   toStatus: string | null;
+  submissionId: number | null;
+  reviewId: number | null;
+  revisionNumber: number | null;
   createdAt: string;
 }
 

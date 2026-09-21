@@ -1978,6 +1978,22 @@ select {
   line-height: 1.7;
 }
 
+.submission-panel { display: grid; gap: 18px; }
+.submission-form { display: grid; gap: 12px; }
+.submission-form textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; resize: vertical; }
+.submission-form > button { justify-self: start; }
+.submission-notice { padding: 16px; border: 1px solid #bfdbfe; border-radius: 16px; background: #eff6ff; }
+.submission-notice p { margin-bottom: 0; }
+.submission-notice--warning { border-color: #fed7aa; background: #fff7ed; }
+.submission-history { display: grid; gap: 14px; }
+.submission-revision { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: #f8fafc; }
+.submission-revision header { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.submission-revision header span { color: var(--muted); }
+.submission-content { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; border-radius: 12px; background: #fff; border: 1px solid var(--border); }
+.submission-decision { padding: 12px; border-radius: 12px; background: #f1f5f9; }
+.submission-decision--approved { background: #ecfdf5; color: #047857; }
+.submission-decision--changesrequested { background: #fff7ed; color: #9a3412; }
+
 @media (max-width: 980px) {
   .task-detail-layout {
     grid-template-columns: 1fr;

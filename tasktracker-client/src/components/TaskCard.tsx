@@ -12,7 +12,7 @@ function TaskCard({ task }: TaskCardProps) {
         <div className="task-row-top">
           <span className="task-category">{task.category}</span>
           <span className={`task-status status-${task.status.toLowerCase().replaceAll(" ", "-")}`}>
-            {task.status}
+            {task.status === "InReview" ? "Waiting for review" : task.status}
           </span>
         </div>
 
