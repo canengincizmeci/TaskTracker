@@ -29,15 +29,15 @@ function AdminDashboardPage() {
     loadTasks();
   }, []);
 
-  const activeCount = tasks.filter((task) => task.status !== "Done").length;
+  const activeCount = tasks.filter((task) => task.status !== "Completed" && task.status !== "Cancelled").length;
 
-  const completedCount = tasks.filter((task) => task.status === "Done").length;
+  const completedCount = tasks.filter((task) => task.status === "Completed").length;
 
   const highPriorityCount = tasks.filter(
     (task) => task.priority === "High" || task.priority === "Critical"
   ).length;
 
-  const openCount = tasks.filter((task) => task.status === "Open").length;
+  const pendingCount = tasks.filter((task) => task.status === "Pending").length;
 
   const handleDeleteTask = async (id: number) => {
     const confirmed = window.confirm(
@@ -107,8 +107,8 @@ function AdminDashboardPage() {
         </div>
 
         <div className="admin-metric-card">
-          <span>Open</span>
-          <strong>{openCount}</strong>
+          <span>Pending</span>
+          <strong>{pendingCount}</strong>
         </div>
 
         <div className="admin-metric-card">
