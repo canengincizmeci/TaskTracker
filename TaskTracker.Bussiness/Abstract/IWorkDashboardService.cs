@@ -6,4 +6,5 @@ namespace TaskTracker.Bussiness.Abstract;
 public interface IWorkDashboardService
 {
     Task<IDataResult<WorkDashboardSummaryDto>> GetSummaryAsync();
+    Task<IDataResult<PagedWorkTasksDto>> GetTasksAsync(WorkTaskQueryDto query);
 }
