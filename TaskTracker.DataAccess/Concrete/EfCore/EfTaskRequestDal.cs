@@ -92,5 +92,43 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                 })
                 .OrderBy(x => x.SubmittedAt == null).ThenBy(x => x.SubmittedAt).ThenBy(x => x.TaskId)
                 .ToListAsync();
+
+        public async Task<WorkDashboardSummaryDto> GetWorkDashboardSummaryAsync(
+            int userId, DateOnly todayUtc, DateTime nowUtc)
+        {
+            var assignedToMeCount = await _context.TaskRequests.AsNoTracking()
+                .CountAsync(x => x.Activity && x.AssigneeUserId == userId &&
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled);
+
+            var awaitingMyReviewCount = await _context.TaskRequests.AsNoTracking()
+                .Where(x => x.Activity && x.OwnerId == userId && x.Status == TaskStatus.InReview &&
+                    x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId &&
+                    x.TaskShares.Any(s => s.SharedWithUserId == x.AssigneeUserId.Value &&
+                        s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage))
+                .CountAsync(x => _context.TaskSubmissions
+                    .Where(s => s.TaskRequestId == x.Id)
+                    .OrderByDescending(s => s.RevisionNumber)
+                    .Take(1)
+                    .Any(s => s.SubmittedByUserId == x.AssigneeUserId &&
+                        !_context.TaskSubmissionReviews.Any(r => r.TaskSubmissionId == s.Id)));
+
+            var overdueCount = await _context.TaskRequests.AsNoTracking()
+                .CountAsync(x => x.Activity && x.DueDate.HasValue && x.DueDate.Value < todayUtc &&
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled &&
+                    (x.OwnerId == userId || x.AssigneeUserId == userId));
+
+            var pendingInvitationCount = await _context.TaskShareInvitations.AsNoTracking()
+                .CountAsync(x => x.InvitedUserId == userId && x.Status == TaskShareInvitationStatus.Pending &&
+                    (!x.ExpiresAt.HasValue || x.ExpiresAt > nowUtc) && x.TaskRequest.Activity &&
+                    x.TaskRequest.Status != TaskStatus.Completed && x.TaskRequest.Status != TaskStatus.Cancelled);
+
+            return new WorkDashboardSummaryDto
+            {
+                AssignedToMeCount = assignedToMeCount,
+                AwaitingMyReviewCount = awaitingMyReviewCount,
+                OverdueCount = overdueCount,
+                PendingInvitationCount = pendingInvitationCount
+            };
+        }
     }
 }

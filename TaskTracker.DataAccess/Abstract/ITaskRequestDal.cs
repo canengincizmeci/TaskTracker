@@ -18,6 +18,7 @@ namespace TaskTracker.DataAccess.Abstract
         Task<TaskSubmission?> GetLatestSubmissionAsync(int taskId);
         Task<List<TaskSubmissionDto>> GetSubmissionHistoryAsync(int taskId);
         Task<List<AwaitingReviewTaskDto>> GetAwaitingReviewAsync(int ownerId);
+        Task<WorkDashboardSummaryDto> GetWorkDashboardSummaryAsync(int userId, DateOnly todayUtc, DateTime nowUtc);
         
 
 
