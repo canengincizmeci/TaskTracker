@@ -62,4 +62,7 @@ internal static class WorkspaceTestServices
             new Notifications(), new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
             new TaskActivityWriter(uow), workspace ?? Create(context));
     }
+
+    public static WorkDashboardManager WorkDashboard(TaskTrackerDbContext context, int userId) =>
+        new(new EfTaskRequestDal(context), new CurrentUser(userId));
 }
