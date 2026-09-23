@@ -209,7 +209,7 @@ function LoginPage() {
       if (role === "Admin") {
         navigate("/admin-dashboard", { replace: true });
       } else {
-        navigate("/tasks/user-tasks", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     } catch (error) {
       setError("Email or password is wrong.");

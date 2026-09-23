@@ -22,6 +22,7 @@ import SecuritySettingsPage from "../pages/SecuritySettingsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import AssignedTasksPage from "../pages/AssignedTasksPage";
 import AwaitingReviewPage from "../pages/AwaitingReviewPage";
+import DashboardPage from "../pages/DashboardPage";
 
 function AppRouter() {
   return (
@@ -66,6 +67,15 @@ function AppRouter() {
         element={
           <ProtectedRoute requiredRole="Admin">
             <AdminDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute requiredRole="User">
+            <DashboardPage />
           </ProtectedRoute>
         }
       />

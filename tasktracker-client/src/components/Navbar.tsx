@@ -113,6 +113,7 @@ function Navbar() {
           <>
             {user?.role === "User" && (
               <>
+                <Link to="/dashboard">My Work</Link>
                 <Link to="/tasks/user-tasks">My Tasks</Link>
                 <Link to="/tasks/assigned-to-me">Assigned to Me</Link>
                 <Link to="/tasks/awaiting-review">Awaiting Review</Link>
