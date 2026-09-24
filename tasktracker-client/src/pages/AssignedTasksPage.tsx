@@ -25,7 +25,7 @@ export default function AssignedTasksPage() {
     {!failure && tasks.length === 0 && <div className="utasks-empty"><h2>No assigned work</h2>
       <p>Tasks will appear here when an owner assigns them to you.</p></div>}
     <section className="utasks-grid">{tasks.map((task) => <article className="utasks-card" key={task.id}>
-      <div className="utasks-card__top"><span className="utasks-pill">{task.priority}</span><span>{task.status}</span></div>
+      <div className="utasks-card__top"><span className="utasks-pill">{task.priority}</span><span>{task.status === "InReview" ? "Waiting for review" : task.status}</span></div>
       <h2>{task.title}</h2><p>Owner: {task.ownerUserName}</p>
       <div className="utasks-card__meta"><span>{task.category}</span>
         <span>{task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}</span></div>

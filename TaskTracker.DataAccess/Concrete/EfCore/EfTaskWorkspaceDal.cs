@@ -22,14 +22,15 @@ public class EfTaskWorkspaceDal : ITaskWorkspaceDal
     public async Task<List<TaskActivity>> GetActivitiesAsync(int taskId)
     {
         var items = await _context.TaskActivities.AsNoTracking().Where(x => x.TaskRequestId == taskId)
-            .Include(x => x.ActorUser).Include(x => x.TargetUser)
+            .Include(x => x.ActorUser).Include(x => x.TargetUser).Include(x => x.Submission)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Take(100).ToListAsync();
         items.Reverse();
         return items;
     }
 
     public Task<TaskActivity?> GetActivityAsync(int activityId) => _context.TaskActivities.AsNoTracking()
-        .Include(x => x.ActorUser).Include(x => x.TargetUser).SingleOrDefaultAsync(x => x.Id == activityId);
+        .Include(x => x.ActorUser).Include(x => x.TargetUser).Include(x => x.Submission)
+        .SingleOrDefaultAsync(x => x.Id == activityId);
 
     public async Task<List<TaskMessage>> GetMessagesAsync(int taskId)
     {

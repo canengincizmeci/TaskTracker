@@ -23,6 +23,11 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<List<TaskRequest>>> GetAllTasks();
         Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId);
         Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId);
+        Task<IDataResult<TaskSubmissionDto>> SubmitAsync(int taskId, CreateTaskSubmissionDto dto, int currentUserId);
+        Task<IDataResult<List<TaskSubmissionDto>>> GetSubmissionHistoryAsync(int taskId, int currentUserId);
+        Task<IDataResult<TaskSubmissionReviewDto>> ReviewAsync(int taskId, int submissionId,
+            ReviewTaskSubmissionDto dto, int currentUserId);
+        Task<IDataResult<List<AwaitingReviewTaskDto>>> GetAwaitingReviewAsync(int currentUserId);
 
 
 

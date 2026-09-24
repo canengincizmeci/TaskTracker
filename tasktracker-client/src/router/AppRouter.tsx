@@ -21,6 +21,8 @@ import ResetPasswordPage from "../pages/ResetPasswordPage";
 import SecuritySettingsPage from "../pages/SecuritySettingsPage";
 import NotFoundPage from "../pages/NotFoundPage";
 import AssignedTasksPage from "../pages/AssignedTasksPage";
+import AwaitingReviewPage from "../pages/AwaitingReviewPage";
+import DashboardPage from "../pages/DashboardPage";
 
 function AppRouter() {
   return (
@@ -70,6 +72,15 @@ function AppRouter() {
       />
 
       <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute requiredRole="User">
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/tasks/create-task"
         element={
           <ProtectedRoute>
@@ -87,6 +98,7 @@ function AppRouter() {
         }
       />
       <Route path="/tasks/assigned-to-me" element={<ProtectedRoute><AssignedTasksPage /></ProtectedRoute>} />
+      <Route path="/tasks/awaiting-review" element={<ProtectedRoute><AwaitingReviewPage /></ProtectedRoute>} />
       <Route
         path="/tasks/task-detail/:taskId"
         element={

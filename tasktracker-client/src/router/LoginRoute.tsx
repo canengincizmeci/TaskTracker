@@ -18,7 +18,7 @@ function LoginRoute() {
     redirect ??
     (getRoleFromToken(token) === "Admin"
       ? "/admin-dashboard"
-      : "/tasks/user-tasks");
+      : "/dashboard");
 
   return <Navigate to={destination} replace />;
 }

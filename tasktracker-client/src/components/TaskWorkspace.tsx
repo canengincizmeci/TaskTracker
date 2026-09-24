@@ -70,7 +70,7 @@ export default function TaskWorkspace({ taskId, onTaskChanged, onAccessRevoked }
       if (disposed) return;
       setLiveError("");
       // Reload after joining/rejoining to recover events missed while disconnected.
-      await loadHistory();
+      await Promise.all([loadHistory(), Promise.resolve(onTaskChanged?.())]);
     };
     const start = async () => {
       try {

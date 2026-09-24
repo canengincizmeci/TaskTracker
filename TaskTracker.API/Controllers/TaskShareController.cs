@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Concrete;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Entities.DTOs;
+using TaskTracker.Core.Utilities.Results;
 
 namespace TaskTracker.API.Controllers
 {
@@ -126,7 +126,7 @@ namespace TaskTracker.API.Controllers
         public async Task<IActionResult> CancelInvitation(int invitationId, TaskWorkflowCommandDto dto)
         {
             var result = await _taskShareService.CancelInvitationAsync(invitationId, dto.Version);
-            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+            return ToActionResult(result);
         }
 
         [Authorize(Roles = "User")]
@@ -134,7 +134,7 @@ namespace TaskTracker.API.Controllers
         public async Task<IActionResult> UpdatePermission(int taskId, int userId, UpdateParticipantPermissionDto dto)
         {
             var result = await _taskShareService.UpdateParticipantPermissionAsync(taskId, userId, dto);
-            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+            return ToActionResult(result);
         }
 
         [Authorize(Roles = "User")]
@@ -142,8 +142,16 @@ namespace TaskTracker.API.Controllers
         public async Task<IActionResult> RemoveParticipant(int taskId, int userId, TaskWorkflowCommandDto dto)
         {
             var result = await _taskShareService.RemoveParticipantAsync(taskId, userId, dto.Version);
-            return result.Success ? Ok(result.Message) : BadRequest(result.Message);
+            return ToActionResult(result);
         }
+
+        private IActionResult ToActionResult(TaskTracker.Core.Utilities.Results.IResult result) =>
+            result.Success ? Ok(result.Message) : result switch
+        {
+            IConflictResult => Conflict(new { code = "conflict", message = result.Message }),
+            _ when result.Message == Messages.AuthorizationDenied => StatusCode(403, result.Message),
+            _ => BadRequest(result.Message)
+        };
 
     }
 }

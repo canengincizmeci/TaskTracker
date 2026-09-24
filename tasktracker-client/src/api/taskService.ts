@@ -2,6 +2,7 @@ import axiosClient from "./axiosClient";
 import type { Task } from "../types/task";
 import type { CreateTaskRequest } from "../types/CreateTaskRequest";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
+import type { AwaitingReviewTask, SubmissionReview, TaskSubmission } from "../types/taskSubmission";
 
 async function getAllTasks(): Promise<Task[]> {
   const response = await axiosClient.get("/TaskRequest/list-alltasks");
@@ -47,4 +48,23 @@ async function taskAction(taskId: number, action: "unassign" | "start" | "comple
   return (await axiosClient.post(`/TaskRequest/${taskId}/${action}`, { version })).data;
 }
 
-export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks, getAssignedTasks, updateTask, assignTask, taskAction };
+async function getTaskSubmissions(taskId: number): Promise<TaskSubmission[]> {
+  return (await axiosClient.get(`/TaskRequest/${taskId}/submissions`)).data;
+}
+
+async function submitTask(taskId: number, version: number, content: string): Promise<TaskSubmission> {
+  return (await axiosClient.post(`/TaskRequest/${taskId}/submissions`, { version, content })).data;
+}
+
+async function reviewSubmission(taskId: number, submissionId: number, version: number,
+  decision: "Approved" | "ChangesRequested", feedback?: string): Promise<SubmissionReview> {
+  return (await axiosClient.post(`/TaskRequest/${taskId}/submissions/${submissionId}/review`,
+    { version, decision, feedback: feedback || null })).data;
+}
+
+async function getAwaitingReview(): Promise<AwaitingReviewTask[]> {
+  return (await axiosClient.get("/TaskRequest/awaiting-review")).data;
+}
+
+export { getAllTasks, getTaskById, createTask, deleteTask, getUserTasks, getAssignedTasks, updateTask, assignTask,
+  taskAction, getTaskSubmissions, submitTask, reviewSubmission, getAwaitingReview };

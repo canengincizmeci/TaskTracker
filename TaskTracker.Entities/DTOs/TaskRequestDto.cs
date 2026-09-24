@@ -29,6 +29,8 @@ namespace TaskTracker.Entities.DTOs
         public bool CanDelete { get; set; }
         public bool CanViewParticipants { get; set; }
         public bool CanManageResponsibility { get; set; }
+        public bool CanSubmit { get; set; }
+        public bool CanReview { get; set; }
         public string? CurrentUserPermission { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateOnly? DueDate { get; set; }

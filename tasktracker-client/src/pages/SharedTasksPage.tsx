@@ -116,7 +116,7 @@ function SharedTasksPage() {
                     <div className="task-card-meta">
                       {task.category && <span>{task.category}</span>}
                       {task.priority && <span>{task.priority}</span>}
-                      {task.status && <span>{task.status}</span>}
+                      {task.status && <span>{task.status === "InReview" ? "Waiting for review" : task.status}</span>}
                       <span>Owner: {task.ownerUserName}</span>
                       <span>Assignee: {task.assigneeUserName ?? "Unassigned"}</span>
                       {task.dueDate && <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>}

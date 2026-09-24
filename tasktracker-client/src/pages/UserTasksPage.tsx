@@ -145,7 +145,7 @@ function UserTasksPage() {
                   </span>
 
                   <span className="utasks-pill utasks-pill--status">
-                    {task.status}
+                    {task.status === "InReview" ? "Waiting for review" : task.status}
                   </span>
                 </div>
 

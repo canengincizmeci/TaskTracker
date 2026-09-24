@@ -7,6 +7,7 @@ using TaskTracker.DataAccess.Concrete.EfCore;
 using TaskTracker.Entities.DTOs;
 using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
+using Microsoft.Extensions.Configuration;
 
 namespace TaskTracker.Tests;
 
@@ -32,14 +33,36 @@ internal static class WorkspaceTestServices
         public Task<IResult> MarkAllAsReadAsync() => Task.FromResult<IResult>(new SuccessResult());
     }
 
+    private sealed class CurrentUser(int id) : ICurrentUserService { public int UserId => id; }
+    private sealed class Email : IEmailService
+    {
+        public Task SendVerificationCodeAsync(string email, string code) => Task.CompletedTask;
+        public Task SendPasswordResetCodeAsync(string email, string code) => Task.CompletedTask;
+        public Task SendTaskShareInvitationEmailAsync(string email, string title, string user, string url) => Task.CompletedTask;
+    }
+
     public static TaskWorkspaceManager Create(TaskTrackerDbContext context, bool failRealtime = false) =>
         new(new UnitOfWork(context), new EfTaskWorkspaceDal(context), new Realtime(failRealtime),
             NullLogger<TaskWorkspaceManager>.Instance);
 
-    public static TaskRequestManager TaskRequests(TaskTrackerDbContext context)
+    public static TaskRequestManager TaskRequests(TaskTrackerDbContext context,
+        INotificationService? notifications = null, ITaskWorkspaceService? workspace = null)
     {
         var uow = new UnitOfWork(context);
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
-            new TaskActivityWriter(uow), Create(context), new Notifications(), NullLogger<TaskRequestManager>.Instance);
+            new TaskActivityWriter(uow), workspace ?? Create(context), notifications ?? new Notifications(),
+            NullLogger<TaskRequestManager>.Instance);
     }
+
+    public static TaskShareManager TaskShares(TaskTrackerDbContext context, int userId,
+        ITaskWorkspaceService? workspace = null)
+    {
+        var uow = new UnitOfWork(context);
+        return new TaskShareManager(uow, new EfTaskShareDal(context), new CurrentUser(userId), new Email(),
+            new Notifications(), new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
+            new TaskActivityWriter(uow), workspace ?? Create(context));
+    }
+
+    public static WorkDashboardManager WorkDashboard(TaskTrackerDbContext context, int userId) =>
+        new(new EfTaskRequestDal(context), new CurrentUser(userId));
 }
