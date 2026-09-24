@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from "react";
-import { sendTaskMessage } from "../api/taskWorkspaceService";
+import { sendTaskMessage } from "../api/taskCollaborationService";
 import { errorMessage } from "../api/errorMessage";
-import type { TaskMessage } from "../types/taskWorkspace";
+import type { TaskMessage } from "../types/taskCollaboration";
 
 export default function TaskDiscussion({ taskId, messages, loading, error, onMessage }: {
   taskId: number;

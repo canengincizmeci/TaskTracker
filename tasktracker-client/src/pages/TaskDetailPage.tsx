@@ -6,7 +6,7 @@ import { deleteTask, getTaskById, taskAction, updateTask } from "../api/taskServ
 import type { Task } from "../types/task";
 import type { UpdateTaskRequest } from "../types/UpdateTaskRequest";
 import TaskResponsibility from "../components/TaskResponsibility";
-import TaskWorkspace from "../components/TaskWorkspace";
+import TaskCollaborationPanel from "../components/TaskCollaborationPanel";
 import LoadingSpinner from "../components/LoadingSpinner";
 import TaskSubmissionPanel from "../components/TaskSubmissionPanel";
 
@@ -357,7 +357,7 @@ function TaskDetailPage() {
           {task.canViewParticipants && <>
             <TaskResponsibility key={`responsibility-${task.id}-${task.version}`} task={task} onChanged={refreshTask} />
             <TaskSubmissionPanel task={task} onChanged={refreshTask} />
-            <TaskWorkspace key={`workspace-${task.id}`} taskId={task.id} onTaskChanged={refreshTask}
+            <TaskCollaborationPanel key={`collaboration-${task.id}`} taskId={task.id} onTaskChanged={refreshTask}
               onAccessRevoked={handleAccessRevoked} />
           </>}
         </div>

@@ -1,4 +1,4 @@
-import type { TaskActivity } from "../types/taskWorkspace";
+import type { TaskActivity } from "../types/taskCollaboration";
 
 function activityText(activity: TaskActivity): string {
   const actor = activity.actorUserName;
