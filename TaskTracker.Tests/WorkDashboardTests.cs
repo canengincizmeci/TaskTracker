@@ -28,7 +28,7 @@ public class WorkDashboardTests
         });
         await context.SaveChangesAsync();
 
-        var summary = (await WorkspaceTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
 
         Assert.Equal(3, summary.AssignedToMeCount);
     }
@@ -52,7 +52,7 @@ public class WorkDashboardTests
         });
         await context.SaveChangesAsync();
 
-        var summary = (await WorkspaceTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
 
         Assert.Equal(1, summary.AwaitingMyReviewCount);
     }
@@ -78,7 +78,7 @@ public class WorkDashboardTests
         });
         await context.SaveChangesAsync();
 
-        var summary = (await WorkspaceTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
 
         Assert.Equal(2, summary.OverdueCount);
     }
@@ -104,7 +104,7 @@ public class WorkDashboardTests
             Invitation(8, 3, 2, TaskShareInvitationStatus.Pending, future));
         await context.SaveChangesAsync();
 
-        var summary = (await WorkspaceTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
 
         Assert.Equal(1, summary.PendingInvitationCount);
     }
@@ -125,7 +125,7 @@ public class WorkDashboardTests
             1, 1, 1, TaskShareInvitationStatus.Pending, DateTime.UtcNow.AddDays(1)));
         await context.SaveChangesAsync();
 
-        var summary = (await WorkspaceTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
 
         Assert.Equal(1, summary.AssignedToMeCount);
         Assert.Equal(1, summary.AwaitingMyReviewCount);

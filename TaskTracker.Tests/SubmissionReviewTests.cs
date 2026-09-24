@@ -39,7 +39,7 @@ public class SubmissionReviewTests
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
 
-        var result = await WorkspaceTestServices.TaskRequests(context).SubmitAsync(1,
+        var result = await TaskCollaborationTestServices.TaskRequests(context).SubmitAsync(1,
             new() { Version = 0, Content = "  Finished work  " }, 2);
 
         Assert.True(result.Success);
@@ -60,7 +60,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var result = await WorkspaceTestServices.TaskRequests(context).SubmitAsync(1,
+        var result = await TaskCollaborationTestServices.TaskRequests(context).SubmitAsync(1,
             new() { Version = 0, Content = "Work" }, actorId);
         Assert.False(result.Success);
         Assert.Empty(await context.TaskSubmissions.ToListAsync());
@@ -77,7 +77,7 @@ public class SubmissionReviewTests
         await SeedDelegated(context);
         (await context.TaskShares.SingleAsync(x => x.SharedWithUserId == 3)).Permission = permission;
         await context.SaveChangesAsync();
-        var result = await WorkspaceTestServices.TaskRequests(context).SubmitAsync(1,
+        var result = await TaskCollaborationTestServices.TaskRequests(context).SubmitAsync(1,
             new() { Version = 0, Content = "Not my assignment" }, 3);
         Assert.False(result.Success);
         Assert.Empty(await context.TaskSubmissions.ToListAsync());
@@ -90,7 +90,7 @@ public class SubmissionReviewTests
         var task = TestDatabase.Task(); task.AssigneeUserId = 2;
         context.TaskRequests.Add(task);
         await context.SaveChangesAsync();
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         Assert.False((await manager.StartTaskAsync(1, new() { Version = 0 }, 2)).Success);
         task.Status = TaskStatus.InProgress;
         await context.SaveChangesAsync();
@@ -104,7 +104,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        Assert.False((await WorkspaceTestServices.TaskRequests(context).SubmitAsync(1,
+        Assert.False((await TaskCollaborationTestServices.TaskRequests(context).SubmitAsync(1,
             new() { Version = 0, Content = content }, 2)).Success);
         Assert.Empty(await context.TaskSubmissions.ToListAsync());
     }
@@ -114,7 +114,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var stale = await manager.SubmitAsync(1, new() { Version = 4, Content = "Work" }, 2);
         Assert.IsAssignableFrom<IConflictResult>(stale);
         (await context.TaskRequests.SingleAsync()).Status = TaskStatus.Pending;
@@ -128,7 +128,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var first = await manager.SubmitAsync(1, new() { Version = 0, Content = "Revision one" }, 2);
         var changes = await manager.ReviewAsync(1, first.Data.Id,
             new() { Version = 1, Decision = TaskReviewDecision.ChangesRequested, Feedback = "Add evidence" }, 1);
@@ -153,7 +153,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var submission = await manager.SubmitAsync(1, new() { Version = 0, Content = "Work" }, 2);
         Assert.False((await manager.ReviewAsync(1, submission.Data.Id,
             new() { Version = 1, Decision = TaskReviewDecision.Approved }, 3)).Success);
@@ -167,7 +167,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var first = await manager.SubmitAsync(1, new() { Version = 0, Content = "One" }, 2);
         await manager.ReviewAsync(1, first.Data.Id,
             new() { Version = 1, Decision = TaskReviewDecision.ChangesRequested, Feedback = "Again" }, 1);
@@ -188,7 +188,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var submission = await manager.SubmitAsync(1, new() { Version = 0, Content = "Keep me" }, 2);
         Assert.True((await manager.CancelTaskAsync(1, new() { Version = 1 }, 1)).Success);
         Assert.Empty(await context.TaskSubmissionReviews.ToListAsync());
@@ -204,7 +204,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         var first = await manager.SubmitAsync(1, new() { Version = 0, Content = "Approved once" }, 2);
         await manager.ReviewAsync(1, first.Data.Id,
             new() { Version = 1, Decision = TaskReviewDecision.Approved }, 1);
@@ -220,7 +220,7 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context, TaskStatus.InReview);
-        var manager = WorkspaceTestServices.TaskRequests(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
         Assert.True((await manager.GetSubmissionHistoryAsync(1, 2)).Success);
         Assert.False((await manager.GetSubmissionHistoryAsync(1, 99)).Success);
         var queued = Assert.Single((await manager.GetAwaitingReviewAsync(1)).Data);
@@ -234,8 +234,8 @@ public class SubmissionReviewTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await SeedDelegated(context);
-        var manager = WorkspaceTestServices.TaskRequests(context, new FailingNotifications(),
-            WorkspaceTestServices.Create(context, failRealtime: true));
+        var manager = TaskCollaborationTestServices.TaskRequests(context, new FailingNotifications(),
+            TaskCollaborationTestServices.Create(context, failRealtime: true));
 
         var result = await manager.SubmitAsync(1, new() { Version = 0, Content = "Durable" }, 2);
 

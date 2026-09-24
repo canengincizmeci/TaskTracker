@@ -25,7 +25,7 @@ public class WorkDashboardQueryTests
         context.TaskShares.AddRange(Share(3, 1), Share(4, 1));
         await context.SaveChangesAsync();
 
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
         var all = (await service.GetTasksAsync(new() { Sort = WorkTaskSort.Recent })).Data;
         var ownedPage = (await service.GetTasksAsync(new() { Scope = WorkTaskScope.Owned })).Data;
         var assignedPage = (await service.GetTasksAsync(new() { Scope = WorkTaskScope.Assigned })).Data;
@@ -52,7 +52,7 @@ public class WorkDashboardQueryTests
         var noMatch = Task(4, 1);
         context.TaskRequests.AddRange(title, description, category, noMatch);
         await context.SaveChangesAsync();
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
 
         Assert.Equal(1, (await service.GetTasksAsync(new() { Search = "report" })).Data.Items.Single().TaskId);
         Assert.Equal(2, (await service.GetTasksAsync(new() { Search = "RELEASE notes" })).Data.Items.Single().TaskId);
@@ -72,7 +72,7 @@ public class WorkDashboardQueryTests
         context.TaskRequests.AddRange(pendingCritical, progressCritical, pendingLow);
         await context.SaveChangesAsync();
 
-        var page = (await WorkspaceTestServices.WorkDashboard(context, 1).GetTasksAsync(new()
+        var page = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetTasksAsync(new()
         {
             Status = TaskStatus.Pending,
             Priority = TaskPriority.Critical
@@ -96,7 +96,7 @@ public class WorkDashboardQueryTests
         var noDueDate = Task(7, 1);
         context.TaskRequests.AddRange(overdue, completed, cancelled, dueToday, soon, later, noDueDate);
         await context.SaveChangesAsync();
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
 
         Assert.Equal(new[] { 1 }, await Ids(service, WorkTaskDueFilter.Overdue));
         Assert.Equal(new[] { 4 }, await Ids(service, WorkTaskDueFilter.Today));
@@ -111,7 +111,7 @@ public class WorkDashboardQueryTests
         using var context = db.CreateContext();
         context.TaskRequests.AddRange(Enumerable.Range(1, 5).Select(id => Task(id, 1)));
         await context.SaveChangesAsync();
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
 
         var first = (await service.GetTasksAsync(new() { Page = 1, PageSize = 2 })).Data;
         var second = (await service.GetTasksAsync(new() { Page = 2, PageSize = 2 })).Data;
@@ -133,7 +133,7 @@ public class WorkDashboardQueryTests
         using var db = new TestDatabase();
         using var context = db.CreateContext();
 
-        var result = await WorkspaceTestServices.WorkDashboard(context, 1)
+        var result = await TaskCollaborationTestServices.WorkDashboard(context, 1)
             .GetTasksAsync(new() { Page = page, PageSize = pageSize });
 
         Assert.False(result.Success);
@@ -144,7 +144,7 @@ public class WorkDashboardQueryTests
     {
         using var db = new TestDatabase();
         using var context = db.CreateContext();
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
 
         Assert.False((await service.GetTasksAsync(new() { Scope = (WorkTaskScope)999 })).Success);
         Assert.False((await service.GetTasksAsync(new() { Due = (WorkTaskDueFilter)999 })).Success);
@@ -167,7 +167,7 @@ public class WorkDashboardQueryTests
         third.CreatedAt = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc);
         context.TaskRequests.AddRange(first, second, third);
         await context.SaveChangesAsync();
-        var service = WorkspaceTestServices.WorkDashboard(context, 1);
+        var service = TaskCollaborationTestServices.WorkDashboard(context, 1);
 
         Assert.Equal([3, 1, 2], (await service.GetTasksAsync(new() { Sort = WorkTaskSort.Due })).Data.Items.Select(x => x.TaskId));
         Assert.Equal([2, 3, 1], (await service.GetTasksAsync(new() { Sort = WorkTaskSort.Priority })).Data.Items.Select(x => x.TaskId));
@@ -189,7 +189,7 @@ public class WorkDashboardQueryTests
             Submission(2, 2, 2, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)));
         await context.SaveChangesAsync();
 
-        var page = (await WorkspaceTestServices.WorkDashboard(context, 1)
+        var page = (await TaskCollaborationTestServices.WorkDashboard(context, 1)
             .GetTasksAsync(new() { Sort = WorkTaskSort.ReviewAge })).Data;
 
         Assert.Equal([1, 2, 3], page.Items.Select(x => x.TaskId));
@@ -223,7 +223,7 @@ public class WorkDashboardQueryTests
         });
         await context.SaveChangesAsync();
 
-        var items = (await WorkspaceTestServices.WorkDashboard(context, 1)
+        var items = (await TaskCollaborationTestServices.WorkDashboard(context, 1)
             .GetTasksAsync(new() { Sort = WorkTaskSort.Due })).Data.Items.ToDictionary(x => x.TaskId);
 
         Assert.Equal(WorkTaskNextAction.Start, items[1].NextAction);
@@ -240,7 +240,7 @@ public class WorkDashboardQueryTests
         using var context = db.CreateContext();
         context.TaskRequests.Add(Task(1, 1));
         await context.SaveChangesAsync();
-        var controller = new WorkDashboardController(WorkspaceTestServices.WorkDashboard(context, 1));
+        var controller = new WorkDashboardController(TaskCollaborationTestServices.WorkDashboard(context, 1));
 
         var result = await controller.Tasks(new WorkTaskQueryDto { Scope = WorkTaskScope.Owned, PageSize = 10 });
 

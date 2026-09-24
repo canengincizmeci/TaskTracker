@@ -4,7 +4,7 @@ using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.Bussiness.Abstract;
 
-public interface ITaskWorkspaceService
+public interface ITaskCollaborationService
 {
     Task<bool> CanAccessAsync(int taskId, int userId);
     Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId);

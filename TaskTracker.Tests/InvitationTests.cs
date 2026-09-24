@@ -46,7 +46,7 @@ public class InvitationTests
         return new TaskShareManager(uow, new EfTaskShareDal(context), user, new Email(),
             new NotificationManager(uow, user, new Realtime(failRealtime), NullLogger<NotificationManager>.Instance),
             new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), WorkspaceTestServices.Create(context));
+            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context));
     }
     private static async Task Seed(TaskTrackerDbContext context, bool expired = false, TaskPermission permission = TaskPermission.Edit)
     {
@@ -80,7 +80,7 @@ public class InvitationTests
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         await Seed(context);
-        var access = WorkspaceTestServices.TaskRequests(context);
+        var access = TaskCollaborationTestServices.TaskRequests(context);
         Assert.False((await access.GetTaskById(1, 2)).Success);
         Assert.False((await Manager(context).GetParticipantsAsync(1)).Success);
         Assert.True((await Manager(context).AcceptTaskInvitationAsync(1)).Success);
@@ -98,7 +98,7 @@ public class InvitationTests
         Assert.NotNull(share.SharedAt);
         Assert.Empty((await recipient.GetMyPendingInvitationsAsync()).Data);
         Assert.Equal("Edit", Assert.Single((await recipient.GetMySharedTasksAsync()).Data).Permission);
-        var task = await WorkspaceTestServices.TaskRequests(fresh).GetTaskById(1, 2);
+        var task = await TaskCollaborationTestServices.TaskRequests(fresh).GetTaskById(1, 2);
         Assert.True(task.Success); Assert.True(task.Data.CanEdit); Assert.True(task.Data.CanViewParticipants);
         Assert.Equal(2, Assert.Single((await recipient.GetParticipantsAsync(1)).Data).UserId);
         Assert.Equal("Edit", Assert.Single((await Manager(fresh, 1).GetParticipantsAsync(1)).Data).Permission);
@@ -238,7 +238,7 @@ public class InvitationTests
         context.TaskRequests.Add(TestDatabase.Task());
         context.TaskShares.Add(new() { TaskRequestId = 1, SharedWithUserId = 2, Permission = (TaskPermission)value });
         await context.SaveChangesAsync();
-        var tasks = WorkspaceTestServices.TaskRequests(context);
+        var tasks = TaskCollaborationTestServices.TaskRequests(context);
         Assert.False((await tasks.GetTaskById(1, 2)).Success);
         Assert.Empty((await tasks.GetTasksByUserId(2)).Data);
         Assert.False((await Manager(context).GetParticipantsAsync(1)).Success);

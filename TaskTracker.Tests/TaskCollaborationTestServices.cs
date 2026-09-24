@@ -11,9 +11,9 @@ using Microsoft.Extensions.Configuration;
 
 namespace TaskTracker.Tests;
 
-internal static class WorkspaceTestServices
+internal static class TaskCollaborationTestServices
 {
-    internal sealed class Realtime(bool fail = false) : ITaskWorkspaceRealtimeService
+    internal sealed class Realtime(bool fail = false) : ITaskCollaborationRealtimeService
     {
         public Task ActivityCreatedAsync(int taskId, TaskActivityDto activity) => Deliver();
         public Task MessageCreatedAsync(int taskId, TaskMessageDto message) => Deliver();
@@ -41,26 +41,26 @@ internal static class WorkspaceTestServices
         public Task SendTaskShareInvitationEmailAsync(string email, string title, string user, string url) => Task.CompletedTask;
     }
 
-    public static TaskWorkspaceManager Create(TaskTrackerDbContext context, bool failRealtime = false) =>
-        new(new UnitOfWork(context), new EfTaskWorkspaceDal(context), new Realtime(failRealtime),
-            NullLogger<TaskWorkspaceManager>.Instance);
+    public static TaskCollaborationManager Create(TaskTrackerDbContext context, bool failRealtime = false) =>
+        new(new UnitOfWork(context), new EfTaskCollaborationDal(context), new Realtime(failRealtime),
+            NullLogger<TaskCollaborationManager>.Instance);
 
     public static TaskRequestManager TaskRequests(TaskTrackerDbContext context,
-        INotificationService? notifications = null, ITaskWorkspaceService? workspace = null)
+        INotificationService? notifications = null, ITaskCollaborationService? collaboration = null)
     {
         var uow = new UnitOfWork(context);
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
-            new TaskActivityWriter(uow), workspace ?? Create(context), notifications ?? new Notifications(),
+            new TaskActivityWriter(uow), collaboration ?? Create(context), notifications ?? new Notifications(),
             NullLogger<TaskRequestManager>.Instance);
     }
 
     public static TaskShareManager TaskShares(TaskTrackerDbContext context, int userId,
-        ITaskWorkspaceService? workspace = null)
+        ITaskCollaborationService? collaboration = null)
     {
         var uow = new UnitOfWork(context);
         return new TaskShareManager(uow, new EfTaskShareDal(context), new CurrentUser(userId), new Email(),
             new Notifications(), new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), workspace ?? Create(context));
+            new TaskActivityWriter(uow), collaboration ?? Create(context));
     }
 
     public static WorkDashboardManager WorkDashboard(TaskTrackerDbContext context, int userId) =>

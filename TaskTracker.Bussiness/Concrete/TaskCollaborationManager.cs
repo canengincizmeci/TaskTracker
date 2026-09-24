@@ -9,29 +9,29 @@ using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.Bussiness.Concrete;
 
-public class TaskWorkspaceManager : ITaskWorkspaceService
+public class TaskCollaborationManager : ITaskCollaborationService
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly ITaskWorkspaceDal _workspaceDal;
-    private readonly ITaskWorkspaceRealtimeService _realtime;
-    private readonly ILogger<TaskWorkspaceManager> _logger;
+    private readonly ITaskCollaborationDal _collaborationDal;
+    private readonly ITaskCollaborationRealtimeService _realtime;
+    private readonly ILogger<TaskCollaborationManager> _logger;
 
-    public TaskWorkspaceManager(IUnitOfWork unitOfWork, ITaskWorkspaceDal workspaceDal,
-        ITaskWorkspaceRealtimeService realtime, ILogger<TaskWorkspaceManager> logger)
+    public TaskCollaborationManager(IUnitOfWork unitOfWork, ITaskCollaborationDal collaborationDal,
+        ITaskCollaborationRealtimeService realtime, ILogger<TaskCollaborationManager> logger)
     {
         _unitOfWork = unitOfWork;
-        _workspaceDal = workspaceDal;
+        _collaborationDal = collaborationDal;
         _realtime = realtime;
         _logger = logger;
     }
 
-    public Task<bool> CanAccessAsync(int taskId, int userId) => _workspaceDal.CanAccessAsync(taskId, userId);
+    public Task<bool> CanAccessAsync(int taskId, int userId) => _collaborationDal.CanAccessAsync(taskId, userId);
 
     public async Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId)
     {
         if (!await CanAccessAsync(taskId, userId))
             return new ErrorDataResult<List<TaskActivityDto>>(Messages.AuthorizationDenied);
-        return new SuccessDataResult<List<TaskActivityDto>>((await _workspaceDal.GetActivitiesAsync(taskId))
+        return new SuccessDataResult<List<TaskActivityDto>>((await _collaborationDal.GetActivitiesAsync(taskId))
             .Select(MapActivity).ToList());
     }
 
@@ -39,7 +39,7 @@ public class TaskWorkspaceManager : ITaskWorkspaceService
     {
         if (!await CanAccessAsync(taskId, userId))
             return new ErrorDataResult<List<TaskMessageDto>>(Messages.AuthorizationDenied);
-        return new SuccessDataResult<List<TaskMessageDto>>((await _workspaceDal.GetMessagesAsync(taskId))
+        return new SuccessDataResult<List<TaskMessageDto>>((await _collaborationDal.GetMessagesAsync(taskId))
             .Select(MapMessage).ToList());
     }
 
@@ -74,7 +74,7 @@ public class TaskWorkspaceManager : ITaskWorkspaceService
     {
         try
         {
-            var persisted = await _workspaceDal.GetActivityAsync(activity.Id);
+            var persisted = await _collaborationDal.GetActivityAsync(activity.Id);
             if (persisted is not null)
                 await _realtime.ActivityCreatedAsync(persisted.TaskRequestId, MapActivity(persisted));
         }

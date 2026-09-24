@@ -22,19 +22,19 @@ public class TaskRequestManager : ITaskRequestService
     private readonly ITaskShareDal _taskShareDal;
     private readonly ITaskRequestDal _taskRequestDal;
     private readonly ITaskActivityWriter _activityWriter;
-    private readonly ITaskWorkspaceService _workspace;
+    private readonly ITaskCollaborationService _collaboration;
     private readonly INotificationService _notifications;
     private readonly ILogger<TaskRequestManager> _logger;
 
     public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
-        ITaskActivityWriter activityWriter, ITaskWorkspaceService workspace, INotificationService notifications,
+        ITaskActivityWriter activityWriter, ITaskCollaborationService collaboration, INotificationService notifications,
         ILogger<TaskRequestManager> logger)
     {
         _unitOfWork = unitOfWork;
         _taskShareDal = taskShareDal;
         _taskRequestDal = taskRequestDal;
         _activityWriter = activityWriter;
-        _workspace = workspace;
+        _collaboration = collaboration;
         _notifications = notifications;
         _logger = logger;
     }
@@ -52,7 +52,7 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
         await _unitOfWork.SaveChangesAsync();
-        await _workspace.PublishActivityAsync(activity);
+        await _collaboration.PublishActivityAsync(activity);
         return new SuccessResult(Messages.DataAdded);
     }
 
@@ -135,8 +135,8 @@ public class TaskRequestManager : ITaskRequestService
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserAssigned, dto.AssigneeUserId);
         var result = await SaveTaskChange(task, activity, "Task assigned successfully.", publishActivity: false);
         if (!result.Success) return result;
-        if (previousActivity is not null) await _workspace.PublishActivityAsync(previousActivity);
-        await _workspace.PublishActivityAsync(activity);
+        if (previousActivity is not null) await _collaboration.PublishActivityAsync(previousActivity);
+        await _collaboration.PublishActivityAsync(activity);
         await NotifyAssignment(task, previous, dto.AssigneeUserId);
         return result;
     }
@@ -243,14 +243,14 @@ public class TaskRequestManager : ITaskRequestService
 
         await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Task submitted for review",
             $"Revision {submission.RevisionNumber} of '{task.Title}' is waiting for review.", task.Id);
-        await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessDataResult<TaskSubmissionDto>(MapSubmission(submission), "Work submitted for review.");
     }
 
     public async Task<IDataResult<List<TaskSubmissionDto>>> GetSubmissionHistoryAsync(int taskId, int currentUserId)
     {
-        if (!await _workspace.CanAccessAsync(taskId, currentUserId))
+        if (!await _collaboration.CanAccessAsync(taskId, currentUserId))
             return new ErrorDataResult<List<TaskSubmissionDto>>(Messages.AuthorizationDenied);
         return new SuccessDataResult<List<TaskSubmissionDto>>(await _taskRequestDal.GetSubmissionHistoryAsync(taskId));
     }
@@ -302,8 +302,8 @@ public class TaskRequestManager : ITaskRequestService
             dto.Decision == TaskReviewDecision.Approved
                 ? $"Revision {latest.RevisionNumber} of '{task.Title}' was approved."
                 : $"Changes were requested for revision {latest.RevisionNumber} of '{task.Title}'.", task.Id);
-        await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessDataResult<TaskSubmissionReviewDto>(MapReview(review),
             dto.Decision == TaskReviewDecision.Approved ? "Submission approved." : "Changes requested.");
     }
@@ -376,8 +376,8 @@ public class TaskRequestManager : ITaskRequestService
     {
         try { await _unitOfWork.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
-        if (publishActivity) await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        if (publishActivity) await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessResult(message);
     }
 

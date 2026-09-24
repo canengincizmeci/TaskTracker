@@ -6,11 +6,11 @@ using TaskTracker.DataAccess.Abstract;
 
 namespace TaskTracker.DataAccess.Concrete.EfCore;
 
-public class EfTaskWorkspaceDal : ITaskWorkspaceDal
+public class EfTaskCollaborationDal : ITaskCollaborationDal
 {
     private readonly TaskTrackerDbContext _context;
 
-    public EfTaskWorkspaceDal(TaskTrackerDbContext context)
+    public EfTaskCollaborationDal(TaskTrackerDbContext context)
     {
         _context = context;
     }

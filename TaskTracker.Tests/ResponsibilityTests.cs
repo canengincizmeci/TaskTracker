@@ -27,7 +27,7 @@ public class ResponsibilityTests
         public Task SendPasswordResetCodeAsync(string email, string code) => Task.CompletedTask;
         public Task SendTaskShareInvitationEmailAsync(string email, string title, string user, string url) => Task.CompletedTask;
     }
-    private sealed class RecordingWorkspace : ITaskWorkspaceService
+    private sealed class RecordingCollaboration : ITaskCollaborationService
     {
         public List<(int TaskId, int UserId)> Revocations { get; } = [];
         public Task<bool> CanAccessAsync(int taskId, int userId) => Task.FromResult(true);
@@ -52,19 +52,19 @@ public class ResponsibilityTests
         var current = new CurrentUser(userId);
         var notifications = new NotificationManager(uow, current, new NotificationRealtime(), NullLogger<NotificationManager>.Instance);
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
-            new TaskActivityWriter(uow), WorkspaceTestServices.Create(context, failRealtime), notifications,
+            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context, failRealtime), notifications,
             NullLogger<TaskRequestManager>.Instance);
     }
 
     private static TaskShareManager Shares(TaskTrackerDbContext context, int userId = 1,
-        ITaskWorkspaceService? workspace = null)
+        ITaskCollaborationService? collaboration = null)
     {
         var uow = new UnitOfWork(context);
         var current = new CurrentUser(userId);
         var notifications = new NotificationManager(uow, current, new NotificationRealtime(), NullLogger<NotificationManager>.Instance);
         return new TaskShareManager(uow, new EfTaskShareDal(context), current, new Email(), notifications,
             new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), workspace ?? WorkspaceTestServices.Create(context));
+            new TaskActivityWriter(uow), collaboration ?? TaskCollaborationTestServices.Create(context));
     }
 
     [Fact]
@@ -308,16 +308,16 @@ public class ResponsibilityTests
     }
 
     [Fact]
-    public async Task Removed_participant_loses_task_and_workspace_access()
+    public async Task Removed_participant_loses_task_and_collaboration_access()
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
         context.TaskRequests.Add(TestDatabase.Task());
         context.TaskShares.Add(new() { TaskRequestId = 1, SharedWithUserId = 2, Permission = TaskPermission.Edit });
         await context.SaveChangesAsync();
-        Assert.True(await new EfTaskWorkspaceDal(context).CanAccessAsync(1, 2));
-        var realtime = new RecordingWorkspace();
-        Assert.True((await Shares(context, workspace: realtime).RemoveParticipantAsync(1, 2, 0)).Success);
-        Assert.False(await new EfTaskWorkspaceDal(context).CanAccessAsync(1, 2));
+        Assert.True(await new EfTaskCollaborationDal(context).CanAccessAsync(1, 2));
+        var realtime = new RecordingCollaboration();
+        Assert.True((await Shares(context, collaboration: realtime).RemoveParticipantAsync(1, 2, 0)).Success);
+        Assert.False(await new EfTaskCollaborationDal(context).CanAccessAsync(1, 2));
         Assert.False((await Tasks(context).GetTaskById(1, 2)).Success);
         Assert.Contains((1, 2), realtime.Revocations);
         Assert.Equal("/tasks/shared-tasks", (await context.Notifications.SingleAsync()).RedirectUrl);
