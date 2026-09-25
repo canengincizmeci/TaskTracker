@@ -10,5 +10,6 @@ public enum WorkspaceActivityType
     MemberRemoved = 6,
     MemberReactivated = 7,
     RolePromoted = 8,
-    RoleDemoted = 9
+    RoleDemoted = 9,
+    WorkspaceRenamed = 10
 }
