@@ -29,6 +29,10 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskMessage> TaskMessages { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
+        public DbSet<Workspace> Workspaces { get; set; }
+        public DbSet<WorkspaceMember> WorkspaceMembers { get; set; }
+        public DbSet<WorkspaceInvitation> WorkspaceInvitations { get; set; }
+        public DbSet<WorkspaceActivity> WorkspaceActivities { get; set; }
 
          
 
@@ -56,8 +60,32 @@ namespace TaskTracker.Core.DataAccess
                     entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workflow history is immutable. Add a new revision or decision instead.");
 
+                if (entry.Entity is WorkspaceActivity && entry.State is EntityState.Modified or EntityState.Deleted)
+                    throw new InvalidOperationException("Workspace activity history is immutable.");
+
+                if (entry.Entity is Workspace workspace && entry.State is EntityState.Added or EntityState.Modified)
+                {
+                    workspace.Name = workspace.Name?.Trim() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(workspace.Name) || workspace.Name.Length > Workspace.MaxNameLength)
+                        throw new ValidationException($"A workspace name requires 1–{Workspace.MaxNameLength} nonblank characters.");
+                }
+
+                if (entry.Entity is WorkspaceMember member && entry.State is EntityState.Added or EntityState.Modified &&
+                    (!Enum.IsDefined(member.Role) || member.IsActive != !member.RemovedAt.HasValue))
+                    throw new ValidationException("A workspace membership requires a valid role and consistent removal state.");
+
+                if (entry.Entity is WorkspaceInvitation invitation && entry.State is EntityState.Added or EntityState.Modified &&
+                    !Enum.IsDefined(invitation.Status))
+                    throw new ValidationException("A workspace invitation requires a valid status.");
+
                 if (entry.State != EntityState.Added)
                     continue;
+
+                if (entry.Entity is WorkspaceActivity workspaceActivity &&
+                    (!Enum.IsDefined(workspaceActivity.ActivityType) ||
+                     (workspaceActivity.FromRole.HasValue && !Enum.IsDefined(workspaceActivity.FromRole.Value)) ||
+                     (workspaceActivity.ToRole.HasValue && !Enum.IsDefined(workspaceActivity.ToRole.Value))))
+                    throw new ValidationException("Workspace activity type and optional roles must be defined values.");
 
                 if (entry.Entity is TaskMessage message &&
                     (string.IsNullOrWhiteSpace(message.Content) || message.Content.Length > TaskMessage.MaxContentLength))
@@ -80,10 +108,11 @@ namespace TaskTracker.Core.DataAccess
                     throw new ValidationException("Activity type and optional statuses must be defined values.");
             }
 
-            foreach (var entry in ChangeTracker.Entries<TaskRequest>().Where(x => x.State == EntityState.Modified))
+            foreach (var entry in ChangeTracker.Entries().Where(x => x.State == EntityState.Modified &&
+                         x.Entity is TaskRequest or Workspace or WorkspaceMember or WorkspaceInvitation))
             {
-                var version = entry.Property(x => x.Version);
-                version.CurrentValue = checked(version.OriginalValue + 1);
+                var version = entry.Property(nameof(TaskRequest.Version));
+                version.CurrentValue = checked(Convert.ToInt64(version.OriginalValue) + 1);
                 version.IsModified = true;
             }
         }
