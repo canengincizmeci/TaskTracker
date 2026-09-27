@@ -11,4 +11,5 @@ public class Workspace : IEntity
     public ICollection<WorkspaceMember> Members { get; set; } = new List<WorkspaceMember>();
     public ICollection<WorkspaceInvitation> Invitations { get; set; } = new List<WorkspaceInvitation>();
     public ICollection<WorkspaceActivity> Activities { get; set; } = new List<WorkspaceActivity>();
+    public ICollection<TaskRequest> Tasks { get; set; } = new List<TaskRequest>();
 }

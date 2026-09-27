@@ -10,6 +10,8 @@ namespace TaskTracker.Core.Entities.Concrete
     {
         public int Id { get; set; }
         public int OwnerId { get; set; }
+        public int? WorkspaceId { get; set; }
+        public Workspace? Workspace { get; set; }
         public int? AssigneeUserId { get; set; }
         public User? Assignee { get; set; }
         // Advanced by TaskTrackerDbContext for every tracked task update.
