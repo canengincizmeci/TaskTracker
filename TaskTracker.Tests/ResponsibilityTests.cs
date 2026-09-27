@@ -52,6 +52,7 @@ public class ResponsibilityTests
         var current = new CurrentUser(userId);
         var notifications = new NotificationManager(uow, current, new NotificationRealtime(), NullLogger<NotificationManager>.Instance);
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
+            new EfWorkspaceDal(context),
             new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context, failRealtime), notifications,
             NullLogger<TaskRequestManager>.Instance);
     }

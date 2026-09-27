@@ -354,12 +354,12 @@ public class WorkspaceProductFlowTests
         var workspaceId = await SeedWorkspace(context, Member(1, WorkspaceRole.Owner), Member(2));
         var workspace = await context.Workspaces.SingleAsync();
 
-        var invalid = await new WorkspacesController(Manager(context, 1))
+        var invalid = await Controller(context, 1)
             .Create(new CreateWorkspaceDto { Name = " " });
-        var forbidden = await new WorkspacesController(Manager(context, 2))
+        var forbidden = await Controller(context, 2)
             .Invite(workspaceId, new CreateWorkspaceInvitationDto { Username = "user3" });
-        var hidden = await new WorkspacesController(Manager(context, 3)).GetDetails(workspaceId);
-        var conflict = await new WorkspacesController(Manager(context, 1)).Rename(workspaceId,
+        var hidden = await Controller(context, 3).GetDetails(workspaceId);
+        var conflict = await Controller(context, 1).Rename(workspaceId,
             new RenameWorkspaceDto { Name = "Renamed", Version = workspace.Version + 1 });
 
         Assert.IsType<BadRequestObjectResult>(invalid);
@@ -371,6 +371,9 @@ public class WorkspaceProductFlowTests
     private static WorkspaceManager Manager(TaskTrackerDbContext context, int userId) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId),
             NullLogger<WorkspaceManager>.Instance);
+
+    private static WorkspacesController Controller(TaskTrackerDbContext context, int userId) =>
+        new(Manager(context, userId), TaskCollaborationTestServices.TaskRequests(context), new CurrentUser(userId));
 
     private static async Task<int> SeedWorkspace(TaskTrackerDbContext context, params WorkspaceMember[] members)
     {

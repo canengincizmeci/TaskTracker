@@ -50,6 +50,7 @@ internal static class TaskCollaborationTestServices
     {
         var uow = new UnitOfWork(context);
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
+            new EfWorkspaceDal(context),
             new TaskActivityWriter(uow), collaboration ?? Create(context), notifications ?? new Notifications(),
             NullLogger<TaskRequestManager>.Instance);
     }
