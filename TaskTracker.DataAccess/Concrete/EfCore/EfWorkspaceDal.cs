@@ -4,6 +4,7 @@ using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.DataAccess.Abstract;
 using TaskTracker.Entities.DTOs;
+using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
 namespace TaskTracker.DataAccess.Concrete.EfCore;
 
@@ -115,6 +116,11 @@ public class EfWorkspaceDal(TaskTrackerDbContext context) : IWorkspaceDal
 
     public Task<User?> GetUserByUsernameAsync(string username) =>
         context.Users.SingleOrDefaultAsync(x => x.UserName == username);
+
+    public Task<bool> HasActiveTaskResponsibilityAsync(int workspaceId, int userId) =>
+        context.TaskRequests.AnyAsync(x => x.WorkspaceId == workspaceId && x.Activity &&
+            x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled &&
+            (x.OwnerId == userId || x.AssigneeUserId == userId));
 
     public void TouchMembership(WorkspaceMember membership) =>
         context.Entry(membership).Property(x => x.Version).IsModified = true;

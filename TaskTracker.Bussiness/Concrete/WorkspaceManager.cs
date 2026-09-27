@@ -248,6 +248,8 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         if (actor.Role == WorkspaceRole.Admin && target.Role != WorkspaceRole.Member)
             return new ErrorResult(Messages.AuthorizationDenied);
         if (target.Version != dto.Version) return new ConflictResult(WorkspaceMessages.ConcurrentChange);
+        if (await workspaceDal.HasActiveTaskResponsibilityAsync(workspaceId, userId))
+            return new ConflictResult(WorkspaceMessages.ActiveTaskResponsibility);
 
         target.IsActive = false;
         target.RemovedAt = DateTime.UtcNow;

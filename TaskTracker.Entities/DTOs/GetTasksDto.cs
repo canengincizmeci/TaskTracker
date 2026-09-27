@@ -12,6 +12,8 @@ namespace TaskTracker.Entities.DTOs
         public int Id { get; set; }
         public int OwnerId { get; set; }
         public string OwnerUserName { get; set; } = null!;
+        public int? WorkspaceId { get; set; }
+        public string? WorkspaceName { get; set; }
         public int? AssigneeUserId { get; set; }
         public string? AssigneeUserName { get; set; }
         public bool IsOwner { get; set; }

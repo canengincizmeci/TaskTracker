@@ -16,6 +16,7 @@ public static class WorkspaceMessages
     public const string OwnerCannotChangeOwnRole = "The workspace Owner role cannot be changed.";
     public const string InvalidRoleChange = "Only Member to Admin or Admin to Member role changes are allowed.";
     public const string MembershipInactive = "The workspace membership is already inactive.";
+    public const string ActiveTaskResponsibility = "This member owns or is assigned to an active workspace task.";
     public const string ConcurrentChange = "The workspace changed. Refresh and retry.";
     public const string ConflictingState = "The workspace state changed or conflicts with this operation. Refresh and retry.";
     public const string Created = "Workspace created successfully.";

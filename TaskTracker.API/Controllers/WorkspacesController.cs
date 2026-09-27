@@ -11,7 +11,8 @@ namespace TaskTracker.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/workspaces")]
-public class WorkspacesController(IWorkspaceService workspaceService) : ControllerBase
+public class WorkspacesController(IWorkspaceService workspaceService, ITaskRequestService taskRequestService,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateWorkspaceDto dto)
@@ -29,6 +30,11 @@ public class WorkspacesController(IWorkspaceService workspaceService) : Controll
     [HttpGet("{workspaceId:int}")]
     public async Task<IActionResult> GetDetails(int workspaceId) =>
         ToDataActionResult(await workspaceService.GetDetailsAsync(workspaceId));
+
+    [HttpPost("{workspaceId:int}/tasks")]
+    public async Task<IActionResult> CreateTask(int workspaceId, WorkspaceTaskCreateDto dto) =>
+        ToDataActionResult(await taskRequestService.AddWorkspaceTaskAsync(workspaceId, dto,
+            currentUserService.UserId));
 
     [HttpPut("{workspaceId:int}/rename")]
     public async Task<IActionResult> Rename(int workspaceId, RenameWorkspaceDto dto) =>

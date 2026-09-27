@@ -19,31 +19,41 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
 
         }
         public Task<bool> CanEditAsync(int taskId, int userId)
-        {
-            throw new NotImplementedException();
-        }
+            => _context.TaskRequests.AnyAsync(x => x.Id == taskId && x.Activity &&
+                (x.WorkspaceId == null && (x.OwnerId == userId || x.TaskShares.Any(s =>
+                     s.SharedWithUserId == userId && s.Permission >= TaskPermission.Edit &&
+                     s.Permission <= TaskPermission.Manage)) ||
+                 x.WorkspaceId != null && x.OwnerId == userId && x.Workspace!.Members.Any(m =>
+                     m.UserId == userId && m.IsActive)));
 
         public Task<bool> CanManageAsync(int taskId, int userId)
-        {
-            throw new NotImplementedException();
-        }
+            => _context.TaskRequests.AnyAsync(x => x.Id == taskId && x.Activity && x.OwnerId == userId &&
+                (x.WorkspaceId == null || x.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)));
 
         public Task<bool> CanViewAsync(int taskId, int userId)
-        {
-            throw new NotImplementedException();
-        }
+            => _context.TaskRequests.AnyAsync(x => x.Id == taskId && x.Activity &&
+                (x.WorkspaceId == null && (x.OwnerId == userId || x.Visibility == TaskVisibility.Public ||
+                     x.TaskShares.Any(s => s.SharedWithUserId == userId &&
+                         s.Permission >= TaskPermission.View && s.Permission <= TaskPermission.Manage)) ||
+                 x.WorkspaceId != null && x.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)));
 
         public async Task<List<TaskRequest>> GetTasksByUserIdAsync(int userId)
         {
             var tasks =await _context.TaskRequests.AsNoTracking().Include(t => t.Owner).Include(t => t.Assignee)
-                .Include(t => t.TaskShares).Where(t=>t.Activity==true && (t.OwnerId==userId || t.TaskShares.Any(ts => ts.SharedWithUserId == userId && ts.Permission >= TaskPermission.View && ts.Permission <= TaskPermission.Manage))).OrderByDescending(t => t.CreatedAt).ToListAsync();
+                .Include(t => t.Workspace).Include(t => t.TaskShares).Where(t => t.Activity &&
+                    (t.WorkspaceId == null && (t.OwnerId == userId || t.TaskShares.Any(ts =>
+                         ts.SharedWithUserId == userId && ts.Permission >= TaskPermission.View &&
+                         ts.Permission <= TaskPermission.Manage)) ||
+                     t.WorkspaceId != null && t.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)))
+                .OrderByDescending(t => t.CreatedAt).ToListAsync();
               
             return tasks;
         }  
 
         public Task<List<TaskRequest>> GetAssignedTasksAsync(int userId) => _context.TaskRequests.AsNoTracking()
-            .Include(t => t.Owner).Include(t => t.Assignee).Include(t => t.TaskShares)
-            .Where(t => t.Activity && t.AssigneeUserId == userId)
+            .Include(t => t.Owner).Include(t => t.Assignee).Include(t => t.Workspace).Include(t => t.TaskShares)
+            .Where(t => t.Activity && t.AssigneeUserId == userId &&
+                (t.WorkspaceId == null || t.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)))
             .OrderBy(t => t.DueDate == null).ThenBy(t => t.DueDate).ThenByDescending(t => t.CreatedAt)
             .ToListAsync();
 
