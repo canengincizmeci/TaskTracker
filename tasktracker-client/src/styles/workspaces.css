@@ -329,6 +329,203 @@
   font-size: 13px;
 }
 
+.workspace-member__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.workspace-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-text-button {
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.workspace-text-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.workspace-text-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.workspace-text-button--danger {
+  color: var(--red);
+}
+
+.workspace-section-alert,
+.workspace-section-notice {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.workspace-section-alert {
+  border: 1px solid #fecaca;
+  background: var(--red-soft);
+  color: #b91c1c;
+}
+
+.workspace-section-notice {
+  border: 1px solid #bbf7d0;
+  background: var(--green-soft);
+  color: #15803d;
+}
+
+.workspace-compact-state {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 17px;
+  background: #f8fafc;
+}
+
+.workspace-empty-row {
+  display: grid;
+  gap: 5px;
+  padding: 20px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 17px;
+  background: #f8fafc;
+}
+
+.workspace-empty-row strong {
+  color: #101828;
+}
+
+.workspace-empty-row span {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.workspace-invite-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.workspace-invite-form label {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.workspace-invite-form > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.workspace-invite-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.workspace-invite-form input:focus {
+  border-color: var(--brand);
+  outline: 3px solid rgba(37, 99, 235, 0.13);
+}
+
+.workspace-invite-form > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-invitation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-invitation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: #ffffff;
+}
+
+.workspace-invitation-row h3 {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+  color: #101828;
+  font-size: 17px;
+}
+
+.workspace-invitation-row p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-invitation-row__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.workspace-invitation-row__title h3 {
+  margin: 0;
+}
+
+.workspace-invitation-status {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.workspace-invitation-status--pending {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.workspace-invitation-status--accepted {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.workspace-invitation-status--rejected,
+.workspace-invitation-status--cancelled,
+.workspace-invitation-status--expired {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 .workspace-tasks-placeholder {
   min-height: 285px;
   display: flex;
@@ -387,6 +584,7 @@
   }
 
   .workspace-create-form > div,
+  .workspace-invite-form > div,
   .workspace-grid,
   .workspace-detail-summary {
     grid-template-columns: 1fr;
@@ -403,5 +601,20 @@
 
   .workspace-member .workspace-role {
     grid-column: 2;
+  }
+
+  .workspace-member__controls {
+    grid-column: 2;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace-invitation-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-invitation-row > .secondary-button {
+    width: 100%;
   }
 }

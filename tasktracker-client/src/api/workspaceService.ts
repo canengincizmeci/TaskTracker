@@ -1,8 +1,14 @@
 import axiosClient from "./axiosClient";
 import type {
   CreateWorkspaceRequest,
+  CreateWorkspaceInvitationRequest,
+  ChangeWorkspaceMemberRoleRequest,
+  WorkspaceInvitation,
   WorkspaceDetail,
   WorkspaceListItem,
+  WorkspaceMember,
+  WorkspaceRole,
+  WorkspaceVersionRequest,
 } from "../types/workspace";
 
 export async function getMyWorkspaces(): Promise<WorkspaceListItem[]> {
@@ -18,4 +24,74 @@ export async function createWorkspace(
 ): Promise<WorkspaceDetail> {
   const request: CreateWorkspaceRequest = { name };
   return (await axiosClient.post<WorkspaceDetail>("/workspaces", request)).data;
+}
+
+export async function getWorkspaceMembers(workspaceId: number): Promise<WorkspaceMember[]> {
+  return (await axiosClient.get<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`)).data;
+}
+
+export async function getWorkspaceInvitations(workspaceId: number): Promise<WorkspaceInvitation[]> {
+  return (await axiosClient.get<WorkspaceInvitation[]>(`/workspaces/${workspaceId}/invitations`)).data;
+}
+
+export async function getMyWorkspaceInvitations(): Promise<WorkspaceInvitation[]> {
+  return (await axiosClient.get<WorkspaceInvitation[]>("/workspaces/invitations/my")).data;
+}
+
+export async function inviteWorkspaceMember(
+  workspaceId: number,
+  username: string
+): Promise<WorkspaceInvitation> {
+  const request: CreateWorkspaceInvitationRequest = { username };
+  return (await axiosClient.post<WorkspaceInvitation>(
+    `/workspaces/${workspaceId}/invitations`,
+    request
+  )).data;
+}
+
+export async function acceptWorkspaceInvitation(invitationId: number, version: number): Promise<string> {
+  const request: WorkspaceVersionRequest = { version };
+  return (await axiosClient.post<string>(`/workspaces/invitations/${invitationId}/accept`, request)).data;
+}
+
+export async function rejectWorkspaceInvitation(invitationId: number, version: number): Promise<string> {
+  const request: WorkspaceVersionRequest = { version };
+  return (await axiosClient.post<string>(`/workspaces/invitations/${invitationId}/reject`, request)).data;
+}
+
+export async function cancelWorkspaceInvitation(
+  workspaceId: number,
+  invitationId: number,
+  version: number
+): Promise<string> {
+  const request: WorkspaceVersionRequest = { version };
+  return (await axiosClient.post<string>(
+    `/workspaces/${workspaceId}/invitations/${invitationId}/cancel`,
+    request
+  )).data;
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: number,
+  userId: number,
+  version: number
+): Promise<string> {
+  const request: WorkspaceVersionRequest = { version };
+  return (await axiosClient.post<string>(
+    `/workspaces/${workspaceId}/members/${userId}/remove`,
+    request
+  )).data;
+}
+
+export async function changeWorkspaceMemberRole(
+  workspaceId: number,
+  userId: number,
+  role: Exclude<WorkspaceRole, "Owner">,
+  version: number
+): Promise<string> {
+  const request: ChangeWorkspaceMemberRoleRequest = { role, version };
+  return (await axiosClient.post<string>(
+    `/workspaces/${workspaceId}/members/${userId}/role`,
+    request
+  )).data;
 }
