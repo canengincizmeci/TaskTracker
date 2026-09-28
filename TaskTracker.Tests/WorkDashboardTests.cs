@@ -58,6 +58,42 @@ public class WorkDashboardTests
     }
 
     [Fact]
+    public async Task Awaiting_review_counts_workspace_submission_with_active_assignee_without_task_share()
+    {
+        using var db = new TestDatabase();
+        using var context = db.CreateContext();
+        var workspace = new Workspace
+        {
+            Name = "Dashboard workspace",
+            Members =
+            [
+                new WorkspaceMember { UserId = 1, Role = WorkspaceRole.Owner },
+                new WorkspaceMember { UserId = 2, Role = WorkspaceRole.Member },
+                new WorkspaceMember
+                {
+                    UserId = 3, Role = WorkspaceRole.Member, IsActive = false,
+                    RemovedAt = DateTime.UtcNow
+                }
+            ]
+        };
+        var actionable = DelegatedTask(1, ownerId: 1); actionable.Workspace = workspace;
+        var removedAssignee = DelegatedTask(2, ownerId: 1); removedAssignee.AssigneeUserId = 3;
+        removedAssignee.Workspace = workspace;
+        context.TaskRequests.AddRange(actionable, removedAssignee);
+        context.TaskSubmissions.AddRange(Submission(1, 1), new TaskSubmission
+        {
+            Id = 2, TaskRequestId = 2, SubmittedByUserId = 3,
+            RevisionNumber = 1, Content = "Removed member submission"
+        });
+        await context.SaveChangesAsync();
+
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
+
+        Assert.Equal(1, summary.AwaitingMyReviewCount);
+        Assert.Equal(0, context.TaskShares.Count());
+    }
+
+    [Fact]
     public async Task Overdue_count_uses_utc_date_and_owned_or_assigned_nonterminal_tasks()
     {
         using var db = new TestDatabase();

@@ -139,13 +139,19 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
         {
             var assignedToMeCount = await _context.TaskRequests.AsNoTracking()
                 .CountAsync(x => x.Activity && x.AssigneeUserId == userId &&
-                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled);
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled &&
+                    (x.WorkspaceId == null || x.Workspace!.Members.Any(m =>
+                        m.UserId == userId && m.IsActive)));
 
             var awaitingMyReviewCount = await _context.TaskRequests.AsNoTracking()
                 .Where(x => x.Activity && x.OwnerId == userId && x.Status == TaskStatus.InReview &&
                     x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId &&
-                    x.TaskShares.Any(s => s.SharedWithUserId == x.AssigneeUserId.Value &&
-                        s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage))
+                    (x.WorkspaceId == null && x.TaskShares.Any(s =>
+                         s.SharedWithUserId == x.AssigneeUserId.Value &&
+                         s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage) ||
+                     x.WorkspaceId != null && x.Workspace!.Members.Any(m =>
+                         m.UserId == userId && m.IsActive) && x.Workspace.Members.Any(m =>
+                         m.UserId == x.AssigneeUserId.Value && m.IsActive)))
                 .CountAsync(x => _context.TaskSubmissions
                     .Where(s => s.TaskRequestId == x.Id)
                     .OrderByDescending(s => s.RevisionNumber)
@@ -156,7 +162,9 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             var overdueCount = await _context.TaskRequests.AsNoTracking()
                 .CountAsync(x => x.Activity && x.DueDate.HasValue && x.DueDate.Value < todayUtc &&
                     x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled &&
-                    (x.OwnerId == userId || x.AssigneeUserId == userId));
+                    (x.OwnerId == userId || x.AssigneeUserId == userId) &&
+                    (x.WorkspaceId == null || x.Workspace!.Members.Any(m =>
+                        m.UserId == userId && m.IsActive)));
 
             var pendingInvitationCount = await _context.TaskShareInvitations.AsNoTracking()
                 .CountAsync(x => x.InvitedUserId == userId && x.Status == TaskShareInvitationStatus.Pending &&
@@ -176,9 +184,12 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             int userId, WorkTaskQueryDto query, DateOnly todayUtc)
         {
             var tasks = _context.TaskRequests.AsNoTracking().Where(x => x.Activity &&
-                (x.OwnerId == userId || x.AssigneeUserId == userId || x.TaskShares.Any(s =>
-                    s.SharedWithUserId == userId && s.Permission >= TaskPermission.View &&
-                    s.Permission <= TaskPermission.Manage)));
+                (x.WorkspaceId == null && (x.OwnerId == userId || x.AssigneeUserId == userId ||
+                     x.TaskShares.Any(s => s.SharedWithUserId == userId &&
+                         s.Permission >= TaskPermission.View && s.Permission <= TaskPermission.Manage)) ||
+                 x.WorkspaceId != null && x.Workspace!.Members.Any(m =>
+                     m.UserId == userId && m.IsActive) &&
+                     (x.OwnerId == userId || x.AssigneeUserId == userId)));
 
             tasks = query.Scope switch
             {
@@ -229,11 +240,17 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                 IsAssigned = x.AssigneeUserId == userId,
                 IsShared = x.TaskShares.Any(s => s.SharedWithUserId == userId &&
                     s.Permission >= TaskPermission.View && s.Permission <= TaskPermission.Manage),
-                HasCurrentUserEditShare = x.TaskShares.Any(s => s.SharedWithUserId == userId &&
-                    s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage),
-                AssigneeHasEditShare = x.AssigneeUserId.HasValue && x.TaskShares.Any(s =>
-                    s.SharedWithUserId == x.AssigneeUserId.Value && s.Permission >= TaskPermission.Edit &&
-                    s.Permission <= TaskPermission.Manage),
+                CurrentUserCanWork = x.WorkspaceId == null
+                    ? x.TaskShares.Any(s => s.SharedWithUserId == userId &&
+                        s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage)
+                    : x.AssigneeUserId == userId && x.Workspace!.Members.Any(m =>
+                        m.UserId == userId && m.IsActive),
+                AssigneeCanWork = x.AssigneeUserId.HasValue &&
+                    (x.WorkspaceId == null && x.TaskShares.Any(s =>
+                         s.SharedWithUserId == x.AssigneeUserId.Value &&
+                         s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage) ||
+                     x.WorkspaceId != null && x.Workspace!.Members.Any(m =>
+                         m.UserId == x.AssigneeUserId.Value && m.IsActive)),
                 LatestSubmissionId = _context.TaskSubmissions.Where(s => s.TaskRequestId == x.Id)
                     .OrderByDescending(s => s.RevisionNumber).Select(s => (int?)s.Id).FirstOrDefault(),
                 LatestSubmissionAuthorId = _context.TaskSubmissions.Where(s => s.TaskRequestId == x.Id)
@@ -255,7 +272,7 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                     .ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.TaskId),
                 WorkTaskSort.Recent => rows.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.TaskId),
                 WorkTaskSort.ReviewAge => rows.OrderBy(x => !(x.IsOwned && x.Status == TaskStatus.InReview &&
-                        x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeHasEditShare &&
+                        x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null))
                     .ThenBy(x => x.LatestSubmissionCreatedAt).ThenBy(x => x.TaskId),
                 _ => rows.OrderBy(x => !x.DueDate.HasValue).ThenBy(x => x.DueDate).ThenBy(x => x.TaskId)
@@ -280,24 +297,24 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                     IsAssigned = x.IsAssigned,
                     IsShared = x.IsShared,
                     NextAction = x.IsOwned && x.Status == TaskStatus.InReview && x.AssigneeUserId.HasValue &&
-                        x.AssigneeUserId != x.OwnerId && x.AssigneeHasEditShare &&
+                        x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null
                             ? WorkTaskNextAction.Review
                         : x.IsAssigned && !x.IsOwned && x.Status == TaskStatus.InProgress &&
-                          x.HasCurrentUserEditShare && x.LatestSubmissionAuthorId == userId &&
+                          x.CurrentUserCanWork && x.LatestSubmissionAuthorId == userId &&
                           x.LatestReviewDecision == TaskReviewDecision.ChangesRequested
                             ? WorkTaskNextAction.Revise
                         : x.IsAssigned && !x.IsOwned && x.Status == TaskStatus.InProgress &&
-                          x.HasCurrentUserEditShare
+                          x.CurrentUserCanWork
                             ? WorkTaskNextAction.Submit
                         : x.Status == TaskStatus.Pending &&
-                          (x.IsAssigned && (x.IsOwned || x.HasCurrentUserEditShare) ||
+                          (x.IsAssigned && (x.IsOwned || x.CurrentUserCanWork) ||
                            !x.AssigneeUserId.HasValue && x.IsOwned)
                             ? WorkTaskNextAction.Start
                             : WorkTaskNextAction.View,
                     LatestSubmissionId = x.LatestSubmissionId,
                     ReviewSubmittedAt = x.IsOwned && x.Status == TaskStatus.InReview &&
-                        x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeHasEditShare &&
+                        x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null
                             ? x.LatestSubmissionCreatedAt : null,
                     CreatedAt = x.CreatedAt
@@ -330,8 +347,8 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             public bool IsOwned { get; init; }
             public bool IsAssigned { get; init; }
             public bool IsShared { get; init; }
-            public bool HasCurrentUserEditShare { get; init; }
-            public bool AssigneeHasEditShare { get; init; }
+            public bool CurrentUserCanWork { get; init; }
+            public bool AssigneeCanWork { get; init; }
             public int? LatestSubmissionId { get; init; }
             public int? LatestSubmissionAuthorId { get; init; }
             public DateTime? LatestSubmissionCreatedAt { get; init; }
