@@ -1,4 +1,5 @@
 import axiosClient from "./axiosClient";
+import type { Task } from "../types/task";
 import type {
   CreateWorkspaceRequest,
   CreateWorkspaceInvitationRequest,
@@ -9,6 +10,7 @@ import type {
   WorkspaceMember,
   WorkspaceRole,
   WorkspaceVersionRequest,
+  WorkspaceTaskCreateRequest,
 } from "../types/workspace";
 
 export async function getMyWorkspaces(): Promise<WorkspaceListItem[]> {
@@ -94,4 +96,15 @@ export async function changeWorkspaceMemberRole(
     `/workspaces/${workspaceId}/members/${userId}/role`,
     request
   )).data;
+}
+
+export async function getWorkspaceTasks(workspaceId: number): Promise<Task[]> {
+  return (await axiosClient.get<Task[]>(`/workspaces/${workspaceId}/tasks`)).data;
+}
+
+export async function createWorkspaceTask(
+  workspaceId: number,
+  request: WorkspaceTaskCreateRequest
+): Promise<Task> {
+  return (await axiosClient.post<Task>(`/workspaces/${workspaceId}/tasks`, request)).data;
 }

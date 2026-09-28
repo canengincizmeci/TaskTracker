@@ -1,3 +1,5 @@
+import type { CreateTaskRequest } from "./CreateTaskRequest";
+
 export type WorkspaceRole = "Owner" | "Admin" | "Member";
 
 export type WorkspaceInvitationStatus =
@@ -60,4 +62,8 @@ export type WorkspaceVersionRequest = {
 
 export type ChangeWorkspaceMemberRoleRequest = WorkspaceVersionRequest & {
   role: Exclude<WorkspaceRole, "Owner">;
+};
+
+export type WorkspaceTaskCreateRequest = CreateTaskRequest & {
+  assigneeUserId: number | null;
 };

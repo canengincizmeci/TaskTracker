@@ -12,6 +12,7 @@ import {
 } from "../api/workspaceService";
 import { errorMessage } from "../api/errorMessage";
 import LoadingSpinner from "../components/LoadingSpinner";
+import WorkspaceTasksSection from "../components/WorkspaceTasksSection";
 import type {
   WorkspaceDetail,
   WorkspaceInvitation,
@@ -300,7 +301,7 @@ export default function WorkspaceDetailPage() {
               </div>
             </header>
 
-            <div className="workspace-detail-grid workspace-detail-grid--management">
+            <div className="workspace-detail-grid workspace-detail-grid--members">
               <section className="workspace-detail-card" aria-labelledby="workspace-members-title">
                 <div className="workspace-section-heading">
                   <div>
@@ -361,12 +362,6 @@ export default function WorkspaceDetailPage() {
                 </div>
               </section>
 
-              <section className="workspace-detail-card workspace-tasks-placeholder" aria-labelledby="workspace-tasks-title">
-                <div className="workspace-state__icon" aria-hidden="true">✓</div>
-                <p className="eyebrow">Tasks</p>
-                <h2 id="workspace-tasks-title">Task management coming next</h2>
-                <p>Workspace tasks will appear here in a future update.</p>
-              </section>
             </div>
 
             {canManageInvitations && (
@@ -451,6 +446,8 @@ export default function WorkspaceDetailPage() {
                 )}
               </section>
             )}
+
+            <WorkspaceTasksSection workspace={workspace} />
           </>
         )}
       </div>
