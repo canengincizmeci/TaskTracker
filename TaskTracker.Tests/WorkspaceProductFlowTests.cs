@@ -370,6 +370,7 @@ public class WorkspaceProductFlowTests
 
     private static WorkspaceManager Manager(TaskTrackerDbContext context, int userId) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId),
+            TaskCollaborationTestServices.Create(context),
             NullLogger<WorkspaceManager>.Instance);
 
     private static WorkspacesController Controller(TaskTrackerDbContext context, int userId) =>

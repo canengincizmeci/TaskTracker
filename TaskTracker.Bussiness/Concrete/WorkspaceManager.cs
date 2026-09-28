@@ -13,7 +13,8 @@ using TaskTracker.Entities.DTOs;
 namespace TaskTracker.Bussiness.Concrete;
 
 public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal,
-    ICurrentUserService currentUserService, ILogger<WorkspaceManager> logger) : IWorkspaceService
+    ICurrentUserService currentUserService, ITaskCollaborationService collaborationService,
+    ILogger<WorkspaceManager> logger) : IWorkspaceService
 {
     private static bool CanManage(WorkspaceMember membership) =>
         membership.Role is WorkspaceRole.Owner or WorkspaceRole.Admin;
@@ -255,7 +256,11 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         target.RemovedAt = DateTime.UtcNow;
         workspaceDal.TouchMembership(actor);
         await AddActivityAsync(workspaceId, WorkspaceActivityType.MemberRemoved, userId);
-        return await SaveAsync(WorkspaceMessages.MemberRemoved, workspaceId);
+        var saved = await SaveAsync(WorkspaceMessages.MemberRemoved, workspaceId);
+        if (!saved.Success) return saved;
+
+        await RevokeWorkspaceTaskAccessAsync(workspaceId, userId);
+        return saved;
     }
 
     public async Task<IResult> ChangeMemberRoleAsync(int workspaceId, int userId,
@@ -321,6 +326,36 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         catch (ValidationException ex)
         {
             return new ErrorResult(ex.Message);
+        }
+    }
+
+    private async Task RevokeWorkspaceTaskAccessAsync(int workspaceId, int userId)
+    {
+        List<int> taskIds;
+        try
+        {
+            taskIds = await workspaceDal.GetActiveTaskIdsAsync(workspaceId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Could not load active task groups after removing user {UserId} from workspace {WorkspaceId}",
+                userId, workspaceId);
+            return;
+        }
+
+        foreach (var taskId in taskIds)
+        {
+            try
+            {
+                await collaborationService.RevokeAccessAsync(taskId, userId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Could not revoke task collaboration access for user {UserId}, task {TaskId}, workspace {WorkspaceId}",
+                    userId, taskId, workspaceId);
+            }
         }
     }
 

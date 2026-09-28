@@ -122,6 +122,12 @@ public class EfWorkspaceDal(TaskTrackerDbContext context) : IWorkspaceDal
             x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled &&
             (x.OwnerId == userId || x.AssigneeUserId == userId));
 
+    public Task<List<int>> GetActiveTaskIdsAsync(int workspaceId) =>
+        context.TaskRequests.AsNoTracking()
+            .Where(x => x.WorkspaceId == workspaceId && x.Activity)
+            .Select(x => x.Id)
+            .ToListAsync();
+
     public void TouchMembership(WorkspaceMember membership) =>
         context.Entry(membership).Property(x => x.Version).IsModified = true;
 }

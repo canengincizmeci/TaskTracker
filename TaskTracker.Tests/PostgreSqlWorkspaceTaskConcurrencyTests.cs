@@ -76,6 +76,7 @@ public class PostgreSqlWorkspaceTaskConcurrencyTests
     {
         var uow = new UnitOfWork(context);
         return new WorkspaceManager(uow, new EfWorkspaceDal(context), new CurrentUser(userId),
+            TaskCollaborationTestServices.Create(context),
             NullLogger<WorkspaceManager>.Instance);
     }
 
