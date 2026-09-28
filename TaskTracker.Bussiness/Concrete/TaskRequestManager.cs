@@ -446,6 +446,15 @@ public class TaskRequestManager : ITaskRequestService
         new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetTasksByUserIdAsync(userId))
             .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);
 
+    public async Task<IDataResult<List<GetTasksDto>>> GetWorkspaceTasksAsync(int workspaceId, int currentUserId)
+    {
+        if (await _workspaceDal.GetActiveMembershipAsync(workspaceId, currentUserId) is null)
+            return new ErrorDataResult<List<GetTasksDto>>(WorkspaceMessages.NotFound);
+
+        return new SuccessDataResult<List<GetTasksDto>>(
+            await _taskRequestDal.GetWorkspaceTasksAsync(workspaceId, currentUserId), Messages.DataListed);
+    }
+
     public async Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId) =>
         new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetAssignedTasksAsync(userId))
             .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);

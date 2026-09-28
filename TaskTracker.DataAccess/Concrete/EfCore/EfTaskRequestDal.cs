@@ -50,6 +50,37 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             return tasks;
         }  
 
+        public Task<List<GetTasksDto>> GetWorkspaceTasksAsync(int workspaceId, int userId) =>
+            _context.TaskRequests.AsNoTracking()
+                .Where(x => x.Activity && x.WorkspaceId == workspaceId)
+                .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+                .Select(x => new GetTasksDto
+                {
+                    Id = x.Id,
+                    OwnerId = x.OwnerId,
+                    OwnerUserName = x.Owner.UserName,
+                    WorkspaceId = x.WorkspaceId,
+                    WorkspaceName = x.Workspace!.Name,
+                    AssigneeUserId = x.AssigneeUserId,
+                    AssigneeUserName = x.Assignee == null ? null : x.Assignee.UserName,
+                    IsOwner = x.OwnerId == userId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    Category = x.Category,
+                    Priority = x.Priority.ToString(),
+                    Status = x.Status.ToString(),
+                    Activity = x.Activity,
+                    SharedCount = x.SharedCount,
+                    DueDate = x.DueDate,
+                    Visibility = x.Visibility.ToString(),
+                    CreatedAt = x.CreatedAt,
+                    IsSharedWithMe = false,
+                    CanView = true,
+                    CanEdit = x.OwnerId == userId,
+                    CanShare = false,
+                    Version = x.Version
+                }).ToListAsync();
+
         public Task<List<TaskRequest>> GetAssignedTasksAsync(int userId) => _context.TaskRequests.AsNoTracking()
             .Include(t => t.Owner).Include(t => t.Assignee).Include(t => t.Workspace).Include(t => t.TaskShares)
             .Where(t => t.Activity && t.AssigneeUserId == userId &&

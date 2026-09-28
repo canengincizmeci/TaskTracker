@@ -36,6 +36,11 @@ public class WorkspacesController(IWorkspaceService workspaceService, ITaskReque
         ToDataActionResult(await taskRequestService.AddWorkspaceTaskAsync(workspaceId, dto,
             currentUserService.UserId));
 
+    [HttpGet("{workspaceId:int}/tasks")]
+    public async Task<IActionResult> GetTasks(int workspaceId) =>
+        ToDataActionResult(await taskRequestService.GetWorkspaceTasksAsync(workspaceId,
+            currentUserService.UserId));
+
     [HttpPut("{workspaceId:int}/rename")]
     public async Task<IActionResult> Rename(int workspaceId, RenameWorkspaceDto dto) =>
         ToActionResult(await workspaceService.RenameAsync(workspaceId, dto));

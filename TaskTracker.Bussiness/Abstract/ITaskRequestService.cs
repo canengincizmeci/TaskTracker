@@ -24,6 +24,7 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IResult> ReopenTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId);
         Task<IDataResult<List<TaskRequest>>> GetAllTasks();
         Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId);
+        Task<IDataResult<List<GetTasksDto>>> GetWorkspaceTasksAsync(int workspaceId, int currentUserId);
         Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId);
         Task<IDataResult<TaskSubmissionDto>> SubmitAsync(int taskId, CreateTaskSubmissionDto dto, int currentUserId);
         Task<IDataResult<List<TaskSubmissionDto>>> GetSubmissionHistoryAsync(int taskId, int currentUserId);

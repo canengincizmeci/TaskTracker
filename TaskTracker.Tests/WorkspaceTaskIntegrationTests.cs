@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Bussiness.Concrete;
 using TaskTracker.Core.DataAccess;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
@@ -65,6 +66,129 @@ public class WorkspaceTaskIntegrationTests
         Assert.True(active.Success);
         Assert.Equal(3, (await context.TaskRequests.SingleAsync()).AssigneeUserId);
         Assert.Empty(await context.TaskShares.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task Active_owner_admin_and_member_can_list_workspace_tasks(int userId)
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var workspaceId = await SeedWorkspace(context);
+        var task = await SeedTask(context, workspaceId, ownerId: 1, assigneeId: 3);
+
+        var result = await Tasks(context).GetWorkspaceTasksAsync(workspaceId, userId);
+
+        Assert.True(result.Success);
+        var item = Assert.Single(result.Data!);
+        Assert.Equal(task.Id, item.Id);
+        Assert.Equal(workspaceId, item.WorkspaceId);
+        Assert.Equal("Product", item.WorkspaceName);
+        Assert.Equal("user1", item.OwnerUserName);
+        Assert.Equal("user3", item.AssigneeUserName);
+        Assert.True(item.CanView);
+        Assert.Equal(userId == 1, item.IsOwner);
+    }
+
+    [Fact]
+    public async Task Unrelated_user_cannot_list_workspace_tasks()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        await AddUser(context, 4);
+        var workspaceId = await SeedWorkspace(context);
+        await SeedTask(context, workspaceId, ownerId: 1);
+
+        var result = await Tasks(context).GetWorkspaceTasksAsync(workspaceId, 4);
+
+        Assert.False(result.Success);
+        Assert.Equal(WorkspaceMessages.NotFound, result.Message);
+    }
+
+    [Fact]
+    public async Task Removed_member_cannot_list_workspace_tasks()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var workspaceId = await SeedWorkspace(context);
+        await SeedTask(context, workspaceId, ownerId: 1);
+        var membership = await context.WorkspaceMembers.SingleAsync(x => x.UserId == 3);
+        membership.IsActive = false;
+        membership.RemovedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+
+        var result = await Tasks(context).GetWorkspaceTasksAsync(workspaceId, 3);
+
+        Assert.False(result.Success);
+        Assert.Equal(WorkspaceMessages.NotFound, result.Message);
+    }
+
+    [Fact]
+    public async Task Workspace_task_list_returns_only_active_tasks_from_requested_workspace_newest_first()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var workspaceId = await SeedWorkspace(context);
+        var otherWorkspace = new Workspace
+        {
+            Name = "Other",
+            Members = [new WorkspaceMember { UserId = 1, Role = WorkspaceRole.Owner }]
+        };
+        context.Workspaces.Add(otherWorkspace);
+        await context.SaveChangesAsync();
+
+        var now = DateTime.UtcNow;
+        context.TaskRequests.AddRange(
+            WorkspaceTask(10, workspaceId, "Older", now.AddMinutes(-2)),
+            WorkspaceTask(11, workspaceId, "Newer", now.AddMinutes(-1)),
+            WorkspaceTask(12, otherWorkspace.Id, "Other workspace", now),
+            WorkspaceTask(13, null, "Personal", now),
+            WorkspaceTask(14, workspaceId, "Deleted", now, activity: false));
+        await context.SaveChangesAsync();
+
+        var result = await Tasks(context).GetWorkspaceTasksAsync(workspaceId, 1);
+
+        Assert.True(result.Success);
+        Assert.Equal([11, 10], result.Data!.Select(x => x.Id));
+        Assert.All(result.Data, item => Assert.Equal(workspaceId, item.WorkspaceId));
+        Assert.DoesNotContain(result.Data, item => item.Title is "Personal" or "Other workspace" or "Deleted");
+    }
+
+    [Fact]
+    public async Task Empty_workspace_returns_an_empty_task_list()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var workspaceId = await SeedWorkspace(context);
+
+        var result = await Tasks(context).GetWorkspaceTasksAsync(workspaceId, 2);
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Data!);
+    }
+
+    [Fact]
+    public async Task Existing_personal_task_list_still_returns_personal_tasks_unchanged()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var personal = TestDatabase.Task();
+        context.TaskRequests.Add(personal);
+        await context.SaveChangesAsync();
+
+        var result = await Tasks(context).GetTasksByUserId(1);
+
+        Assert.True(result.Success);
+        var item = Assert.Single(result.Data!);
+        Assert.Equal(personal.Id, item.Id);
+        Assert.Null(item.WorkspaceId);
+        Assert.Null(item.WorkspaceName);
+        Assert.True(item.IsOwner);
+        Assert.True(item.CanView);
+        Assert.True(item.CanEdit);
+        Assert.True(item.CanShare);
     }
 
     [Fact]
@@ -324,6 +448,22 @@ public class WorkspaceTaskIntegrationTests
         await context.SaveChangesAsync();
         return task;
     }
+
+    private static TaskRequest WorkspaceTask(int id, int? workspaceId, string title, DateTime createdAt,
+        bool activity = true) => new()
+    {
+        Id = id,
+        WorkspaceId = workspaceId,
+        OwnerId = 1,
+        Title = title,
+        Description = $"{title} description",
+        Category = "Tests",
+        Priority = TaskPriority.Medium,
+        Status = TaskStatus.Pending,
+        Activity = activity,
+        Visibility = TaskVisibility.Private,
+        CreatedAt = createdAt
+    };
 
     private static async Task AddUser(TaskTrackerDbContext context, int id)
     {
