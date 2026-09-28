@@ -194,7 +194,8 @@ function TaskDetailPage() {
     setEditError("");
     try {
       await deleteTask(id);
-      if (isCurrent()) navigate("/tasks/user-tasks", { replace: true });
+      if (isCurrent()) navigate(task.workspaceId ? `/workspaces/${task.workspaceId}` : "/tasks/user-tasks",
+        { replace: true });
     } catch (error) {
       if (isCurrent()) setEditError(getUpdateError(error, "Task could not be deleted."));
     } finally {
@@ -281,7 +282,7 @@ function TaskDetailPage() {
                   Edit Task
                 </button>
               )}
-              {(task.isAssignee === true || (task.isOwner === true && !task.assigneeUserId)) && !isEditing && task.status === "Pending" && (
+              {task.canStart === true && !isEditing && (
                 <button type="button" className="secondary-button" disabled={isSaving || isUpdatingStatus || isDeleting}
                   onClick={() => handleStatusUpdate("start")}>
                   {isUpdatingStatus ? "Starting..." : "Start work"}
@@ -384,6 +385,17 @@ function TaskDetailPage() {
               <strong>{task.category}</strong>
             </div>
 
+            {task.workspaceId != null && task.workspaceName && (
+              <div className="task-sidebar-info">
+                <span>Workspace</span>
+                <strong>
+                  <Link className="task-workspace-link" to={`/workspaces/${task.workspaceId}`}>
+                    {task.workspaceName}
+                  </Link>
+                </strong>
+              </div>
+            )}
+
             {task.createdAt && (
               <div className="task-sidebar-info">
                 <span>Created</span>
@@ -415,6 +427,7 @@ function TaskDetailPage() {
             </div>
 
             <div className="task-sidebar-links">
+              {task.workspaceId != null && <Link to={`/workspaces/${task.workspaceId}`}>Back to Workspace</Link>}
               <Link to="/tasks/user-tasks">My Tasks</Link>
               <Link to="/profile">Profile</Link>
               <Link to="/tasks/create-task">Create Task</Link>
