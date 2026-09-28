@@ -38,6 +38,10 @@ export type CreateWorkspaceRequest = {
   name: string;
 };
 
+export type RenameWorkspaceRequest = WorkspaceVersionRequest & {
+  name: string;
+};
+
 export type WorkspaceInvitation = {
   id: number;
   workspaceId: number;

@@ -9,6 +9,7 @@ import {
   getWorkspaceInvitations,
   inviteWorkspaceMember,
   removeWorkspaceMember,
+  renameWorkspace,
 } from "../api/workspaceService";
 import { errorMessage } from "../api/errorMessage";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -51,6 +52,12 @@ export default function WorkspaceDetailPage() {
   const [loading, setLoading] = useState(validWorkspaceId);
   const [failure, setFailure] = useState(validWorkspaceId ? "" : "This workspace address is invalid.");
   const workspaceRequestId = useRef(0);
+  const [editingName, setEditingName] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [renameFailure, setRenameFailure] = useState("");
+  const [renameNotice, setRenameNotice] = useState("");
+  const renameInProgress = useRef(false);
+  const [renaming, setRenaming] = useState(false);
 
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
@@ -148,6 +155,79 @@ export default function WorkspaceDetailPage() {
   const finishOperation = (key: string) => {
     activeOperations.current.delete(key);
     setBusyOperations(new Set(activeOperations.current));
+  };
+
+  const beginRename = () => {
+    if (!workspace || workspace.currentUserRole !== "Owner") return;
+    setWorkspaceName(workspace.name);
+    setRenameFailure("");
+    setRenameNotice("");
+    setEditingName(true);
+  };
+
+  const cancelRename = () => {
+    if (renaming) return;
+    setWorkspaceName(workspace?.name ?? "");
+    setRenameFailure("");
+    setEditingName(false);
+  };
+
+  const handleRename = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!workspace || workspace.currentUserRole !== "Owner" || renameInProgress.current) return;
+
+    const normalizedName = workspaceName.trim();
+    if (!normalizedName) {
+      setRenameFailure("Workspace name is required.");
+      return;
+    }
+    if (normalizedName.length > 150) {
+      setRenameFailure("Workspace name must be 150 characters or fewer.");
+      return;
+    }
+    if (normalizedName === workspace.name) {
+      setRenameFailure("");
+      setEditingName(false);
+      return;
+    }
+
+    renameInProgress.current = true;
+    setRenaming(true);
+    setRenameFailure("");
+    setRenameNotice("");
+
+    try {
+      const message = await renameWorkspace(parsedWorkspaceId, normalizedName, workspace.version);
+      setWorkspace((current) => current?.id === parsedWorkspaceId
+        ? { ...current, name: normalizedName }
+        : current);
+      setEditingName(false);
+      const refreshed = await loadWorkspace(false);
+      if (refreshed) {
+        setRenameNotice(message || "Workspace renamed.");
+      } else {
+        setRenameFailure("The workspace was renamed, but its latest details could not be loaded.");
+      }
+    } catch (reason: unknown) {
+      const status = responseStatus(reason);
+      const message = errorMessage(reason, "The workspace could not be renamed.");
+      if (status === 409 || status === 403 || status === 404) {
+        const refreshed = await loadWorkspace(false);
+        if (status === 409) {
+          setRenameFailure(`${message} ${refreshed
+            ? "Latest workspace data was loaded."
+            : "Refresh and try again."}`);
+        } else {
+          setRenameFailure(message);
+        }
+        setEditingName(false);
+      } else {
+        setRenameFailure(message);
+      }
+    } finally {
+      renameInProgress.current = false;
+      setRenaming(false);
+    }
   };
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
@@ -292,8 +372,44 @@ export default function WorkspaceDetailPage() {
             <header className="workspace-detail-header">
               <div>
                 <p className="eyebrow">Workspace</p>
-                <h1>{workspace.name}</h1>
-                <p>Created {formatDate(workspace.createdAt)}</p>
+                {editingName ? (
+                  <form className="workspace-rename-form" onSubmit={handleRename}>
+                    <input
+                      aria-label="Workspace name"
+                      autoFocus
+                      disabled={renaming}
+                      maxLength={150}
+                      onChange={(event) => {
+                        setWorkspaceName(event.target.value);
+                        if (renameFailure) setRenameFailure("");
+                      }}
+                      value={workspaceName}
+                    />
+                    <div className="workspace-rename-actions">
+                      <button className="primary-button" disabled={renaming || !workspaceName.trim()}
+                        type="submit">
+                        {renaming ? "Saving..." : "Save"}
+                      </button>
+                      <button className="secondary-button" disabled={renaming} onClick={cancelRename}
+                        type="button">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="workspace-detail-title">
+                    <h1>{workspace.name}</h1>
+                    {workspace.currentUserRole === "Owner" && (
+                      <button className="workspace-text-button" onClick={beginRename} type="button">
+                        Rename
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p className="workspace-detail-meta">Created {formatDate(workspace.createdAt)}</p>
+                {renameFailure && <p className="workspace-rename-message workspace-rename-message--error"
+                  role="alert">{renameFailure}</p>}
+                {renameNotice && <p className="workspace-rename-message" role="status">{renameNotice}</p>}
               </div>
               <div className="workspace-detail-summary">
                 <div><span>Your role</span><strong>{workspace.currentUserRole}</strong></div>

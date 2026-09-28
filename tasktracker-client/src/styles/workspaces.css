@@ -36,12 +36,58 @@
 }
 
 .workspace-header p:last-child,
-.workspace-detail-header > div:first-child > p:last-child {
+.workspace-detail-meta {
   max-width: 650px;
   margin: 0;
   color: var(--muted);
   font-size: 17px;
   line-height: 1.65;
+}
+
+.workspace-detail-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.workspace-rename-form {
+  display: grid;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+
+.workspace-rename-form input {
+  width: min(520px, 100%);
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #101828;
+  font: inherit;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+}
+
+.workspace-rename-form input:focus {
+  border-color: var(--brand);
+  outline: 3px solid rgba(37, 99, 235, 0.13);
+}
+
+.workspace-rename-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.workspace-rename-message {
+  margin: 12px 0 0;
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.workspace-rename-message--error {
+  color: var(--red);
 }
 
 .workspace-create-card,
@@ -708,6 +754,11 @@
 
   .workspace-task-form__actions {
     flex-direction: column-reverse;
+  }
+
+  .workspace-rename-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .workspace-task-form__actions button {

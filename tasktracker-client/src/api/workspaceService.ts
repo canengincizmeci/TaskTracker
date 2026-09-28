@@ -4,6 +4,7 @@ import type {
   CreateWorkspaceRequest,
   CreateWorkspaceInvitationRequest,
   ChangeWorkspaceMemberRoleRequest,
+  RenameWorkspaceRequest,
   WorkspaceInvitation,
   WorkspaceDetail,
   WorkspaceListItem,
@@ -26,6 +27,15 @@ export async function createWorkspace(
 ): Promise<WorkspaceDetail> {
   const request: CreateWorkspaceRequest = { name };
   return (await axiosClient.post<WorkspaceDetail>("/workspaces", request)).data;
+}
+
+export async function renameWorkspace(
+  workspaceId: number,
+  name: string,
+  version: number
+): Promise<string> {
+  const request: RenameWorkspaceRequest = { name, version };
+  return (await axiosClient.put<string>(`/workspaces/${workspaceId}/rename`, request)).data;
 }
 
 export async function getWorkspaceMembers(workspaceId: number): Promise<WorkspaceMember[]> {
