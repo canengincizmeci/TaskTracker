@@ -120,7 +120,7 @@ public class WorkDashboardTests
     }
 
     [Fact]
-    public async Task Pending_invitation_count_matches_actionable_invitation_semantics()
+    public async Task Pending_task_invitation_count_matches_existing_actionable_invitation_semantics()
     {
         using var db = new TestDatabase();
         using var context = db.CreateContext();
@@ -142,7 +142,38 @@ public class WorkDashboardTests
 
         var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
 
-        Assert.Equal(1, summary.PendingInvitationCount);
+        Assert.Equal(1, summary.PendingTaskInvitationsCount);
+        Assert.Equal(0, summary.PendingWorkspaceInvitationsCount);
+    }
+
+    [Fact]
+    public async Task Pending_workspace_invitation_count_includes_only_current_pending_invitations_for_user()
+    {
+        using var db = new TestDatabase();
+        using var context = db.CreateContext();
+        var workspaces = Enumerable.Range(1, 6).Select(number => new Workspace
+        {
+            Name = $"Dashboard workspace {number}",
+            Members = [new WorkspaceMember { UserId = 1, Role = WorkspaceRole.Owner }]
+        }).ToArray();
+        context.Workspaces.AddRange(workspaces);
+        await context.SaveChangesAsync();
+        var future = DateTime.UtcNow.AddDays(1);
+        context.WorkspaceInvitations.AddRange(
+            WorkspaceInvitation(workspaces[0].Id, 2, WorkspaceInvitationStatus.Pending, future),
+            WorkspaceInvitation(workspaces[1].Id, 2, WorkspaceInvitationStatus.Accepted, future),
+            WorkspaceInvitation(workspaces[2].Id, 2, WorkspaceInvitationStatus.Rejected, future),
+            WorkspaceInvitation(workspaces[3].Id, 2, WorkspaceInvitationStatus.Cancelled, future),
+            WorkspaceInvitation(workspaces[4].Id, 2, WorkspaceInvitationStatus.Expired, future),
+            WorkspaceInvitation(workspaces[5].Id, 2, WorkspaceInvitationStatus.Pending,
+                DateTime.UtcNow.AddDays(-1)),
+            WorkspaceInvitation(workspaces[0].Id, 3, WorkspaceInvitationStatus.Pending, future));
+        await context.SaveChangesAsync();
+
+        var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 2).GetSummaryAsync()).Data;
+
+        Assert.Equal(0, summary.PendingTaskInvitationsCount);
+        Assert.Equal(1, summary.PendingWorkspaceInvitationsCount);
     }
 
     [Fact]
@@ -159,6 +190,15 @@ public class WorkDashboardTests
         context.TaskSubmissions.Add(Submission(1, 3));
         context.TaskShareInvitations.Add(Invitation(
             1, 1, 1, TaskShareInvitationStatus.Pending, DateTime.UtcNow.AddDays(1)));
+        var workspace = new Workspace
+        {
+            Name = "Dashboard workspace",
+            Members = [new WorkspaceMember { UserId = 2, Role = WorkspaceRole.Owner }]
+        };
+        context.Workspaces.Add(workspace);
+        await context.SaveChangesAsync();
+        context.WorkspaceInvitations.Add(WorkspaceInvitation(workspace.Id, 1,
+            WorkspaceInvitationStatus.Pending, DateTime.UtcNow.AddDays(1), invitedByUserId: 2));
         await context.SaveChangesAsync();
 
         var summary = (await TaskCollaborationTestServices.WorkDashboard(context, 1).GetSummaryAsync()).Data;
@@ -166,7 +206,8 @@ public class WorkDashboardTests
         Assert.Equal(1, summary.AssignedToMeCount);
         Assert.Equal(1, summary.AwaitingMyReviewCount);
         Assert.Equal(1, summary.OverdueCount);
-        Assert.Equal(1, summary.PendingInvitationCount);
+        Assert.Equal(1, summary.PendingTaskInvitationsCount);
+        Assert.Equal(1, summary.PendingWorkspaceInvitationsCount);
     }
 
     private static TaskRequest DelegatedTask(int id, int ownerId)
@@ -202,5 +243,15 @@ public class WorkDashboardTests
     {
         Id = id, TaskRequestId = taskId, InvitedByUserId = 1, InvitedUserId = invitedUserId,
         Permission = TaskPermission.View, Status = status, ExpiresAt = expiresAt
+    };
+
+    private static WorkspaceInvitation WorkspaceInvitation(int workspaceId, int invitedUserId,
+        WorkspaceInvitationStatus status, DateTime expiresAt, int invitedByUserId = 1) => new()
+    {
+        WorkspaceId = workspaceId,
+        InvitedUserId = invitedUserId,
+        InvitedByUserId = invitedByUserId,
+        Status = status,
+        ExpiresAt = expiresAt
     };
 }

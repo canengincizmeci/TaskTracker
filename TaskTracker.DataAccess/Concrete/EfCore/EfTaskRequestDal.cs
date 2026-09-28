@@ -166,17 +166,22 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                     (x.WorkspaceId == null || x.Workspace!.Members.Any(m =>
                         m.UserId == userId && m.IsActive)));
 
-            var pendingInvitationCount = await _context.TaskShareInvitations.AsNoTracking()
+            var pendingTaskInvitationsCount = await _context.TaskShareInvitations.AsNoTracking()
                 .CountAsync(x => x.InvitedUserId == userId && x.Status == TaskShareInvitationStatus.Pending &&
                     (!x.ExpiresAt.HasValue || x.ExpiresAt > nowUtc) && x.TaskRequest.Activity &&
                     x.TaskRequest.Status != TaskStatus.Completed && x.TaskRequest.Status != TaskStatus.Cancelled);
+
+            var pendingWorkspaceInvitationsCount = await _context.WorkspaceInvitations.AsNoTracking()
+                .CountAsync(x => x.InvitedUserId == userId && x.Status == WorkspaceInvitationStatus.Pending &&
+                    (!x.ExpiresAt.HasValue || x.ExpiresAt > nowUtc));
 
             return new WorkDashboardSummaryDto
             {
                 AssignedToMeCount = assignedToMeCount,
                 AwaitingMyReviewCount = awaitingMyReviewCount,
                 OverdueCount = overdueCount,
-                PendingInvitationCount = pendingInvitationCount
+                PendingTaskInvitationsCount = pendingTaskInvitationsCount,
+                PendingWorkspaceInvitationsCount = pendingWorkspaceInvitationsCount
             };
         }
 
