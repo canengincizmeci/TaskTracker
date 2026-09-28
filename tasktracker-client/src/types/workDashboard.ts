@@ -2,7 +2,8 @@ export type WorkDashboardSummary = {
   assignedToMeCount: number;
   awaitingMyReviewCount: number;
   overdueCount: number;
-  pendingInvitationCount: number;
+  pendingTaskInvitationsCount: number;
+  pendingWorkspaceInvitationsCount: number;
 };
 
 export type WorkScope = "all" | "owned" | "assigned" | "shared";

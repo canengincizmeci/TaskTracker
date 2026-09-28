@@ -10,6 +10,8 @@ export interface Task {
   dueDate: string | null;
   ownerId: number;
   ownerUserName: string;
+  workspaceId?: number | null;
+  workspaceName?: string | null;
   assigneeUserId: number | null;
   assigneeUserName: string | null;
   version: number;
@@ -22,6 +24,7 @@ export interface Task {
   canDelete?: boolean;
   canViewParticipants?: boolean;
   canManageResponsibility?: boolean;
+  canStart?: boolean;
   canSubmit?: boolean;
   canReview?: boolean;
   currentUserPermission?: string | null;

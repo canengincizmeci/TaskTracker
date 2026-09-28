@@ -40,7 +40,11 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
         this.databaseConnection = databaseConnection;
     }
 
-    public static async Task<PostgreSqlTestDatabase> CreateAsync()
+    public static Task<PostgreSqlTestDatabase> CreateAsync() => CreateAsync(useCurrentModel: false);
+
+    public static Task<PostgreSqlTestDatabase> CreateCurrentModelAsync() => CreateAsync(useCurrentModel: true);
+
+    private static async Task<PostgreSqlTestDatabase> CreateAsync(bool useCurrentModel)
     {
         var configured = Environment.GetEnvironmentVariable("TASKTRACKER_TEST_DATABASE")
             ?? throw new InvalidOperationException("TASKTRACKER_TEST_DATABASE is required.");
@@ -56,7 +60,10 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
         var database = new NpgsqlConnectionStringBuilder(configured) { Database = name, Pooling = false }.ConnectionString;
         var instance = new PostgreSqlTestDatabase(admin, name, database);
         await using var context = instance.CreateContext();
-        await context.Database.MigrateAsync();
+        if (useCurrentModel)
+            await context.Database.EnsureCreatedAsync();
+        else
+            await context.Database.MigrateAsync();
         context.Users.AddRange(User(1), User(2), User(3));
         await context.SaveChangesAsync();
         return instance;

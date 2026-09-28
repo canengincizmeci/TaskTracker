@@ -6,14 +6,14 @@ using System.Collections.Concurrent;
 namespace TaskTracker.API.Hubs
 {
     [Authorize]
-    public class TaskWorkspaceHub : Hub
+    public class TaskCollaborationHub : Hub
     {
         private static readonly ConcurrentDictionary<(int TaskId, int UserId), ConcurrentDictionary<string, byte>> Memberships = new();
-        private readonly ITaskWorkspaceService _workspace;
+        private readonly ITaskCollaborationService _collaboration;
 
-        public TaskWorkspaceHub(ITaskWorkspaceService workspace)
+        public TaskCollaborationHub(ITaskCollaborationService collaboration)
         {
-            _workspace = workspace;
+            _collaboration = collaboration;
         }
 
         public static string TaskGroup(int taskId) => $"task:{taskId}";
@@ -21,7 +21,7 @@ namespace TaskTracker.API.Hubs
         public async Task JoinTask(int taskId)
         {
             if (!int.TryParse(Context.UserIdentifier, out var userId) ||
-                !await _workspace.CanAccessAsync(taskId, userId))
+                !await _collaboration.CanAccessAsync(taskId, userId))
                 throw new HubException("You do not have access to this task workspace.");
             await Groups.AddToGroupAsync(Context.ConnectionId, TaskGroup(taskId));
             Memberships.GetOrAdd((taskId, userId), _ => new()).TryAdd(Context.ConnectionId, 0);

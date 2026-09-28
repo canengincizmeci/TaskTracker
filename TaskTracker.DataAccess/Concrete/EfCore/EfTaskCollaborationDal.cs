@@ -6,18 +6,21 @@ using TaskTracker.DataAccess.Abstract;
 
 namespace TaskTracker.DataAccess.Concrete.EfCore;
 
-public class EfTaskWorkspaceDal : ITaskWorkspaceDal
+public class EfTaskCollaborationDal : ITaskCollaborationDal
 {
     private readonly TaskTrackerDbContext _context;
 
-    public EfTaskWorkspaceDal(TaskTrackerDbContext context)
+    public EfTaskCollaborationDal(TaskTrackerDbContext context)
     {
         _context = context;
     }
 
     public Task<bool> CanAccessAsync(int taskId, int userId) => _context.TaskRequests.AnyAsync(x =>
-        x.Id == taskId && x.Activity && (x.OwnerId == userId || x.TaskShares.Any(s =>
-            s.SharedWithUserId == userId && s.Permission >= TaskPermission.View && s.Permission <= TaskPermission.Manage)));
+        x.Id == taskId && x.Activity &&
+        (x.WorkspaceId == null && (x.OwnerId == userId || x.TaskShares.Any(s =>
+             s.SharedWithUserId == userId && s.Permission >= TaskPermission.View &&
+             s.Permission <= TaskPermission.Manage)) ||
+         x.WorkspaceId != null && x.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)));
 
     public async Task<List<TaskActivity>> GetActivitiesAsync(int taskId)
     {

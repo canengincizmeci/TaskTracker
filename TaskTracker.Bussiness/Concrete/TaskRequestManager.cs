@@ -21,20 +21,23 @@ public class TaskRequestManager : ITaskRequestService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITaskShareDal _taskShareDal;
     private readonly ITaskRequestDal _taskRequestDal;
+    private readonly IWorkspaceDal _workspaceDal;
     private readonly ITaskActivityWriter _activityWriter;
-    private readonly ITaskWorkspaceService _workspace;
+    private readonly ITaskCollaborationService _collaboration;
     private readonly INotificationService _notifications;
     private readonly ILogger<TaskRequestManager> _logger;
 
     public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
-        ITaskActivityWriter activityWriter, ITaskWorkspaceService workspace, INotificationService notifications,
+        IWorkspaceDal workspaceDal,
+        ITaskActivityWriter activityWriter, ITaskCollaborationService collaboration, INotificationService notifications,
         ILogger<TaskRequestManager> logger)
     {
         _unitOfWork = unitOfWork;
         _taskShareDal = taskShareDal;
         _taskRequestDal = taskRequestDal;
+        _workspaceDal = workspaceDal;
         _activityWriter = activityWriter;
-        _workspace = workspace;
+        _collaboration = collaboration;
         _notifications = notifications;
         _logger = logger;
     }
@@ -52,39 +55,92 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
         await _unitOfWork.SaveChangesAsync();
-        await _workspace.PublishActivityAsync(activity);
+        await _collaboration.PublishActivityAsync(activity);
         return new SuccessResult(Messages.DataAdded);
+    }
+
+    [ValidationAspect(typeof(WorkspaceTaskCreateDtoValidator))]
+    public async Task<IDataResult<TaskRequestDto>> AddWorkspaceTaskAsync(int workspaceId,
+        WorkspaceTaskCreateDto dto, int currentUserId)
+    {
+        var creator = await _workspaceDal.GetActiveMembershipAsync(workspaceId, currentUserId);
+        if (creator is null) return new ErrorDataResult<TaskRequestDto>(WorkspaceMessages.NotFound);
+        if (creator.Role is not (WorkspaceRole.Owner or WorkspaceRole.Admin))
+            return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
+
+        WorkspaceMember? assigneeMembership = null;
+        if (dto.AssigneeUserId.HasValue)
+        {
+            assigneeMembership = await _workspaceDal.GetActiveMembershipAsync(workspaceId, dto.AssigneeUserId.Value);
+            if (assigneeMembership is null)
+                return new ConflictDataResult<TaskRequestDto>("Assignee must be an active member of this workspace.");
+        }
+
+        var task = new TaskRequest
+        {
+            WorkspaceId = workspaceId, OwnerId = currentUserId, AssigneeUserId = dto.AssigneeUserId,
+            Title = dto.Title, Description = dto.Description, Category = dto.Category,
+            Priority = dto.Priority, Status = TaskStatus.Pending, DueDate = dto.DueDate,
+            Activity = true, Visibility = TaskVisibility.Private, CreatedAt = DateTime.UtcNow, SharedCount = 0
+        };
+        await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
+        _workspaceDal.TouchMembership(creator);
+        if (assigneeMembership is not null && assigneeMembership.Id != creator.Id)
+            _workspaceDal.TouchMembership(assigneeMembership);
+        try { await _unitOfWork.SaveChangesAsync(); }
+        catch (DbUpdateConcurrencyException)
+        { return new ConflictDataResult<TaskRequestDto>(WorkspaceMessages.ConcurrentChange); }
+        await _collaboration.PublishActivityAsync(activity);
+        return await GetTaskById(task.Id, currentUserId);
     }
 
     public async Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId)
     {
         var task = await _unitOfWork.GetRepository<TaskRequest>().GetAsync(x => x.Id == taskId,
-            q => q.Include(x => x.Owner).Include(x => x.Assignee));
+            q => q.Include(x => x.Owner).Include(x => x.Assignee).Include(x => x.Workspace));
         if (task is null || !task.Activity) return new ErrorDataResult<TaskRequestDto>(Messages.DataNotFound);
-        var share = task.OwnerId == currentUserId ? null : await _taskShareDal.GetAsync(x =>
-            x.TaskRequestId == taskId && x.SharedWithUserId == currentUserId);
+        var workspaceMembership = task.WorkspaceId.HasValue
+            ? await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, currentUserId)
+            : null;
+        var share = task.WorkspaceId is null && task.OwnerId != currentUserId
+            ? await _taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == currentUserId)
+            : null;
         var validShare = share is not null && Enum.IsDefined(share.Permission);
         var isOwner = task.OwnerId == currentUserId;
-        var canView = isOwner || task.Visibility == TaskVisibility.Public || validShare;
+        var canView = task.WorkspaceId.HasValue
+            ? workspaceMembership is not null
+            : isOwner || task.Visibility == TaskVisibility.Public || validShare;
         if (!canView) return new ErrorDataResult<TaskRequestDto>(Messages.AuthorizationDenied);
-        var canEdit = (isOwner || validShare && share!.Permission >= TaskPermission.Edit) &&
+        var canEdit = (task.WorkspaceId.HasValue ? isOwner && workspaceMembership is not null :
+                isOwner || validShare && share!.Permission >= TaskPermission.Edit) &&
             task.Status is not (TaskStatus.Completed or TaskStatus.Cancelled or TaskStatus.InReview);
         var validAssignee = task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId &&
-            await _taskShareDal.HasPermissionAsync(task.Id, task.AssigneeUserId.Value, TaskPermission.Edit);
+            (task.WorkspaceId.HasValue
+                ? await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, task.AssigneeUserId.Value) is not null
+                : await _taskShareDal.HasPermissionAsync(task.Id, task.AssigneeUserId.Value, TaskPermission.Edit));
         var latest = task.Status == TaskStatus.InReview ? await _taskRequestDal.GetLatestSubmissionAsync(task.Id) : null;
         var latestReviewed = latest is not null && await _unitOfWork.GetRepository<TaskSubmissionReview>()
             .AnyAsync(x => x.TaskSubmissionId == latest.Id);
         return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
         {
             Id = task.Id, OwnerId = task.OwnerId, OwnerUserName = task.Owner.UserName,
+            WorkspaceId = task.WorkspaceId, WorkspaceName = task.Workspace?.Name,
             AssigneeUserId = task.AssigneeUserId, AssigneeUserName = task.Assignee?.UserName,
             Version = task.Version, Title = task.Title, Description = task.Description,
             Category = task.Category, Priority = task.Priority.ToString(), Status = task.Status.ToString(),
             Activity = task.Activity, DueDate = task.DueDate, Visibility = task.Visibility.ToString(),
             CreatedAt = task.CreatedAt, IsOwner = isOwner, IsAssignee = task.AssigneeUserId == currentUserId,
             CanView = canView, CanEdit = canEdit,
-            CanShare = isOwner, CanDelete = isOwner, CanViewParticipants = isOwner || validShare,
-            CanManageResponsibility = isOwner,
+            CanShare = isOwner && task.WorkspaceId is null,
+            CanDelete = isOwner && (task.WorkspaceId is null || workspaceMembership is not null),
+            CanViewParticipants = task.WorkspaceId.HasValue ? workspaceMembership is not null : isOwner || validShare,
+            CanManageResponsibility = isOwner && (task.WorkspaceId is null || workspaceMembership is not null),
+            CanStart = task.Status == TaskStatus.Pending && (task.AssigneeUserId.HasValue
+                ? task.AssigneeUserId == currentUserId && (task.WorkspaceId.HasValue
+                    ? workspaceMembership is not null
+                    : isOwner || validShare && share!.Permission >= TaskPermission.Edit)
+                : isOwner && (task.WorkspaceId is null || workspaceMembership is not null)),
             CanSubmit = !isOwner && task.AssigneeUserId == currentUserId && validAssignee &&
                 task.Status == TaskStatus.InProgress,
             CanReview = isOwner && validAssignee && task.Status == TaskStatus.InReview && latest is not null &&
@@ -101,7 +157,7 @@ public class TaskRequestManager : ITaskRequestService
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
         if (task.Status is TaskStatus.Completed or TaskStatus.Cancelled or TaskStatus.InReview)
             return new ErrorResult("Task details cannot be changed in the current state.");
-        if (task.OwnerId != currentUserId && !await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
+        if (!await _taskRequestDal.CanEditAsync(task.Id, currentUserId))
             return new ErrorResult(Messages.AuthorizationDenied);
         if (dto.DueDate.HasValue && dto.DueDate != task.DueDate &&
             dto.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
@@ -118,25 +174,35 @@ public class TaskRequestManager : ITaskRequestService
     {
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
         if (task.Status is TaskStatus.Completed or TaskStatus.Cancelled or TaskStatus.InReview)
             return new ErrorResult("Responsibility cannot be changed in the current state.");
-        if (dto.AssigneeUserId != task.OwnerId &&
-            !await _taskShareDal.HasPermissionAsync(task.Id, dto.AssigneeUserId, TaskPermission.Edit))
+        WorkspaceMember? assigneeMembership = null;
+        if (task.WorkspaceId.HasValue)
+        {
+            assigneeMembership = await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value,
+                dto.AssigneeUserId);
+            if (assigneeMembership is null)
+                return new ConflictResult("Assignee must be an active member of this workspace.");
+        }
+        else if (dto.AssigneeUserId != task.OwnerId &&
+                 !await _taskShareDal.HasPermissionAsync(task.Id, dto.AssigneeUserId, TaskPermission.Edit))
             return new ErrorResult("Assignee must be the owner or an accepted collaborator with Edit access.");
         if (task.AssigneeUserId == dto.AssigneeUserId) return new SuccessResult("Task is already assigned to this user.");
         var previous = task.AssigneeUserId;
         if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
         task.AssigneeUserId = dto.AssigneeUserId;
+        if (assigneeMembership is not null) _workspaceDal.TouchMembership(assigneeMembership);
         TaskActivity? previousActivity = null;
         if (previous.HasValue)
             previousActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous);
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserAssigned, dto.AssigneeUserId);
         var result = await SaveTaskChange(task, activity, "Task assigned successfully.", publishActivity: false);
         if (!result.Success) return result;
-        if (previousActivity is not null) await _workspace.PublishActivityAsync(previousActivity);
-        await _workspace.PublishActivityAsync(activity);
+        if (previousActivity is not null) await _collaboration.PublishActivityAsync(previousActivity);
+        await _collaboration.PublishActivityAsync(activity);
         await NotifyAssignment(task, previous, dto.AssigneeUserId);
         return result;
     }
@@ -145,7 +211,8 @@ public class TaskRequestManager : ITaskRequestService
     {
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
         if (task.Status == TaskStatus.InReview) return new ErrorResult("A task under review cannot be unassigned.");
         if (!task.AssigneeUserId.HasValue) return new SuccessResult("Task is already unassigned.");
@@ -168,8 +235,14 @@ public class TaskRequestManager : ITaskRequestService
         if (task.Status != TaskStatus.Pending) return new ConflictResult("Task must be Pending for this action.");
         var allowed = task.AssigneeUserId.HasValue ? task.AssigneeUserId == currentUserId : task.OwnerId == currentUserId;
         if (!allowed) return new ErrorResult(Messages.AuthorizationDenied);
-        if (task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId &&
-            !await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
+        if (task.WorkspaceId.HasValue)
+        {
+            var membership = await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, currentUserId);
+            if (membership is null) return new ErrorResult(Messages.AuthorizationDenied);
+            _workspaceDal.TouchMembership(membership);
+        }
+        else if (task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId &&
+                 !await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
             return new ErrorResult(Messages.AuthorizationDenied);
         return await ApplyStatus(task, currentUserId, TaskStatus.InProgress,
             TaskActivityType.WorkStarted, "Work started.");
@@ -180,7 +253,8 @@ public class TaskRequestManager : ITaskRequestService
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         if (task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId)
             return new ErrorResult("Delegated work will be completed through submission and review.");
         if (task.Status is not (TaskStatus.Pending or TaskStatus.InProgress))
@@ -193,7 +267,8 @@ public class TaskRequestManager : ITaskRequestService
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         if (task.Status is not (TaskStatus.Pending or TaskStatus.InProgress or TaskStatus.InReview))
             return new ConflictResult("Only pending, in-progress, or in-review tasks can be cancelled.");
         return await ApplyStatus(task, currentUserId, TaskStatus.Cancelled, TaskActivityType.TaskCancelled, "Task cancelled.");
@@ -204,9 +279,25 @@ public class TaskRequestManager : ITaskRequestService
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         if (task.Status is not (TaskStatus.Completed or TaskStatus.Cancelled))
             return new ErrorResult("Only completed or cancelled tasks can be reopened.");
+        if (task.WorkspaceId.HasValue)
+        {
+            var ownerMembership = await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, task.OwnerId);
+            if (ownerMembership is null)
+                return new ConflictResult("The task owner is no longer an active workspace member.");
+            _workspaceDal.TouchMembership(ownerMembership);
+            if (task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId)
+            {
+                var assigneeMembership = await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value,
+                    task.AssigneeUserId.Value);
+                if (assigneeMembership is null)
+                    return new ConflictResult("The task assignee is no longer an active workspace member.");
+                _workspaceDal.TouchMembership(assigneeMembership);
+            }
+        }
         return await ApplyStatus(task, currentUserId, TaskStatus.Pending, TaskActivityType.TaskReopened, "Task reopened.");
     }
 
@@ -219,8 +310,15 @@ public class TaskRequestManager : ITaskRequestService
         if (task.Status != TaskStatus.InProgress)
             return new ConflictDataResult<TaskSubmissionDto>("Only in-progress delegated work can be submitted.");
         if (!task.AssigneeUserId.HasValue || task.AssigneeUserId == task.OwnerId ||
-            task.AssigneeUserId != currentUserId ||
-            !await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
+            task.AssigneeUserId != currentUserId)
+            return new ErrorDataResult<TaskSubmissionDto>(Messages.AuthorizationDenied);
+        if (task.WorkspaceId.HasValue)
+        {
+            var membership = await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, currentUserId);
+            if (membership is null) return new ErrorDataResult<TaskSubmissionDto>(Messages.AuthorizationDenied);
+            _workspaceDal.TouchMembership(membership);
+        }
+        else if (!await _taskShareDal.HasPermissionAsync(task.Id, currentUserId, TaskPermission.Edit))
             return new ErrorDataResult<TaskSubmissionDto>(Messages.AuthorizationDenied);
         var content = dto.Content?.Trim();
         if (string.IsNullOrWhiteSpace(content) || content.Length > TaskSubmission.MaxContentLength)
@@ -243,14 +341,14 @@ public class TaskRequestManager : ITaskRequestService
 
         await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Task submitted for review",
             $"Revision {submission.RevisionNumber} of '{task.Title}' is waiting for review.", task.Id);
-        await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessDataResult<TaskSubmissionDto>(MapSubmission(submission), "Work submitted for review.");
     }
 
     public async Task<IDataResult<List<TaskSubmissionDto>>> GetSubmissionHistoryAsync(int taskId, int currentUserId)
     {
-        if (!await _workspace.CanAccessAsync(taskId, currentUserId))
+        if (!await _collaboration.CanAccessAsync(taskId, currentUserId))
             return new ErrorDataResult<List<TaskSubmissionDto>>(Messages.AuthorizationDenied);
         return new SuccessDataResult<List<TaskSubmissionDto>>(await _taskRequestDal.GetSubmissionHistoryAsync(taskId));
     }
@@ -260,7 +358,7 @@ public class TaskRequestManager : ITaskRequestService
     {
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorDataResult<TaskSubmissionReviewDto>(Messages.DataNotFound);
-        if (task.OwnerId != currentUserId)
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
             return new ErrorDataResult<TaskSubmissionReviewDto>(Messages.AuthorizationDenied);
         if (task.Version != dto.Version) return new ConflictDataResult<TaskSubmissionReviewDto>(ConcurrentChange);
         if (task.Status != TaskStatus.InReview)
@@ -274,9 +372,12 @@ public class TaskRequestManager : ITaskRequestService
                 "Changes requested requires nonblank feedback up to 5000 characters.");
 
         var latest = await _taskRequestDal.GetLatestSubmissionAsync(task.Id);
+        var validAssignee = task.AssigneeUserId.HasValue && task.AssigneeUserId != task.OwnerId &&
+            (task.WorkspaceId.HasValue
+                ? await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, task.AssigneeUserId.Value) is not null
+                : await _taskShareDal.HasPermissionAsync(task.Id, task.AssigneeUserId.Value, TaskPermission.Edit));
         if (latest is null || latest.Id != submissionId || latest.SubmittedByUserId != task.AssigneeUserId ||
-            !task.AssigneeUserId.HasValue || task.AssigneeUserId == task.OwnerId ||
-            !await _taskShareDal.HasPermissionAsync(task.Id, task.AssigneeUserId.Value, TaskPermission.Edit) ||
+            !validAssignee ||
             await _unitOfWork.GetRepository<TaskSubmissionReview>().AnyAsync(x => x.TaskSubmissionId == submissionId))
             return new ConflictDataResult<TaskSubmissionReviewDto>("This submission is old, reviewed, or no longer actionable.");
 
@@ -302,8 +403,8 @@ public class TaskRequestManager : ITaskRequestService
             dto.Decision == TaskReviewDecision.Approved
                 ? $"Revision {latest.RevisionNumber} of '{task.Title}' was approved."
                 : $"Changes were requested for revision {latest.RevisionNumber} of '{task.Title}'.", task.Id);
-        await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessDataResult<TaskSubmissionReviewDto>(MapReview(review),
             dto.Decision == TaskReviewDecision.Approved ? "Submission approved." : "Changes requested.");
     }
@@ -334,7 +435,8 @@ public class TaskRequestManager : ITaskRequestService
     {
         var task = await _unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
-        if (task.OwnerId != currentUserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
+            return new ErrorResult(Messages.AuthorizationDenied);
         task.Activity = false;
         try { await _unitOfWork.SaveChangesAsync(); return new SuccessResult(Messages.DataUpdated); }
         catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
@@ -344,6 +446,15 @@ public class TaskRequestManager : ITaskRequestService
         new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetTasksByUserIdAsync(userId))
             .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);
 
+    public async Task<IDataResult<List<GetTasksDto>>> GetWorkspaceTasksAsync(int workspaceId, int currentUserId)
+    {
+        if (await _workspaceDal.GetActiveMembershipAsync(workspaceId, currentUserId) is null)
+            return new ErrorDataResult<List<GetTasksDto>>(WorkspaceMessages.NotFound);
+
+        return new SuccessDataResult<List<GetTasksDto>>(
+            await _taskRequestDal.GetWorkspaceTasksAsync(workspaceId, currentUserId), Messages.DataListed);
+    }
+
     public async Task<IDataResult<List<GetTasksDto>>> GetAssignedTasksAsync(int userId) =>
         new SuccessDataResult<List<GetTasksDto>>((await _taskRequestDal.GetAssignedTasksAsync(userId))
             .Select(x => MapList(x, userId)).ToList(), Messages.DataListed);
@@ -352,15 +463,18 @@ public class TaskRequestManager : ITaskRequestService
     {
         var share = task.TaskShares.FirstOrDefault(x => x.SharedWithUserId == userId && Enum.IsDefined(x.Permission));
         var owner = task.OwnerId == userId;
+        var workspaceAccess = task.WorkspaceId.HasValue;
         return new GetTasksDto
         {
             Id = task.Id, OwnerId = task.OwnerId, OwnerUserName = task.Owner.UserName,
+            WorkspaceId = task.WorkspaceId, WorkspaceName = task.Workspace?.Name,
             AssigneeUserId = task.AssigneeUserId, AssigneeUserName = task.Assignee?.UserName,
             Title = task.Title, Description = task.Description, Category = task.Category,
             Priority = task.Priority.ToString(), Status = task.Status.ToString(), Activity = task.Activity,
             DueDate = task.DueDate, IsOwner = owner, IsSharedWithMe = share is not null,
-            CanView = owner || share is not null, CanEdit = owner || share?.Permission >= TaskPermission.Edit,
-            CanShare = owner, Visibility = task.Visibility.ToString(), CreatedAt = task.CreatedAt,
+            CanView = workspaceAccess || owner || share is not null,
+            CanEdit = workspaceAccess ? owner : owner || share?.Permission >= TaskPermission.Edit,
+            CanShare = owner && !workspaceAccess, Visibility = task.Visibility.ToString(), CreatedAt = task.CreatedAt,
             SharedCount = task.SharedCount, Version = task.Version
         };
     }
@@ -369,15 +483,16 @@ public class TaskRequestManager : ITaskRequestService
         new SuccessDataResult<List<TaskRequest>>(await _unitOfWork.GetRepository<TaskRequest>().GetAllAsync(x => x.Activity));
 
     private Task<TaskRequest?> GetActiveTask(int taskId) => _unitOfWork.GetRepository<TaskRequest>().GetAsync(
-        x => x.Id == taskId && x.Activity, q => q.Include(x => x.Owner).Include(x => x.Assignee));
+        x => x.Id == taskId && x.Activity,
+        q => q.Include(x => x.Owner).Include(x => x.Assignee).Include(x => x.Workspace));
 
     private async Task<IResult> SaveTaskChange(TaskRequest task, TaskActivity activity, string message,
         bool publishActivity = true)
     {
         try { await _unitOfWork.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
-        if (publishActivity) await _workspace.PublishActivityAsync(activity);
-        await _workspace.PublishTaskChangedAsync(task.Id);
+        if (publishActivity) await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessResult(message);
     }
 

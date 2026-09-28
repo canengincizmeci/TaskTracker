@@ -29,8 +29,8 @@ public class PostgreSqlSubmissionConcurrencyTests
         await using var secondContext = database.CreateContext(barrier);
 
         var results = await Task.WhenAll(
-            WorkspaceTestServices.TaskRequests(firstContext).SubmitAsync(1, new() { Version = 0, Content = "First" }, 2),
-            WorkspaceTestServices.TaskRequests(secondContext).SubmitAsync(1, new() { Version = 0, Content = "Second" }, 2));
+            TaskCollaborationTestServices.TaskRequests(firstContext).SubmitAsync(1, new() { Version = 0, Content = "First" }, 2),
+            TaskCollaborationTestServices.TaskRequests(secondContext).SubmitAsync(1, new() { Version = 0, Content = "Second" }, 2));
 
         Assert.Single(results, x => x.Success);
         Assert.IsAssignableFrom<IConflictResult>(Assert.Single(results, x => !x.Success));
@@ -56,9 +56,9 @@ public class PostgreSqlSubmissionConcurrencyTests
         await using var changesContext = database.CreateContext(barrier);
 
         var results = await Task.WhenAll(
-            WorkspaceTestServices.TaskRequests(approveContext).ReviewAsync(1, 1,
+            TaskCollaborationTestServices.TaskRequests(approveContext).ReviewAsync(1, 1,
                 new() { Version = 0, Decision = TaskReviewDecision.Approved }, 1),
-            WorkspaceTestServices.TaskRequests(changesContext).ReviewAsync(1, 1,
+            TaskCollaborationTestServices.TaskRequests(changesContext).ReviewAsync(1, 1,
                 new() { Version = 0, Decision = TaskReviewDecision.ChangesRequested, Feedback = "Revise" }, 1));
 
         Assert.Single(results, x => x.Success);
@@ -86,9 +86,9 @@ public class PostgreSqlSubmissionConcurrencyTests
         await using var reviewContext = database.CreateContext(barrier);
         await using var cancelContext = database.CreateContext(barrier);
 
-        var reviewTask = WorkspaceTestServices.TaskRequests(reviewContext).ReviewAsync(1, 1,
+        var reviewTask = TaskCollaborationTestServices.TaskRequests(reviewContext).ReviewAsync(1, 1,
             new() { Version = 0, Decision = TaskReviewDecision.Approved }, 1);
-        var cancelTask = WorkspaceTestServices.TaskRequests(cancelContext).CancelTaskAsync(1, new() { Version = 0 }, 1);
+        var cancelTask = TaskCollaborationTestServices.TaskRequests(cancelContext).CancelTaskAsync(1, new() { Version = 0 }, 1);
         await Task.WhenAll(reviewTask, cancelTask);
 
         var results = new IResult[] { reviewTask.Result, cancelTask.Result };
@@ -112,15 +112,15 @@ public class PostgreSqlSubmissionConcurrencyTests
         var barrier = new SaveBarrierInterceptor("TaskActivities");
         await using var submitContext = database.CreateContext(barrier);
         await using var responsibilityContext = database.CreateContext(barrier);
-        var submit = WorkspaceTestServices.TaskRequests(submitContext).SubmitAsync(1,
+        var submit = TaskCollaborationTestServices.TaskRequests(submitContext).SubmitAsync(1,
             new() { Version = 0, Content = "Concurrent work" }, 2);
         Task<IResult> responsibility = operation switch
         {
-            "reassign" => WorkspaceTestServices.TaskRequests(responsibilityContext).AssignTaskAsync(1,
+            "reassign" => TaskCollaborationTestServices.TaskRequests(responsibilityContext).AssignTaskAsync(1,
                 new() { Version = 0, AssigneeUserId = 3 }, 1),
-            "remove" => WorkspaceTestServices.TaskShares(responsibilityContext, 1)
+            "remove" => TaskCollaborationTestServices.TaskShares(responsibilityContext, 1)
                 .RemoveParticipantAsync(1, 2, 0),
-            _ => WorkspaceTestServices.TaskShares(responsibilityContext, 1)
+            _ => TaskCollaborationTestServices.TaskShares(responsibilityContext, 1)
                 .UpdateParticipantPermissionAsync(1, 2, new() { Version = 0, Permission = TaskPermission.View })
         };
         await Task.WhenAll(submit, responsibility);
@@ -161,14 +161,14 @@ public class PostgreSqlSubmissionConcurrencyTests
         await staleContext.TaskSubmissions.SingleAsync();
         await using (var current = database.CreateContext())
         {
-            var manager = WorkspaceTestServices.TaskRequests(current);
+            var manager = TaskCollaborationTestServices.TaskRequests(current);
             Assert.True((await manager.CancelTaskAsync(1, new() { Version = 0 }, 1)).Success);
             Assert.True((await manager.ReopenTaskAsync(1, new() { Version = 1 }, 1)).Success);
             Assert.True((await manager.StartTaskAsync(1, new() { Version = 2 }, 2)).Success);
             Assert.True((await manager.SubmitAsync(1, new() { Version = 3, Content = "New" }, 2)).Success);
         }
 
-        var stale = await WorkspaceTestServices.TaskRequests(staleContext).ReviewAsync(1, 1,
+        var stale = await TaskCollaborationTestServices.TaskRequests(staleContext).ReviewAsync(1, 1,
             new() { Version = 0, Decision = TaskReviewDecision.Approved }, 1);
         Assert.IsAssignableFrom<IConflictResult>(stale);
         await using var verify = database.CreateContext();

@@ -243,10 +243,15 @@ export default function DashboardPage() {
               description={summary.overdueCount === 0 ? "No owned or assigned work is overdue" :
                 `${countText(summary.overdueCount, "task")} past the due date`}
               tone="overdue" to="/dashboard?due=overdue" />
-            <DashboardSummaryCard title="Pending invitations" count={summary.pendingInvitationCount}
-              description={summary.pendingInvitationCount === 0 ? "No invitations need a response" :
-                `${countText(summary.pendingInvitationCount, "invitation")} awaiting your response`}
+            <DashboardSummaryCard title="Task invitations" count={summary.pendingTaskInvitationsCount}
+              description={summary.pendingTaskInvitationsCount === 0 ? "No task invitations need a response" :
+                `${countText(summary.pendingTaskInvitationsCount, "invitation")} awaiting your response`}
               tone="invitation" to="/tasks/invitations" />
+            <DashboardSummaryCard title="Workspace invitations" count={summary.pendingWorkspaceInvitationsCount}
+              description={summary.pendingWorkspaceInvitationsCount === 0 ?
+                "No workspace invitations need a response" :
+                `${countText(summary.pendingWorkspaceInvitationsCount, "invitation")} awaiting your response`}
+              tone="invitation" to="/workspaces" />
           </section>
 
           {allClear && <section className="dashboard-zero-state">

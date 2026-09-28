@@ -18,6 +18,8 @@ namespace TaskTracker.Entities.DTOs
         public bool Activity { get; set; }
         public int? OwnerId { get; set; }
         public string OwnerUserName { get; set; } = null!;
+        public int? WorkspaceId { get; set; }
+        public string? WorkspaceName { get; set; }
         public int? AssigneeUserId { get; set; }
         public string? AssigneeUserName { get; set; }
         public long Version { get; set; }
@@ -29,6 +31,7 @@ namespace TaskTracker.Entities.DTOs
         public bool CanDelete { get; set; }
         public bool CanViewParticipants { get; set; }
         public bool CanManageResponsibility { get; set; }
+        public bool CanStart { get; set; }
         public bool CanSubmit { get; set; }
         public bool CanReview { get; set; }
         public string? CurrentUserPermission { get; set; }

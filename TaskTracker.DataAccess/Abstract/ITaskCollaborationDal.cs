@@ -2,7 +2,7 @@ using TaskTracker.Core.Entities.Concrete;
 
 namespace TaskTracker.DataAccess.Abstract;
 
-public interface ITaskWorkspaceDal
+public interface ITaskCollaborationDal
 {
     Task<bool> CanAccessAsync(int taskId, int userId);
     Task<List<TaskActivity>> GetActivitiesAsync(int taskId);

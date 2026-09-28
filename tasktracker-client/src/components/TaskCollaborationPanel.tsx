@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { HubConnectionBuilder } from "@microsoft/signalr";
-import { getTaskActivity, getTaskMessages } from "../api/taskWorkspaceService";
+import { getTaskActivity, getTaskMessages } from "../api/taskCollaborationService";
 import { errorMessage } from "../api/errorMessage";
 import { getAccessToken } from "../utils/authStorage";
-import type { TaskActivity, TaskMessage } from "../types/taskWorkspace";
+import type { TaskActivity, TaskMessage } from "../types/taskCollaboration";
 import TaskActivityTimeline from "./TaskActivityTimeline";
 import TaskDiscussion from "./TaskDiscussion";
 
@@ -12,7 +12,7 @@ function mergeHistory<T extends { id: number; createdAt: string }>(current: T[],
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id - b.id).slice(-100);
 }
 
-export default function TaskWorkspace({ taskId, onTaskChanged, onAccessRevoked }: {
+export default function TaskCollaborationPanel({ taskId, onTaskChanged, onAccessRevoked }: {
   taskId: number;
   onTaskChanged?: () => void | Promise<void>;
   onAccessRevoked?: () => void;

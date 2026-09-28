@@ -38,6 +38,9 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.HasOne(x => x.Owner).WithMany(x => x.OwnedTaskRequests).HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeUserId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(x => x.Workspace).WithMany(x => x.Tasks).HasForeignKey(x => x.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(x => x.WorkspaceId);
 
         }
     }

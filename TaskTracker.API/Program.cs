@@ -33,8 +33,8 @@ builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
     containerBuilder.RegisterType<SignalRNotificationManager>()
         .As<IRealtimeNotificationService>()
         .InstancePerLifetimeScope();
-    containerBuilder.RegisterType<SignalRTaskWorkspaceService>()
-        .As<ITaskWorkspaceRealtimeService>()
+    containerBuilder.RegisterType<SignalRTaskCollaborationService>()
+        .As<ITaskCollaborationRealtimeService>()
         .InstancePerLifetimeScope();
 });
 
@@ -146,7 +146,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
-app.MapHub<TaskWorkspaceHub>("/hubs/task-workspace", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<TaskCollaborationHub>("/hubs/task-workspace", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHealthChecks("/health");
 
 app.Run();

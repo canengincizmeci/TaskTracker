@@ -23,6 +23,8 @@ import NotFoundPage from "../pages/NotFoundPage";
 import AssignedTasksPage from "../pages/AssignedTasksPage";
 import AwaitingReviewPage from "../pages/AwaitingReviewPage";
 import DashboardPage from "../pages/DashboardPage";
+import WorkspacesPage from "../pages/WorkspacesPage";
+import WorkspaceDetailPage from "../pages/WorkspaceDetailPage";
 
 function AppRouter() {
   return (
@@ -144,6 +146,22 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <SharedTasksPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workspaces"
+        element={
+          <ProtectedRoute>
+            <WorkspacesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workspaces/:workspaceId"
+        element={
+          <ProtectedRoute>
+            <WorkspaceDetailPage />
           </ProtectedRoute>
         }
       />

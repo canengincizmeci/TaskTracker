@@ -118,6 +118,7 @@ function Navbar() {
                 <Link to="/tasks/assigned-to-me">Assigned to Me</Link>
                 <Link to="/tasks/awaiting-review">Awaiting Review</Link>
                 <Link to="/tasks/shared-tasks">Shared</Link>
+                <Link to="/workspaces">Workspaces</Link>
                 <Link to="/tasks/invitations">Invitations</Link>
                 <Link to="/tasks/create-task" className="create-task-link">
                   + Create Task

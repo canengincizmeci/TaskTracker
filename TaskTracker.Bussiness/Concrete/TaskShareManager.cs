@@ -17,10 +17,12 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
     ICurrentUserService currentUserService, IEmailService emailService,
     INotificationService notificationService, IConfiguration configuration,
     ILogger<TaskShareManager> logger, ITaskActivityWriter activityWriter,
-    ITaskWorkspaceService workspaceService) : ITaskShareService
+    ITaskCollaborationService collaborationService) : ITaskShareService
 {
     private const string TaskUnavailable = "This task is inactive or completed/cancelled and cannot receive participants.";
     private const string ConcurrentChange = "The task or invitation changed. Refresh and retry.";
+    private const string WorkspaceTaskSharingUnavailable =
+        "Workspace tasks use Workspace membership and cannot be shared directly.";
 
     private static bool CanJoin(TaskRequest? task) => task is { Activity: true } &&
         task.Status is not TaskStatus.Completed and not TaskStatus.Cancelled;
@@ -40,6 +42,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (invitation.InvitedUserId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(invitation.TaskRequestId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         // Read the decision AFTER the task version: a response committed between these reads
         // must either be observed here or invalidate our subsequent version check.
         await taskShareDal.ReloadInvitationAsync(invitation);
@@ -69,8 +72,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var result = await SaveInvitationChange(task, message);
         if (result.Success)
         {
-            await workspaceService.PublishActivityAsync(activity);
-            await workspaceService.PublishTaskChangedAsync(task.Id);
+            await collaborationService.PublishActivityAsync(activity);
+            await collaborationService.PublishTaskChangedAsync(task.Id);
             if (task.OwnerId != currentUserService.UserId)
                 await TryTaskNotification(task.OwnerId, accept ? "Invitation accepted" : "Invitation rejected",
                     $"A collaborator {(accept ? "accepted" : "rejected")} the invitation to '{task.Title}'.", task.Id);
@@ -104,6 +107,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var invitations = await unitOfWork.GetRepository<TaskShareInvitation>().GetAllAsync(x =>
             x.InvitedUserId == currentUserService.UserId && x.Status == TaskShareInvitationStatus.Pending &&
             (!x.ExpiresAt.HasValue || x.ExpiresAt > now) && x.TaskRequest.Activity &&
+            x.TaskRequest.WorkspaceId == null &&
             x.TaskRequest.Status != TaskStatus.Completed && x.TaskRequest.Status != TaskStatus.Cancelled,
             include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
         return new SuccessDataResult<List<TaskInvitationDto>>(invitations.OrderByDescending(x => x.CreatedAt)
@@ -117,6 +121,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
         return invitation is null
             ? new ErrorDataResult<TaskInvitationDto>(Messages.InvitationNotFound)
+            : invitation.TaskRequest.WorkspaceId.HasValue
+                ? new ConflictDataResult<TaskInvitationDto>(WorkspaceTaskSharingUnavailable)
             : new SuccessDataResult<TaskInvitationDto>(MapInvitation(invitation, DateTime.UtcNow));
     }
 
@@ -159,6 +165,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
     public async Task<IDataResult<List<SharedTaskDto>>> GetMySharedTasksAsync()
     {
         var shares = await taskShareDal.GetAllAsync(x => x.SharedWithUserId == currentUserService.UserId && x.TaskRequest.Activity &&
+            x.TaskRequest.WorkspaceId == null &&
             x.Permission >= TaskPermission.View && x.Permission <= TaskPermission.Manage,
             include: q => q.Include(x => x.TaskRequest).ThenInclude(x => x.Owner)
                 .Include(x => x.TaskRequest).ThenInclude(x => x.Assignee));
@@ -190,6 +197,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(dto.TaskRequestId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (!CanJoin(task)) return new ErrorResult(TaskUnavailable);
         if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
         if (string.IsNullOrWhiteSpace(dto.Username)) return new ErrorResult("Username is required.");
@@ -217,7 +225,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             TaskActivityType.UserInvited, user.Id, invitation);
         var result = await SaveInvitationChange(task, Messages.TaskShareInvitationSent);
         if (!result.Success) return result;
-        await workspaceService.PublishActivityAsync(activity);
+        await collaborationService.PublishActivityAsync(activity);
         // Delivery is best effort after commit; it cannot turn a persisted invitation into a failed request.
         try
         {
@@ -267,6 +275,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(invitation.TaskRequestId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (task.Version != version) return new ConflictResult(ConcurrentChange);
         await taskShareDal.ReloadInvitationAsync(invitation);
         if (invitation.Status != TaskShareInvitationStatus.Pending)
@@ -278,8 +287,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var result = await SaveInvitationChange(task, "Invitation cancelled.");
         if (result.Success)
         {
-            await workspaceService.PublishActivityAsync(activity);
-            await workspaceService.PublishTaskChangedAsync(task.Id);
+            await collaborationService.PublishActivityAsync(activity);
+            await collaborationService.PublishTaskChangedAsync(task.Id);
         }
         return result;
     }
@@ -289,6 +298,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (userId == task.OwnerId) return new ErrorResult("The owner is not a removable participant.");
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
         if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
@@ -310,9 +320,9 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             TaskActivityType.ParticipantPermissionChanged, userId);
         var result = await SaveInvitationChange(task, "Participant permission updated.");
         if (!result.Success) return result;
-        if (unassigned is not null) await workspaceService.PublishActivityAsync(unassigned);
-        await workspaceService.PublishActivityAsync(activity);
-        await workspaceService.PublishTaskChangedAsync(task.Id);
+        if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
+        await collaborationService.PublishActivityAsync(activity);
+        await collaborationService.PublishTaskChangedAsync(task.Id);
         await TryTaskNotification(userId, "Task access changed",
             $"Your access to '{task.Title}' is now {dto.Permission}.", task.Id);
         return result;
@@ -323,6 +333,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
+        if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (userId == task.OwnerId) return new ErrorResult("The task owner cannot be removed.");
         if (task.Version != version) return new ConflictResult(ConcurrentChange);
         if (task.Status == TaskStatus.InReview) return new ErrorResult("Participants cannot be removed while a task is under review.");
@@ -340,10 +351,10 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             TaskActivityType.ParticipantRemoved, userId);
         var result = await SaveInvitationChange(task, "Participant removed.");
         if (!result.Success) return result;
-        if (unassigned is not null) await workspaceService.PublishActivityAsync(unassigned);
-        await workspaceService.PublishActivityAsync(activity);
-        await workspaceService.PublishTaskChangedAsync(task.Id);
-        try { await workspaceService.RevokeAccessAsync(task.Id, userId); }
+        if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
+        await collaborationService.PublishActivityAsync(activity);
+        await collaborationService.PublishTaskChangedAsync(task.Id);
+        try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
         catch (Exception ex) { logger.LogWarning(ex, "Could not revoke live workspace access for task {TaskId}", task.Id); }
         await TryTaskNotification(userId, "Removed from task", $"You no longer have access to '{task.Title}'.",
             task.Id, "/tasks/shared-tasks");
