@@ -14,6 +14,8 @@ public class PasswordValidationTests
     {
         var result = new UserForRegisterDtoValidator().Validate(new UserForRegisterDto
         {
+            Email = "valid@example.test",
+            UserName = "valid-user",
             Password = new string('x', length)
         });
 
@@ -62,6 +64,8 @@ public class PasswordValidationTests
         var spaced = "            ";
         Assert.True(new UserForRegisterDtoValidator().Validate(new UserForRegisterDto
         {
+            Email = "valid@example.test",
+            UserName = "valid-user",
             Password = spaced
         }).IsValid);
         Assert.False(new ResetPasswordDtoValidator().Validate(new ResetPasswordDto
@@ -69,5 +73,25 @@ public class PasswordValidationTests
             NewPassword = "CaseSensitive1",
             ConfirmNewPassword = "casesensitive1"
         }).IsValid);
+    }
+
+    [Theory]
+    [InlineData("  Mixed.Case@Example.Test  ", "Display Name", true)]
+    [InlineData("invalid-email", "Display Name", false)]
+    [InlineData("valid@example.test", "   ", false)]
+    [InlineData("valid@example.test", "name\u0000", false)]
+    public void RegistrationValidatesCanonicalizableIdentityFields(
+        string email,
+        string userName,
+        bool expected)
+    {
+        var result = new UserForRegisterDtoValidator().Validate(new UserForRegisterDto
+        {
+            Email = email,
+            UserName = userName,
+            Password = new string('x', 12)
+        });
+
+        Assert.Equal(expected, result.IsValid);
     }
 }

@@ -46,7 +46,7 @@ public class InvitationTests
         return new TaskShareManager(uow, new EfTaskShareDal(context), user, new Email(),
             new NotificationManager(uow, user, new Realtime(failRealtime), NullLogger<NotificationManager>.Instance),
             new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context));
+            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context), new IdentityNormalizer());
     }
     private static async Task Seed(TaskTrackerDbContext context, bool expired = false, TaskPermission permission = TaskPermission.Edit)
     {
@@ -69,7 +69,7 @@ public class InvitationTests
         Assert.Equal("Expired", (await recipient.GetInvitationAsync(1)).Data.Status);
         Assert.False((await recipient.AcceptTaskInvitationAsync(1)).Success);
         Assert.False((await recipient.RejectTaskInvitationAsync(1)).Success);
-        Assert.True((await Manager(context, 1).InviteUserToTask(new() { TaskRequestId = 1, Username = "user2", Permission = TaskPermission.Edit })).Success);
+        Assert.True((await Manager(context, 1).InviteUserToTask(new() { TaskRequestId = 1, Username = "  UsEr2  ", Permission = TaskPermission.Edit })).Success);
         Assert.Single((await recipient.GetMyPendingInvitationsAsync()).Data);
         Assert.Equal(TaskShareInvitationStatus.Pending, (await context.TaskShareInvitations.FindAsync(1))!.Status);
         Assert.Null((await context.TaskShareInvitations.FindAsync(1))!.RespondedAt);

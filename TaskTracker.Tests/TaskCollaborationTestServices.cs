@@ -61,7 +61,7 @@ internal static class TaskCollaborationTestServices
         var uow = new UnitOfWork(context);
         return new TaskShareManager(uow, new EfTaskShareDal(context), new CurrentUser(userId), new Email(),
             new Notifications(), new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), collaboration ?? Create(context));
+            new TaskActivityWriter(uow), collaboration ?? Create(context), new IdentityNormalizer());
     }
 
     public static WorkDashboardManager WorkDashboard(TaskTrackerDbContext context, int userId) =>

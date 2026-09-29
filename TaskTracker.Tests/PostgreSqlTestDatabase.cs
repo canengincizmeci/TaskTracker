@@ -75,7 +75,7 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
 
     private static User User(int id) => new()
     {
-        Id = id, FirstName = "Postgres", LastName = "User", UserName = $"pg-user{id}",
+        Id = id, FirstName = "Postgres", LastName = "User", UserName = $"pg-user{id}", NormalizedUserName = $"pg-user{id}",
         Email = $"pg-user{id}@example.test", PasswordHash = [1], PasswordSalt = [1], Status = true
     };
 

@@ -29,7 +29,7 @@ internal sealed class TestDatabase : IDisposable
 
     private static User User(int id) => new()
     {
-        Id = id, FirstName = "Test", LastName = "User", UserName = $"user{id}",
+        Id = id, FirstName = "Test", LastName = "User", UserName = $"user{id}", NormalizedUserName = $"user{id}",
         Email = $"user{id}@example.test", PasswordHash = [1], PasswordSalt = [1], Status = true
     };
 

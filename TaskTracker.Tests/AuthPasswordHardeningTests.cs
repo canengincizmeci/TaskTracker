@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using TaskTracker.API.Controllers;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Concrete;
 using TaskTracker.Bussiness.Constanst;
@@ -43,6 +45,157 @@ public class AuthPasswordHardeningTests
         Assert.Equal(PasswordHashVersion.IdentityV3, user.PasswordHashVersion);
         Assert.Empty(user.PasswordSalt);
         Assert.Equal(PasswordVerificationOutcome.Valid, Hasher().Verify(user, NewPassword));
+    }
+
+    [Fact]
+    public async Task RegistrationCanonicalizesEmailAndPreservesTrimmedUserNameDisplay()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+
+        var result = await Manager(context).RegisterAsync(new UserForRegisterDto
+        {
+            Email = "  New.User@EXAMPLE.TEST  ",
+            UserName = "  DisplayName  ",
+            FirstName = "New",
+            LastName = "User",
+            Password = NewPassword
+        });
+
+        var user = await context.Users.SingleAsync(x => x.Email == "new.user@example.test");
+        Assert.True(result.Success);
+        Assert.Equal("DisplayName", user.UserName);
+        Assert.Equal("displayname", user.NormalizedUserName);
+    }
+
+    [Theory]
+    [InlineData("  USER1@EXAMPLE.TEST  ", "different-name")]
+    [InlineData("different@example.test", "  UsEr1  ")]
+    public async Task RegistrationRejectsCanonicalIdentityConflictsWithoutOverwritingTheAccount(
+        string email,
+        string userName)
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var original = await context.Users.SingleAsync(x => x.Id == 1);
+
+        var result = await Manager(context).RegisterAsync(new UserForRegisterDto
+        {
+            Email = email,
+            UserName = userName,
+            FirstName = "Replacement",
+            LastName = "Attempt",
+            Password = NewPassword
+        });
+
+        Assert.IsAssignableFrom<TaskTracker.Core.Utilities.Results.IConflictResult>(result);
+        Assert.Equal(Messages.IdentityConflict, result.Message);
+        Assert.Equal("Test", original.FirstName);
+        Assert.Equal("user1", original.UserName);
+        Assert.Equal(3, await context.Users.CountAsync());
+    }
+
+    [Fact]
+    public async Task ExactRegistrationDuplicateMapsToStableIdentityConflictResponse()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var controller = new AuthController(Manager(context));
+
+        var response = await controller.Register(new UserForRegisterDto
+        {
+            Email = "user1@example.test",
+            UserName = "user1",
+            FirstName = "Duplicate",
+            LastName = "User",
+            Password = NewPassword
+        });
+
+        var conflict = Assert.IsType<ConflictObjectResult>(response);
+        Assert.Equal(409, conflict.StatusCode);
+        Assert.Equal("identity_conflict",
+            conflict.Value!.GetType().GetProperty("code")!.GetValue(conflict.Value));
+        Assert.Equal(Messages.IdentityConflict,
+            conflict.Value.GetType().GetProperty("message")!.GetValue(conflict.Value));
+    }
+
+    [Fact]
+    public async Task ConcurrentCanonicalRegistrationConflictReturnsConflictResult()
+    {
+        using var database = new TestDatabase();
+        await using var winnerContext = database.CreateContext();
+        var barrier = new BeforeSaveInterceptor();
+        await using var loserContext = database.CreateContext(barrier);
+
+        barrier.Action = async () => Assert.True((await Manager(winnerContext).RegisterAsync(new UserForRegisterDto
+        {
+            Email = "race@example.test",
+            UserName = "RaceUser",
+            FirstName = "Winner",
+            LastName = "User",
+            Password = WinningPassword
+        })).Success);
+
+        var result = await Manager(loserContext).RegisterAsync(new UserForRegisterDto
+        {
+            Email = "  RACE@EXAMPLE.TEST  ",
+            UserName = "different-user",
+            FirstName = "Loser",
+            LastName = "User",
+            Password = LosingPassword
+        });
+
+        Assert.IsAssignableFrom<TaskTracker.Core.Utilities.Results.IConflictResult>(result);
+        await using var verificationContext = database.CreateContext();
+        Assert.Single(await verificationContext.Users.Where(x => x.Email == "race@example.test").ToListAsync());
+    }
+
+    [Fact]
+    public async Task EmailBasedAuthFlowsAcceptMixedCaseAndWhitespace()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var user = await MakeLegacyUser(context);
+
+        var login = await Manager(context).LoginAsync(new UserForLoginDto
+        {
+            Email = "  USER1@EXAMPLE.TEST  ",
+            Password = LegacyPassword
+        });
+        var forgot = await Manager(context).ForgotPasswordAsync(new ForgotPasswordDto
+        {
+            Email = "  USER1@EXAMPLE.TEST  "
+        });
+
+        Assert.True(login.Success);
+        Assert.True(forgot.Success);
+        Assert.Single(await context.PasswordResetRequests.Where(x => x.UserId == user.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task EmailVerificationAcceptsMixedCaseAndWhitespace()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var user = await context.Users.SingleAsync(x => x.Id == 1);
+        user.IsVerified = false;
+        context.OperationClaims.Add(new OperationClaim { Id = 2, Name = "User" });
+        context.EmailVerifications.Add(new EmailVerification
+        {
+            UserId = user.Id,
+            Code = "123456",
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+
+        var result = await Manager(context).VerifyEmailAsync(new EmailVerificationDto
+        {
+            Email = "  USER1@EXAMPLE.TEST  ",
+            Code = "123456"
+        });
+
+        Assert.True(result.Success);
+        Assert.True(user.IsVerified);
     }
 
     [Fact]
@@ -401,7 +554,8 @@ public class AuthPasswordHardeningTests
             ["PasswordRecovery:HmacSecret"] = new string('s', 32)
         }).Build(),
         NullLogger<AuthManager>.Instance,
-        Hasher());
+        Hasher(),
+        new IdentityNormalizer());
 
     private sealed class CurrentUser(int id) : ICurrentUserService
     {

@@ -42,4 +42,53 @@ public class PostgreSqlPasswordHardeningTests
         Assert.Equal(PasswordVerificationOutcome.Failed, hasher.Verify(stored, LosingPassword));
         Assert.Empty(await verificationContext.RefreshTokens.Where(x => x.UserId == stored.Id).ToListAsync());
     }
+
+    [PostgreSqlFact]
+    public async Task CanonicalIdentityColumnsHaveDatabaseBackedUniqueness()
+    {
+        await using var database = await PostgreSqlTestDatabase.CreateAsync();
+
+        await using (var userNameContext = database.CreateContext())
+        {
+            userNameContext.Users.Add(CreateUser("DisplayOne", "shared-key", "one@example.test"));
+            await userNameContext.SaveChangesAsync();
+        }
+
+        await using (var duplicateUserNameContext = database.CreateContext())
+        {
+            duplicateUserNameContext.Users.Add(CreateUser("DISPLAYONE", "shared-key", "two@example.test"));
+            await Assert.ThrowsAsync<DbUpdateException>(() => duplicateUserNameContext.SaveChangesAsync());
+        }
+
+        await using (var duplicateEmailContext = database.CreateContext())
+        {
+            duplicateEmailContext.Users.Add(CreateUser("Other", "other", "one@example.test"));
+            await Assert.ThrowsAsync<DbUpdateException>(() => duplicateEmailContext.SaveChangesAsync());
+        }
+    }
+
+    [Fact]
+    public void UserModelUsesOnlyTheNormalizedUserNameAsItsUniqueUserNameKey()
+    {
+        using var database = new TestDatabase();
+        using var context = database.CreateContext();
+        var entity = context.Model.FindEntityType(typeof(User))!;
+
+        Assert.Contains(entity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(User.NormalizedUserName));
+        Assert.DoesNotContain(entity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(User.UserName));
+    }
+
+    private static User CreateUser(string userName, string normalizedUserName, string email) => new()
+    {
+        FirstName = "Identity",
+        LastName = "Test",
+        UserName = userName,
+        NormalizedUserName = normalizedUserName,
+        Email = email,
+        PasswordHash = [1],
+        PasswordSalt = [1],
+        Status = true
+    };
 }

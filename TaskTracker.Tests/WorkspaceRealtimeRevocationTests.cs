@@ -104,7 +104,7 @@ public class WorkspaceRealtimeRevocationTests
     private static WorkspaceManager Manager(TaskTrackerDbContext context,
         ITaskCollaborationService collaboration) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(1), collaboration,
-            NullLogger<WorkspaceManager>.Instance);
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
 
     private static async Task<(int WorkspaceId, int OtherWorkspaceId)> SeedWorkspacesAsync(
         TaskTrackerDbContext context)

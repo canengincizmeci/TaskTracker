@@ -411,7 +411,7 @@ public class WorkspaceTaskIntegrationTests
         var uow = new UnitOfWork(context);
         return new WorkspaceManager(uow, new EfWorkspaceDal(context), new CurrentUser(userId),
             TaskCollaborationTestServices.Create(context),
-            NullLogger<WorkspaceManager>.Instance);
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
     }
 
     private static WorkspaceTaskCreateDto CreateDto(int? assigneeId = null) => new()
@@ -470,7 +470,7 @@ public class WorkspaceTaskIntegrationTests
     {
         context.Users.Add(new User
         {
-            Id = id, FirstName = "Test", LastName = "User", UserName = $"user{id}",
+            Id = id, FirstName = "Test", LastName = "User", UserName = $"user{id}", NormalizedUserName = $"user{id}",
             Email = $"user{id}@example.test", PasswordHash = [1], PasswordSalt = [1], Status = true
         });
         await context.SaveChangesAsync();

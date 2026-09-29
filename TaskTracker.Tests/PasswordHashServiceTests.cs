@@ -158,6 +158,7 @@ public class PasswordHashServiceTests
         FirstName = "Password",
         LastName = "Tester",
         UserName = Guid.NewGuid().ToString("N"),
+        NormalizedUserName = Guid.NewGuid().ToString("N"),
         Email = $"{Guid.NewGuid():N}@example.test",
         PasswordHash = hash,
         PasswordSalt = salt,

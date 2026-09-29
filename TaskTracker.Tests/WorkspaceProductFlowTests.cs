@@ -88,7 +88,7 @@ public class WorkspaceProductFlowTests
         workspaceId = await SeedWorkspace(context, Member(1, actorRole));
 
         var result = await Manager(context, 1).InviteAsync(workspaceId,
-            new CreateWorkspaceInvitationDto { Username = "user2" });
+            new CreateWorkspaceInvitationDto { Username = "  UsEr2  " });
 
         Assert.Equal(allowed, result.Success);
         Assert.Equal(allowed ? 1 : 0, await context.WorkspaceInvitations.CountAsync());
@@ -371,7 +371,7 @@ public class WorkspaceProductFlowTests
     private static WorkspaceManager Manager(TaskTrackerDbContext context, int userId) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId),
             TaskCollaborationTestServices.Create(context),
-            NullLogger<WorkspaceManager>.Instance);
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
 
     private static WorkspacesController Controller(TaskTrackerDbContext context, int userId) =>
         new(Manager(context, userId), TaskCollaborationTestServices.TaskRequests(context), new CurrentUser(userId));
@@ -410,6 +410,7 @@ public class WorkspaceProductFlowTests
             FirstName = "Test",
             LastName = "User",
             UserName = $"user{id}",
+            NormalizedUserName = $"user{id}",
             Email = $"user{id}@example.test",
             PasswordHash = [1],
             PasswordSalt = [1],
