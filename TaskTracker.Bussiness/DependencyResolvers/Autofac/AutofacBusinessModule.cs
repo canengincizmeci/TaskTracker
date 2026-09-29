@@ -40,6 +40,10 @@ namespace TaskTracker.Bussiness.DependencyResolvers.Autofac
                 .As<IPasswordHashService>()
                 .InstancePerLifetimeScope();
 
+            builder.RegisterType<IdentityNormalizer>()
+                .As<IIdentityNormalizer>()
+                .SingleInstance();
+
             builder.RegisterType<JwtHelper>()
                 .As<ITokenHelper>()
                 .InstancePerLifetimeScope();

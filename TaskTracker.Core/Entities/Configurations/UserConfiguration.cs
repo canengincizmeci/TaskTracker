@@ -27,7 +27,9 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(u => u.UserName).IsRequired().HasMaxLength(50);
 
-            builder.HasIndex(u => u.UserName).IsUnique();
+            builder.Property(u => u.NormalizedUserName).IsRequired().HasMaxLength(50);
+
+            builder.HasIndex(u => u.NormalizedUserName).IsUnique();
 
             builder.Property(u => u.PasswordSalt).IsRequired();
 

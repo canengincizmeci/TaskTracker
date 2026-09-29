@@ -11,6 +11,7 @@ namespace TaskTracker.Core.Entities.Concrete
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string UserName { get; set; }
+        public string NormalizedUserName { get; set; } = null!;
         public string Email { get; set; }
         public string? PhoneNumber { get; set; }
         public byte[] PasswordSalt { get; set; }
