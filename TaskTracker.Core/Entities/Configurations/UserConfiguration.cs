@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Core.Entities.Concrete;
+using TaskTracker.Core.Utilities.Security.Hashing;
 
 namespace TaskTracker.Core.Entities.Configurations
 {
@@ -30,7 +31,13 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(u => u.PasswordSalt).IsRequired();
 
-            builder.Property(u => u.PasswordHash).IsRequired();
+            builder.Property(u => u.PasswordHash).IsRequired().IsConcurrencyToken();
+
+            builder.Property(u => u.PasswordHashVersion)
+                .HasConversion<short>()
+                .HasColumnType("smallint")
+                .HasDefaultValue(PasswordHashVersion.LegacyHmacSha512)
+                .IsRequired();
 
             builder.Property(u => u.Status).IsRequired();
 

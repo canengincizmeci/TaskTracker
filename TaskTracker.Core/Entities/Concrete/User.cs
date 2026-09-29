@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using TaskTracker.Core.Utilities.Security.Hashing;
 
 namespace TaskTracker.Core.Entities.Concrete
 {
@@ -14,6 +15,7 @@ namespace TaskTracker.Core.Entities.Concrete
         public string? PhoneNumber { get; set; }
         public byte[] PasswordSalt { get; set; }
         public byte[] PasswordHash { get; set; }
+        public PasswordHashVersion PasswordHashVersion { get; set; } = PasswordHashVersion.LegacyHmacSha512;
         public bool Status { get; set; }
         public bool IsVerified { get; set; } = false;
         public bool IsPhoneVerified { get; set; }
