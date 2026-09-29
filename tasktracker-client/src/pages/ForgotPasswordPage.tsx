@@ -13,9 +13,9 @@ function ForgotPasswordPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const trimmedEmail = email.trim();
+    const canonicalEmail = email.trim().toLowerCase();
 
-    if (!trimmedEmail) {
+    if (!canonicalEmail) {
       setError("Email is required.");
       return;
     }
@@ -24,11 +24,11 @@ function ForgotPasswordPage() {
       setLoading(true);
       setError("");
 
-      const response = await forgotPassword({ email: trimmedEmail });
+      const response = await forgotPassword({ email: canonicalEmail });
 
       toast.success(response.message);
       navigate("/verify-password-reset", {
-        state: { email: trimmedEmail },
+        state: { email: canonicalEmail },
       });
     } catch (requestError: unknown) {
       const message = axios.isAxiosError<{ message?: string }>(requestError)

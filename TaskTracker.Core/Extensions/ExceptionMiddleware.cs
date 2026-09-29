@@ -46,6 +46,7 @@ namespace TaskTracker.Core.Extensions
                 return httpContext.Response.WriteAsync(new ValidationErrorDetails
                 {
                     StatusCode = 400,
+                    Code = "validation_failed",
                     Message = message,
                     Errors = errors
                 }.ToString());

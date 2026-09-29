@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TaskTracker.Bussiness.Abstract;
+using TaskTracker.Bussiness.Constanst;
+using TaskTracker.Core.Utilities.Results;
 using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.API.Controllers
@@ -19,16 +21,18 @@ namespace TaskTracker.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(UserForRegisterDto dto)
         {
-            var userExists = await _authService.UserExistsAsync(dto.Email);
-            if (!userExists.Success)
-                return BadRequest(userExists);
-
             var result = await _authService.RegisterAsync(dto);
 
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
+            return result switch
+            {
+                { Success: true } => Ok(result),
+                IConflictResult => Conflict(new
+                {
+                    code = "identity_conflict",
+                    message = Messages.IdentityConflict
+                }),
+                _ => BadRequest(new { code = "validation_failed", message = result.Message })
+            };
         }
 
         [HttpPost("login")]

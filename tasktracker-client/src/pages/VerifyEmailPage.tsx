@@ -110,15 +110,17 @@ function VerifyEmailPage() {
       setError("");
       setSuccessMessage("");
 
+      const canonicalEmail = email.trim().toLowerCase();
+
       await verifyEmail({
-        email,
+        email: canonicalEmail,
         code,
       });
 
       setSuccessMessage("Email verified successfully. You can now sign in.");
 
       setTimeout(() => {
-        navigate("/login", { state: { email } });
+        navigate("/login", { state: { email: canonicalEmail } });
       }, 1200);
     } catch (error) {
       setError("Email verification failed.");

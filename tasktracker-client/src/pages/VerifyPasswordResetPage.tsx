@@ -17,7 +17,7 @@ function VerifyPasswordResetPage() {
   const locationState = location.state as PasswordResetLocationState | null;
   const email =
     typeof locationState?.email === "string" && locationState.email.trim()
-      ? locationState.email
+      ? locationState.email.trim().toLowerCase()
       : null;
 
   if (!email) {

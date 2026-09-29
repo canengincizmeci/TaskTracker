@@ -182,7 +182,7 @@ function LoginPage() {
       setError("");
 
       const response = await login({
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
 

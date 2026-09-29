@@ -122,6 +122,7 @@
 
 
 import { useState } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { register } from "../api/authService";
 
@@ -151,21 +152,28 @@ function RegisterPage() {
       setError("");
       setSuccessMessage("");
 
+      const canonicalEmail = email.trim().toLowerCase();
+      const displayUserName = userName.trim();
+
       await register({
         firstName,
         lastName,
-        email,
-        userName,
+        email: canonicalEmail,
+        userName: displayUserName,
         password,
       });
 
       setSuccessMessage("Registration successful. Please verify your email.");
 
       setTimeout(() => {
-        navigate("/verify-email", { state: { email } });
+        navigate("/verify-email", { state: { email: canonicalEmail } });
       }, 1200);
-    } catch (error) {
-      setError("Registration failed.");
+    } catch (requestError: unknown) {
+      const message = axios.isAxiosError<{ message?: string }>(requestError)
+        ? requestError.response?.data?.message
+        : undefined;
+
+      setError(message ?? "Registration failed.");
     } finally {
       setLoading(false);
     }
@@ -212,6 +220,7 @@ function RegisterPage() {
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="Choose a username"
+              maxLength={50}
               required
             />
           </div>
