@@ -55,6 +55,8 @@ namespace TaskTracker.Bussiness.Constanst
         public static string CurrentPasswordIncorrect = "Current password is incorrect.";
         public static string NewPasswordMustBeDifferent = "New password must be different from the current password.";
         public static string PasswordChangeSuccessful = "Password changed successfully. Please sign in again.";
+        public static string PasswordLengthInvalid = "Password must be between 12 and 128 characters.";
+        public static string PasswordCredentialChangedConcurrently = "Password changed in another request. Please try again.";
 
 
     }

@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
+using TaskTracker.Bussiness.ValidationRules.FluentValidation;
+using TaskTracker.Core.Aspects.Autofac;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Results;
@@ -24,6 +25,7 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly ICurrentUserService _currentUserService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthManager> _logger;
+        private readonly IPasswordHashService _passwordHashService;
 
         public AuthManager(
             IUnitOfWork unitOfWork,
@@ -31,7 +33,8 @@ namespace TaskTracker.Bussiness.Concrete
             IEmailService emailService,
             ICurrentUserService currentUserService,
             IConfiguration configuration,
-            ILogger<AuthManager> logger)
+            ILogger<AuthManager> logger,
+            IPasswordHashService passwordHashService)
         {
             _unitOfWork = unitOfWork;
             _tokenHelper = tokenHelper;
@@ -39,6 +42,7 @@ namespace TaskTracker.Bussiness.Concrete
             _currentUserService = currentUserService;
             _configuration = configuration;
             _logger = logger;
+            _passwordHashService = passwordHashService;
         }
 
         public async Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user)
@@ -71,7 +75,8 @@ namespace TaskTracker.Bussiness.Concrete
             if (!user.Status)
                 return new ErrorDataResult<LoginResponseDto>(Messages.UserPassive);
 
-            if (!HashingHelper.VerifyPasswordHash(dto.Password, user.PasswordHash, user.PasswordSalt))
+            var verificationOutcome = _passwordHashService.Verify(user, dto.Password);
+            if (verificationOutcome == PasswordVerificationOutcome.Failed)
                 return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
 
 
@@ -91,9 +96,40 @@ namespace TaskTracker.Bussiness.Concrete
             var accessToken = _tokenHelper.CreateToken(user, claims);
             var refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
 
+            if (verificationOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
+                ApplyNewPasswordHash(user, dto.Password);
 
             await refreshTokenRepo.AddAsync(refreshToken);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+                when (verificationOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
+            {
+                refreshTokenRepo.Detach(refreshToken);
+                await userRepo.ReloadAsync(user);
+
+                var currentOutcome = _passwordHashService.Verify(user, dto.Password);
+                if (currentOutcome == PasswordVerificationOutcome.Failed)
+                    return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
+
+                if (currentOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
+                    ApplyNewPasswordHash(user, dto.Password);
+
+                accessToken = _tokenHelper.CreateToken(user, claims);
+                refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
+                await refreshTokenRepo.AddAsync(refreshToken);
+
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return new ErrorDataResult<LoginResponseDto>(Messages.PasswordCredentialChangedConcurrently);
+                }
+            }
 
             return new SuccessDataResult<LoginResponseDto>(
                 new LoginResponseDto
@@ -104,59 +140,14 @@ namespace TaskTracker.Bussiness.Concrete
                 Messages.SuccessfulLogin
             );
         }
-
-
-        //public async Task<IDataResult<User>> RegisterAsync(UserForRegisterDto dto)
-        //{
-        //    var userRepo = _unitOfWork.GetRepository<User>();
-        //    var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
-
-
-        //    byte[] passwordHash, passwordSalt;
-        //    HashingHelper.CreatePasswordHash(dto.Password, out passwordHash, out passwordSalt);
-
-        //    var user = new User
-        //    {
-        //        Email = dto.Email,
-        //        FirstName = dto.FirstName,
-        //        LastName = dto.LastName,
-        //        UserName = dto.UserName,
-        //        PasswordHash = passwordHash,
-        //        PasswordSalt = passwordSalt,
-        //        Status = true,
-        //        IsVerified = false,
-        //        IsPhoneVerified = false
-        //    };
-
-        //    await userRepo.AddAsync(user);
-        //    await _unitOfWork.SaveChangesAsync();
-
-
-        //    var code = CodeGenerator.Generate6DigitCode();
-
-
-        //    var verification = new EmailVerification
-        //    {
-        //        UserId = user.Id,
-        //        Code = code
-        //    };
-
-        //    await verificationRepo.AddAsync(verification);
-        //    await _unitOfWork.SaveChangesAsync();
-
-
-        //    await _emailService.SendVerificationCodeAsync(user.Email, code);
-
-
-        //    return new SuccessDataResult<User>(user, "Kayıt başarılı, mailine gönderilen kodu gir.");
-        ////}
+        [ValidationAspect(typeof(UserForRegisterDtoValidator))]
         public async Task<IResult> RegisterAsync(UserForRegisterDto dto)
         {
+            if (!IsNewPasswordLengthValid(dto.Password))
+                return new ErrorResult(Messages.PasswordLengthInvalid);
+
             var userRepo = _unitOfWork.GetRepository<User>();
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
-
-            byte[] passwordHash, passwordSalt;
-            HashingHelper.CreatePasswordHash(dto.Password, out passwordHash, out passwordSalt);
 
             var existingUser = await userRepo.GetAsync(u => u.Email == dto.Email);
 
@@ -172,10 +163,10 @@ namespace TaskTracker.Bussiness.Concrete
                 existingUser.FirstName = dto.FirstName;
                 existingUser.LastName = dto.LastName;
                 existingUser.UserName = dto.UserName;
-                existingUser.PasswordHash = passwordHash;
-                existingUser.PasswordSalt = passwordSalt;
                 existingUser.Status = true;
                 existingUser.IsPhoneVerified = false;
+
+                ApplyNewPasswordHash(existingUser, dto.Password);
 
                 userRepo.Update(existingUser);
                 user = existingUser;
@@ -188,12 +179,14 @@ namespace TaskTracker.Bussiness.Concrete
                     FirstName = dto.FirstName,
                     LastName = dto.LastName,
                     UserName = dto.UserName,
-                    PasswordHash = passwordHash,
-                    PasswordSalt = passwordSalt,
+                    PasswordHash = [],
+                    PasswordSalt = [],
                     Status = true,
                     IsVerified = false,
                     IsPhoneVerified = false
                 };
+
+                ApplyNewPasswordHash(user, dto.Password);
 
                 await userRepo.AddAsync(user);
                 await _unitOfWork.SaveChangesAsync();
@@ -490,6 +483,7 @@ namespace TaskTracker.Bussiness.Concrete
                 Messages.PasswordResetCodeVerified);
         }
 
+        [ValidationAspect(typeof(ResetPasswordDtoValidator))]
         public async Task<IResult> ResetPasswordAsync(ResetPasswordDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.ResetToken))
@@ -525,25 +519,20 @@ namespace TaskTracker.Bussiness.Concrete
             if (user is null)
                 return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
 
-            if (string.IsNullOrWhiteSpace(dto.NewPassword) ||
-                string.IsNullOrWhiteSpace(dto.ConfirmNewPassword))
+            if (string.IsNullOrEmpty(dto.NewPassword) ||
+                string.IsNullOrEmpty(dto.ConfirmNewPassword))
             {
                 return new ErrorResult(Messages.PasswordResetPasswordRequired);
             }
 
-            if (dto.NewPassword.Length > 128 || dto.ConfirmNewPassword.Length > 128)
-                return new ErrorResult(Messages.PasswordResetPasswordTooLong);
+            if (!IsNewPasswordLengthValid(dto.NewPassword) ||
+                !IsNewPasswordLengthValid(dto.ConfirmNewPassword))
+                return new ErrorResult(Messages.PasswordLengthInvalid);
 
             if (dto.NewPassword != dto.ConfirmNewPassword)
                 return new ErrorResult(Messages.PasswordResetPasswordsDoNotMatch);
 
-            HashingHelper.CreatePasswordHash(
-                dto.NewPassword,
-                out var passwordHash,
-                out var passwordSalt);
-
-            user.PasswordHash = passwordHash;
-            user.PasswordSalt = passwordSalt;
+            ApplyNewPasswordHash(user, dto.NewPassword);
             validRequest.UsedAt = now;
 
             var otherResetRequests = await passwordResetRepo.GetAllAsync(r =>
@@ -570,22 +559,31 @@ namespace TaskTracker.Bussiness.Concrete
 
             userRepo.Update(user);
             passwordResetRepo.Update(validRequest);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ErrorResult(Messages.PasswordCredentialChangedConcurrently);
+            }
 
             return new SuccessResult(Messages.PasswordResetSuccessful);
         }
 
+        [ValidationAspect(typeof(ChangePasswordDtoValidator))]
         public async Task<IResult> ChangePasswordAsync(ChangePasswordDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.CurrentPassword) ||
-                string.IsNullOrWhiteSpace(dto.NewPassword) ||
-                string.IsNullOrWhiteSpace(dto.ConfirmNewPassword))
+            if (string.IsNullOrEmpty(dto.CurrentPassword) ||
+                string.IsNullOrEmpty(dto.NewPassword) ||
+                string.IsNullOrEmpty(dto.ConfirmNewPassword))
             {
                 return new ErrorResult(Messages.ChangePasswordFieldsRequired);
             }
 
-            if (dto.NewPassword.Length > 128 || dto.ConfirmNewPassword.Length > 128)
-                return new ErrorResult(Messages.ChangePasswordTooLong);
+            if (!IsNewPasswordLengthValid(dto.NewPassword) ||
+                !IsNewPasswordLengthValid(dto.ConfirmNewPassword))
+                return new ErrorResult(Messages.PasswordLengthInvalid);
 
             if (dto.NewPassword != dto.ConfirmNewPassword)
                 return new ErrorResult(Messages.ChangePasswordPasswordsDoNotMatch);
@@ -603,29 +601,17 @@ namespace TaskTracker.Bussiness.Concrete
             if (user is null)
                 return new ErrorResult(Messages.ChangePasswordUnavailable);
 
-            if (!HashingHelper.VerifyPasswordHash(
-                    dto.CurrentPassword,
-                    user.PasswordHash,
-                    user.PasswordSalt))
+            if (_passwordHashService.Verify(user, dto.CurrentPassword) == PasswordVerificationOutcome.Failed)
             {
                 return new ErrorResult(Messages.CurrentPasswordIncorrect);
             }
 
-            if (HashingHelper.VerifyPasswordHash(
-                    dto.NewPassword,
-                    user.PasswordHash,
-                    user.PasswordSalt))
+            if (_passwordHashService.Verify(user, dto.NewPassword) != PasswordVerificationOutcome.Failed)
             {
                 return new ErrorResult(Messages.NewPasswordMustBeDifferent);
             }
 
-            HashingHelper.CreatePasswordHash(
-                dto.NewPassword,
-                out var passwordHash,
-                out var passwordSalt);
-
-            user.PasswordHash = passwordHash;
-            user.PasswordSalt = passwordSalt;
+            ApplyNewPasswordHash(user, dto.NewPassword);
 
             var activeRefreshTokens = await refreshTokenRepo.GetAllAsync(rt =>
                 rt.UserId == user.Id &&
@@ -650,7 +636,14 @@ namespace TaskTracker.Bussiness.Concrete
             }
 
             userRepo.Update(user);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ErrorResult(Messages.PasswordCredentialChangedConcurrently);
+            }
 
             return new SuccessResult(Messages.PasswordChangeSuccessful);
         }
@@ -685,6 +678,17 @@ namespace TaskTracker.Bussiness.Concrete
             });
          
         }
+
+        private void ApplyNewPasswordHash(User user, string password)
+        {
+            var passwordHash = _passwordHashService.CreateHash(user, password);
+            user.PasswordHash = passwordHash.Hash;
+            user.PasswordSalt = passwordHash.Salt;
+            user.PasswordHashVersion = passwordHash.Version;
+        }
+
+        private static bool IsNewPasswordLengthValid(string? password) =>
+            password is { Length: >= 12 and <= 128 };
 
 
 

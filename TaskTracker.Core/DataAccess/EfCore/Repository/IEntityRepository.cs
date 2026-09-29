@@ -19,6 +19,8 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
      
         void Update(T entity);
         void Delete(T entity);
+        void Detach(T entity);
+        Task ReloadAsync(T entity);
         Task<bool> AnyAsync(Expression<Func<T, bool>> filter);
     }
 }

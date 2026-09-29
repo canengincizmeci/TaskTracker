@@ -19,16 +19,21 @@ function SecuritySettingsPage() {
     setError("");
 
     if (
-      !currentPassword.trim() ||
-      !newPassword.trim() ||
-      !confirmNewPassword.trim()
+      !currentPassword ||
+      !newPassword ||
+      !confirmNewPassword
     ) {
       setError("Current password, new password and confirmation are required.");
       return;
     }
 
-    if (newPassword.length > 128 || confirmNewPassword.length > 128) {
-      setError("New password cannot exceed 128 characters.");
+    if (
+      newPassword.length < 12 ||
+      newPassword.length > 128 ||
+      confirmNewPassword.length < 12 ||
+      confirmNewPassword.length > 128
+    ) {
+      setError("Password must be between 12 and 128 characters.");
       return;
     }
 
@@ -93,6 +98,7 @@ function SecuritySettingsPage() {
               onChange={(event) => setNewPassword(event.target.value)}
               type="password"
               autoComplete="new-password"
+              minLength={12}
               maxLength={128}
               required
             />
@@ -108,6 +114,7 @@ function SecuritySettingsPage() {
               onChange={(event) => setConfirmNewPassword(event.target.value)}
               type="password"
               autoComplete="new-password"
+              minLength={12}
               maxLength={128}
               required
             />

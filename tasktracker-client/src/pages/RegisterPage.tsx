@@ -141,6 +141,11 @@ function RegisterPage() {
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    if (password.length < 12 || password.length > 128) {
+      setError("Password must be between 12 and 128 characters.");
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -229,6 +234,8 @@ function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a password"
               type="password"
+              minLength={12}
+              maxLength={128}
               required
             />
           </div>

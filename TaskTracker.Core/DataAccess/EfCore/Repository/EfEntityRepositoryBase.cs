@@ -34,6 +34,16 @@ namespace TaskTracker.Core.DataAccess.EfCore.Repository
             _dbSet.Remove(entity);
         }
 
+        public void Detach(T entity)
+        {
+            _context.Entry(entity).State = EntityState.Detached;
+        }
+
+        public Task ReloadAsync(T entity)
+        {
+            return _context.Entry(entity).ReloadAsync();
+        }
+
         public async Task<List<T>> GetAllAsync(
             Expression<Func<T, bool>>? filter = null,
             Func<IQueryable<T>, IQueryable<T>>? include = null)
