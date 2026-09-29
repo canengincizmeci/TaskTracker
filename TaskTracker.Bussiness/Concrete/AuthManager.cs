@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Bussiness.ValidationRules.FluentValidation;
@@ -26,6 +27,7 @@ namespace TaskTracker.Bussiness.Concrete
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthManager> _logger;
         private readonly IPasswordHashService _passwordHashService;
+        private readonly IIdentityNormalizer _identityNormalizer;
 
         public AuthManager(
             IUnitOfWork unitOfWork,
@@ -34,7 +36,8 @@ namespace TaskTracker.Bussiness.Concrete
             ICurrentUserService currentUserService,
             IConfiguration configuration,
             ILogger<AuthManager> logger,
-            IPasswordHashService passwordHashService)
+            IPasswordHashService passwordHashService,
+            IIdentityNormalizer identityNormalizer)
         {
             _unitOfWork = unitOfWork;
             _tokenHelper = tokenHelper;
@@ -43,6 +46,7 @@ namespace TaskTracker.Bussiness.Concrete
             _configuration = configuration;
             _logger = logger;
             _passwordHashService = passwordHashService;
+            _identityNormalizer = identityNormalizer;
         }
 
         public async Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user)
@@ -65,7 +69,8 @@ namespace TaskTracker.Bussiness.Concrete
             var userRepo = _unitOfWork.GetRepository<User>();
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
 
-            var user = await userRepo.GetAsync(u => u.Email == dto.Email && u.IsVerified == true);
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
+            var user = await userRepo.GetAsync(u => u.Email == normalizedEmail && u.IsVerified == true);
             if (user == null)
                 return new ErrorDataResult<LoginResponseDto>(Messages.UserNotFound);
 
@@ -148,58 +153,40 @@ namespace TaskTracker.Bussiness.Concrete
 
             var userRepo = _unitOfWork.GetRepository<User>();
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
+            var displayUserName = _identityNormalizer.TrimUserName(dto.UserName);
+            var normalizedUserName = _identityNormalizer.NormalizeUserName(dto.UserName);
 
-            var existingUser = await userRepo.GetAsync(u => u.Email == dto.Email);
-
-            User user;
-
-            if (existingUser != null && existingUser.IsVerified)
+            if (await userRepo.AnyAsync(u =>
+                    u.Email == normalizedEmail || u.NormalizedUserName == normalizedUserName))
             {
-                return new ErrorResult(Messages.UserAlreadyExists);
+                return new ConflictResult(Messages.IdentityConflict);
             }
 
-            if (existingUser != null && !existingUser.IsVerified)
+            var user = new User
             {
-                existingUser.FirstName = dto.FirstName;
-                existingUser.LastName = dto.LastName;
-                existingUser.UserName = dto.UserName;
-                existingUser.Status = true;
-                existingUser.IsPhoneVerified = false;
+                Email = normalizedEmail,
+                FirstName = dto.FirstName,
+                LastName = dto.LastName,
+                UserName = displayUserName,
+                NormalizedUserName = normalizedUserName,
+                PasswordHash = [],
+                PasswordSalt = [],
+                Status = true,
+                IsVerified = false,
+                IsPhoneVerified = false
+            };
 
-                ApplyNewPasswordHash(existingUser, dto.Password);
+            ApplyNewPasswordHash(user, dto.Password);
 
-                userRepo.Update(existingUser);
-                user = existingUser;
-            }
-            else
+            await userRepo.AddAsync(user);
+            try
             {
-                user = new User
-                {
-                    Email = dto.Email,
-                    FirstName = dto.FirstName,
-                    LastName = dto.LastName,
-                    UserName = dto.UserName,
-                    PasswordHash = [],
-                    PasswordSalt = [],
-                    Status = true,
-                    IsVerified = false,
-                    IsPhoneVerified = false
-                };
-
-                ApplyNewPasswordHash(user, dto.Password);
-
-                await userRepo.AddAsync(user);
                 await _unitOfWork.SaveChangesAsync();
             }
-
-            var oldVerifications = await verificationRepo.GetAllAsync(v =>
-                v.UserId == user.Id &&
-                !v.IsVerified);
-
-            foreach (var oldVerification in oldVerifications)
+            catch (DbUpdateException exception) when (IsIdentityUniqueConflict(exception))
             {
-                oldVerification.IsVerified = true;
-                verificationRepo.Update(oldVerification);
+                return new ConflictResult(Messages.IdentityConflict);
             }
 
             var code = CodeGenerator.Generate6DigitCode();
@@ -218,18 +205,6 @@ namespace TaskTracker.Bussiness.Concrete
             await _emailService.SendVerificationCodeAsync(user.Email, code);
 
             return new SuccessResult("Kayıt başarılı, mailine gönderilen kodu gir.");
-        }
-        public async Task<Core.Utilities.Results.IResult> UserExistsAsync(string email)
-        {
-            var userRepo = _unitOfWork.GetRepository<User>();
-
-            var user = await userRepo.GetAsync(u => u.Email == email && u.IsVerified == true);
-            if (user != null)
-            {
-                return new ErrorResult(Messages.UserAlreadyExists);
-            }
-
-            return new SuccessResult();
         }
         //public async Task<Core.Utilities.Results.IResult> VerifyEmailAsync(EmailVerificationDto dto)
         //{
@@ -263,8 +238,9 @@ namespace TaskTracker.Bussiness.Concrete
             var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
             var userRepo = _unitOfWork.GetRepository<User>();
 
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
             var user = await userRepo.GetAsync(u =>
-                u.Email == dto.Email &&
+                u.Email == normalizedEmail &&
                 u.IsVerified == false);
 
             if (user is null)
@@ -333,12 +309,12 @@ namespace TaskTracker.Bussiness.Concrete
             const int resendCooldownSeconds = 60;
 
             var genericResult = new SuccessResult(Messages.PasswordRecoveryInstructionsSent);
-            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
             var userRepo = _unitOfWork.GetRepository<User>();
             var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
 
             var user = await userRepo.GetAsync(u =>
-                u.Email.ToLower() == normalizedEmail &&
+                u.Email == normalizedEmail &&
                 u.Status &&
                 u.IsVerified);
 
@@ -408,12 +384,12 @@ namespace TaskTracker.Bussiness.Concrete
 
             var failureResult = new ErrorDataResult<PasswordResetTokenDto>(
                 Messages.PasswordResetCodeInvalidOrExpired);
-            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
             var userRepo = _unitOfWork.GetRepository<User>();
             var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
 
             var user = await userRepo.GetAsync(u =>
-                u.Email.ToLower() == normalizedEmail &&
+                u.Email == normalizedEmail &&
                 u.Status &&
                 u.IsVerified);
 
@@ -689,6 +665,22 @@ namespace TaskTracker.Bussiness.Concrete
 
         private static bool IsNewPasswordLengthValid(string? password) =>
             password is { Length: >= 12 and <= 128 };
+
+        private static bool IsIdentityUniqueConflict(DbUpdateException exception)
+        {
+            if (exception.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "IX_Users_Email" or "IX_Users_NormalizedUserName"
+                })
+            {
+                return true;
+            }
+
+            var message = exception.InnerException?.Message;
+            return message?.Contains("UNIQUE constraint failed: Users.Email", StringComparison.OrdinalIgnoreCase) == true ||
+                   message?.Contains("UNIQUE constraint failed: Users.NormalizedUserName", StringComparison.OrdinalIgnoreCase) == true;
+        }
 
 
 

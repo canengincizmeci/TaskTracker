@@ -17,7 +17,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
     ICurrentUserService currentUserService, IEmailService emailService,
     INotificationService notificationService, IConfiguration configuration,
     ILogger<TaskShareManager> logger, ITaskActivityWriter activityWriter,
-    ITaskCollaborationService collaborationService) : ITaskShareService
+    ITaskCollaborationService collaborationService, IIdentityNormalizer identityNormalizer) : ITaskShareService
 {
     private const string TaskUnavailable = "This task is inactive or completed/cancelled and cannot receive participants.";
     private const string ConcurrentChange = "The task or invitation changed. Refresh and retry.";
@@ -202,7 +202,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
         if (string.IsNullOrWhiteSpace(dto.Username)) return new ErrorResult("Username is required.");
         var users = unitOfWork.GetRepository<User>();
-        var user = await users.GetAsync(x => x.UserName == dto.Username.Trim());
+        var normalizedUserName = identityNormalizer.NormalizeUserName(dto.Username);
+        var user = await users.GetAsync(x => x.NormalizedUserName == normalizedUserName);
         if (user is null) return new ErrorResult(Messages.UserNotFound);
         if (user.Id == task.OwnerId) return new ErrorResult(Messages.UserCannotShareTaskWithSelf);
         if (await taskShareDal.GetAsync(x => x.TaskRequestId == task.Id && x.SharedWithUserId == user.Id) is not null)

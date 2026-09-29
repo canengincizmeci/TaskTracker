@@ -15,7 +15,7 @@ public interface IWorkspaceDal
     Task<WorkspaceMember?> GetMembershipAsync(int workspaceId, int userId);
     Task<WorkspaceInvitation?> GetInvitationAsync(int invitationId);
     Task<WorkspaceInvitation?> GetPendingInvitationAsync(int workspaceId, int invitedUserId);
-    Task<User?> GetUserByUsernameAsync(string username);
+    Task<User?> GetUserByNormalizedUsernameAsync(string normalizedUsername);
     Task<bool> HasActiveTaskResponsibilityAsync(int workspaceId, int userId);
     Task<List<int>> GetActiveTaskIdsAsync(int workspaceId);
     void TouchMembership(WorkspaceMember membership);

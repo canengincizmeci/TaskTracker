@@ -57,6 +57,7 @@ namespace TaskTracker.Bussiness.Constanst
         public static string PasswordChangeSuccessful = "Password changed successfully. Please sign in again.";
         public static string PasswordLengthInvalid = "Password must be between 12 and 128 characters.";
         public static string PasswordCredentialChangedConcurrently = "Password changed in another request. Please try again.";
+        public static string IdentityConflict = "An account with that email or username already exists.";
 
 
     }

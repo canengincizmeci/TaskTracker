@@ -114,8 +114,8 @@ public class EfWorkspaceDal(TaskTrackerDbContext context) : IWorkspaceDal
         context.WorkspaceInvitations.SingleOrDefaultAsync(x => x.WorkspaceId == workspaceId &&
             x.InvitedUserId == invitedUserId && x.Status == WorkspaceInvitationStatus.Pending);
 
-    public Task<User?> GetUserByUsernameAsync(string username) =>
-        context.Users.SingleOrDefaultAsync(x => x.UserName == username);
+    public Task<User?> GetUserByNormalizedUsernameAsync(string normalizedUsername) =>
+        context.Users.SingleOrDefaultAsync(x => x.NormalizedUserName == normalizedUsername);
 
     public Task<bool> HasActiveTaskResponsibilityAsync(int workspaceId, int userId) =>
         context.TaskRequests.AnyAsync(x => x.WorkspaceId == workspaceId && x.Activity &&

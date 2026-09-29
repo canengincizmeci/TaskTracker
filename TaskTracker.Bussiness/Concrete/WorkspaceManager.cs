@@ -14,7 +14,7 @@ namespace TaskTracker.Bussiness.Concrete;
 
 public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal,
     ICurrentUserService currentUserService, ITaskCollaborationService collaborationService,
-    ILogger<WorkspaceManager> logger) : IWorkspaceService
+    ILogger<WorkspaceManager> logger, IIdentityNormalizer identityNormalizer) : IWorkspaceService
 {
     private static bool CanManage(WorkspaceMember membership) =>
         membership.Role is WorkspaceRole.Owner or WorkspaceRole.Admin;
@@ -103,7 +103,8 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         if (!CanManage(actor)) return new ErrorDataResult<WorkspaceInvitationDto>(Messages.AuthorizationDenied);
         if (string.IsNullOrWhiteSpace(dto.Username))
             return new ErrorDataResult<WorkspaceInvitationDto>(WorkspaceMessages.UsernameRequired);
-        var invitedUser = await workspaceDal.GetUserByUsernameAsync(dto.Username.Trim());
+        var normalizedUserName = identityNormalizer.NormalizeUserName(dto.Username);
+        var invitedUser = await workspaceDal.GetUserByNormalizedUsernameAsync(normalizedUserName);
         if (invitedUser is null) return new ErrorDataResult<WorkspaceInvitationDto>(Messages.UserNotFound);
         if (invitedUser.Id == currentUserService.UserId)
             return new ErrorDataResult<WorkspaceInvitationDto>(WorkspaceMessages.CannotInviteSelf);

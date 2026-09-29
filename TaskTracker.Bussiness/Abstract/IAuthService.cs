@@ -13,7 +13,6 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IResult> RegisterAsync(UserForRegisterDto dto);
         Task<IDataResult<LoginResponseDto>> LoginAsync(UserForLoginDto dto);
 
-        Task<IResult> UserExistsAsync(string email);
         Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user);
         Task<IDataResult<TokenResponseDto>> RefreshTokenAsync(RefreshTokenDto dto);
 
