@@ -31,6 +31,11 @@ namespace TaskTracker.API.Controllers
                     code = "identity_conflict",
                     message = Messages.IdentityConflict
                 }),
+                _ when result.Message == Messages.VerificationEmailDeliveryFailed => Accepted(new
+                {
+                    code = "verification_delivery_failed",
+                    message = Messages.VerificationEmailDeliveryFailed
+                }),
                 _ => BadRequest(new { code = "validation_failed", message = result.Message })
             };
         }
@@ -53,6 +58,13 @@ namespace TaskTracker.API.Controllers
             if (!result.Success)
                 return BadRequest(result);
 
+            return Ok(result);
+        }
+
+        [HttpPost("resend-verification")]
+        public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationDto dto)
+        {
+            var result = await _authService.ResendVerificationAsync(dto);
             return Ok(result);
         }
         [HttpPost("refresh-token")]

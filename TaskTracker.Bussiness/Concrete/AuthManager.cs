@@ -177,9 +177,21 @@ namespace TaskTracker.Bussiness.Concrete
                 IsPhoneVerified = false
             };
 
+            var code = GenerateFreshVerificationCode();
+
+            var verification = new EmailVerification
+            {
+                User = user,
+                Code = code,
+                IsVerified = false,
+                CreatedAt = DateTime.UtcNow,
+                DeliveryToken = Guid.NewGuid()
+            };
+
             ApplyNewPasswordHash(user, dto.Password);
 
             await userRepo.AddAsync(user);
+            await verificationRepo.AddAsync(verification);
             try
             {
                 await _unitOfWork.SaveChangesAsync();
@@ -189,20 +201,11 @@ namespace TaskTracker.Bussiness.Concrete
                 return new ConflictResult(Messages.IdentityConflict);
             }
 
-            var code = CodeGenerator.Generate6DigitCode();
-
-            var verification = new EmailVerification
+            var deliveryOutcome = await TryDeliverVerificationCodeAsync(user, verification, code);
+            if (deliveryOutcome == VerificationDeliveryOutcome.Failed)
             {
-                UserId = user.Id,
-                Code = code,
-                IsVerified = false,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await verificationRepo.AddAsync(verification);
-            await _unitOfWork.SaveChangesAsync();
-
-            await _emailService.SendVerificationCodeAsync(user.Email, code);
+                return new ErrorResult(Messages.VerificationEmailDeliveryFailed);
+            }
 
             return new SuccessResult("Kayıt başarılı, mailine gönderilen kodu gir.");
         }
@@ -257,14 +260,100 @@ namespace TaskTracker.Bussiness.Concrete
             if (verification.CreatedAt.AddMinutes(10) < DateTime.UtcNow)
                 return new ErrorResult(Messages.CodeExpired);
 
+            if (verification.DeliveryClaimed)
+                return new ErrorResult(Messages.CodeNotFound);
+
             verification.IsVerified = true;
+            verification.DeliveryToken = null;
+            verification.DeliveryClaimed = false;
+            verification.Version = checked(verification.Version + 1);
             user.IsVerified = true;
 
             await AddUserClaimToUserAsync(user.Id);
 
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new ErrorResult(Messages.CodeNotFound);
+            }
 
             return new SuccessResult(Messages.EmailIsCorrect);
+        }
+
+        public async Task<IResult> ResendVerificationAsync(ResendVerificationDto dto)
+        {
+            var genericResult = new SuccessResult(Messages.VerificationResendGeneric);
+            var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
+            var userRepo = _unitOfWork.GetRepository<User>();
+            var verificationRepo = _unitOfWork.GetRepository<EmailVerification>();
+            var user = await userRepo.GetAsync(u => u.Email == normalizedEmail);
+
+            if (user is null || user.IsVerified)
+                return genericResult;
+
+            var activeVerifications = await verificationRepo.GetAllAsync(v =>
+                v.UserId == user.Id && !v.IsVerified);
+            var currentVerification = activeVerifications
+                .OrderByDescending(v => v.CreatedAt)
+                .ThenByDescending(v => v.Id)
+                .FirstOrDefault();
+
+            if (currentVerification?.DeliveryClaimed == true)
+                return genericResult;
+
+            var code = GenerateFreshVerificationCode(currentVerification?.Code);
+            var deliveryToken = Guid.NewGuid();
+            var now = DateTime.UtcNow;
+
+            foreach (var staleVerification in activeVerifications.Where(v => v != currentVerification))
+            {
+                staleVerification.IsVerified = true;
+                staleVerification.DeliveryToken = null;
+                staleVerification.DeliveryClaimed = false;
+                staleVerification.Version = checked(staleVerification.Version + 1);
+            }
+
+            if (currentVerification is null)
+            {
+                currentVerification = new EmailVerification
+                {
+                    UserId = user.Id,
+                    Code = code,
+                    CreatedAt = now,
+                    DeliveryToken = deliveryToken
+                };
+                await verificationRepo.AddAsync(currentVerification);
+            }
+            else
+            {
+                currentVerification.Code = code;
+                currentVerification.CreatedAt = now;
+                currentVerification.FailedAttemptCount = 0;
+                currentVerification.LockedUntil = null;
+                currentVerification.DeliveryToken = deliveryToken;
+                currentVerification.DeliveryClaimed = false;
+                currentVerification.Version = checked(currentVerification.Version + 1);
+            }
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return genericResult;
+            }
+            catch (DbUpdateException exception) when (IsActiveVerificationUniqueConflict(exception))
+            {
+                return genericResult;
+            }
+
+            await TryDeliverVerificationCodeAsync(user, currentVerification, code);
+
+            return genericResult;
         }
         public async Task<IDataResult<TokenResponseDto>> RefreshTokenAsync(RefreshTokenDto dto)
         {
@@ -666,6 +755,77 @@ namespace TaskTracker.Bussiness.Concrete
         private static bool IsNewPasswordLengthValid(string? password) =>
             password is { Length: >= 12 and <= 128 };
 
+        private static string GenerateFreshVerificationCode(string? previousCode = null)
+        {
+            string code;
+            do
+            {
+                code = CodeGenerator.Generate6DigitCode();
+            } while (code == previousCode);
+
+            return code;
+        }
+
+        private async Task<VerificationDeliveryOutcome> TryDeliverVerificationCodeAsync(
+            User user,
+            EmailVerification verification,
+            string code)
+        {
+            if (verification.DeliveryToken is null ||
+                verification.DeliveryClaimed ||
+                verification.IsVerified ||
+                user.IsVerified)
+            {
+                return VerificationDeliveryOutcome.Superseded;
+            }
+
+            verification.DeliveryClaimed = true;
+            verification.Version = checked(verification.Version + 1);
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return VerificationDeliveryOutcome.Superseded;
+            }
+
+            var outcome = VerificationDeliveryOutcome.Delivered;
+            try
+            {
+                await _emailService.SendVerificationCodeAsync(user.Email, code);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Verification email delivery failed for user {UserId}.", user.Id);
+                outcome = VerificationDeliveryOutcome.Failed;
+            }
+            finally
+            {
+                verification.DeliveryToken = null;
+                verification.DeliveryClaimed = false;
+                verification.Version = checked(verification.Version + 1);
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException exception)
+                {
+                    _logger.LogWarning(exception,
+                        "Verification delivery ownership was already invalidated for user {UserId}.", user.Id);
+                }
+            }
+
+            return outcome;
+        }
+
+        private enum VerificationDeliveryOutcome
+        {
+            Superseded,
+            Delivered,
+            Failed
+        }
+
         private static bool IsIdentityUniqueConflict(DbUpdateException exception)
         {
             if (exception.InnerException is PostgresException
@@ -680,6 +840,22 @@ namespace TaskTracker.Bussiness.Concrete
             var message = exception.InnerException?.Message;
             return message?.Contains("UNIQUE constraint failed: Users.Email", StringComparison.OrdinalIgnoreCase) == true ||
                    message?.Contains("UNIQUE constraint failed: Users.NormalizedUserName", StringComparison.OrdinalIgnoreCase) == true;
+        }
+
+        private static bool IsActiveVerificationUniqueConflict(DbUpdateException exception)
+        {
+            if (exception.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "UX_EmailVerifications_UserId_Active"
+                })
+            {
+                return true;
+            }
+
+            return exception.InnerException?.Message.Contains(
+                "UNIQUE constraint failed: EmailVerifications.UserId",
+                StringComparison.OrdinalIgnoreCase) == true;
         }
 
 

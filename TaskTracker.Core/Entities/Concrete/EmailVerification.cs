@@ -13,6 +13,9 @@ namespace TaskTracker.Core.Entities.Concrete
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public int FailedAttemptCount { get; set; } = 0;
         public DateTime? LockedUntil { get; set; }
+        public long Version { get; set; }
+        public Guid? DeliveryToken { get; set; }
+        public bool DeliveryClaimed { get; set; }
         public virtual User User { get; set; } = null!;
     }
 }
