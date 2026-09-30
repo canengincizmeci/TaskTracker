@@ -66,6 +66,434 @@ public class AuthPasswordHardeningTests
         Assert.True(result.Success);
         Assert.Equal("DisplayName", user.UserName);
         Assert.Equal("displayname", user.NormalizedUserName);
+        Assert.Single(await context.EmailVerifications.Where(x => x.UserId == user.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task RegistrationSaveFailureLeavesNoPartialIdentityData()
+    {
+        using var database = new TestDatabase();
+        await using (var failingContext = database.CreateContext(new FailNextSaveInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                Manager(failingContext).RegisterAsync(Registration("atomic@example.test", "atomic-user")));
+        }
+
+        await using var verificationContext = database.CreateContext();
+        Assert.DoesNotContain(await verificationContext.Users.ToListAsync(),
+            x => x.Email == "atomic@example.test");
+        Assert.Empty(await verificationContext.EmailVerifications.ToListAsync());
+    }
+
+    [Fact]
+    public async Task VerificationInsertFailureRollsBackTheUserInsert()
+    {
+        using var database = new TestDatabase();
+        await using (var failingContext = database.CreateContext(new BreakVerificationSaveInterceptor()))
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                Manager(failingContext).RegisterAsync(Registration("rollback@example.test", "rollback-user")));
+        }
+
+        await using var verificationContext = database.CreateContext();
+        Assert.DoesNotContain(await verificationContext.Users.ToListAsync(),
+            x => x.Email == "rollback@example.test");
+        Assert.Empty(await verificationContext.EmailVerifications.ToListAsync());
+    }
+
+    [Fact]
+    public async Task DeliveryFailureKeepsRegistrationRecoverableAndMapsToAcceptedResponse()
+    {
+        using var database = new TestDatabase();
+        var email = new Email { FailVerificationDelivery = true };
+        await using var context = database.CreateContext();
+        var controller = new AuthController(Manager(context, emailService: email));
+
+        var response = await controller.Register(Registration("delivery@example.test", "delivery-user"));
+
+        var unavailable = Assert.IsType<AcceptedResult>(response);
+        Assert.Equal(202, unavailable.StatusCode);
+        Assert.Equal("verification_delivery_failed",
+            unavailable.Value!.GetType().GetProperty("code")!.GetValue(unavailable.Value));
+        var user = await context.Users.SingleAsync(x => x.Email == "delivery@example.test");
+        var originalVerification = await context.EmailVerifications.SingleAsync(x => x.UserId == user.Id);
+
+        email.FailVerificationDelivery = false;
+        var resend = await Manager(context, emailService: email).ResendVerificationAsync(new ResendVerificationDto
+        {
+            Email = "  DELIVERY@EXAMPLE.TEST  "
+        });
+
+        Assert.True(resend.Success);
+        Assert.Equal(Messages.VerificationResendGeneric, resend.Message);
+        Assert.Equal(2, email.VerificationAttempts.Count);
+        Assert.NotEqual(email.VerificationAttempts[0].Code, email.VerificationAttempts[1].Code);
+        Assert.Equal(email.VerificationAttempts[1].Code, originalVerification.Code);
+        Assert.Null(originalVerification.DeliveryToken);
+        Assert.False(originalVerification.DeliveryClaimed);
+        Assert.Single(await context.EmailVerifications.Where(x => x.UserId == user.Id && !x.IsVerified).ToListAsync());
+    }
+
+    [Fact]
+    public async Task ResendReplacesActiveCodeWithoutChangingTheUserOrCreatingAmbiguity()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var user = await context.Users.SingleAsync(x => x.Id == 1);
+        await context.Database.ExecuteSqlRawAsync(
+            "DROP INDEX \"UX_EmailVerifications_UserId_Active\"");
+        var originalHash = user.PasswordHash.ToArray();
+        var originalSalt = user.PasswordSalt.ToArray();
+        var older = new EmailVerification
+        {
+            UserId = user.Id,
+            Code = "111111",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+        };
+        var current = new EmailVerification
+        {
+            UserId = user.Id,
+            Code = "222222",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-1),
+            FailedAttemptCount = 3,
+            LockedUntil = DateTime.UtcNow.AddMinutes(1)
+        };
+        context.EmailVerifications.AddRange(older, current);
+        await context.SaveChangesAsync();
+        var email = new Email();
+
+        var first = await Manager(context, emailService: email).ResendVerificationAsync(new ResendVerificationDto
+        {
+            Email = "  USER1@EXAMPLE.TEST  "
+        });
+        var firstCode = current.Code;
+        var second = await Manager(context, emailService: email).ResendVerificationAsync(new ResendVerificationDto
+        {
+            Email = "user1@example.test"
+        });
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Equal(Messages.VerificationResendGeneric, first.Message);
+        Assert.True(older.IsVerified);
+        Assert.False(current.IsVerified);
+        Assert.NotEqual("222222", firstCode);
+        Assert.NotEqual(firstCode, current.Code);
+        Assert.Equal(0, current.FailedAttemptCount);
+        Assert.Null(current.LockedUntil);
+        Assert.Equal(2, await context.EmailVerifications.CountAsync(x => x.UserId == user.Id));
+        Assert.Single(await context.EmailVerifications.Where(x => x.UserId == user.Id && !x.IsVerified).ToListAsync());
+        Assert.Equal(2, email.VerificationAttempts.Count);
+        Assert.Equal(current.Code, email.VerificationAttempts[1].Code);
+        Assert.Equal("Test", user.FirstName);
+        Assert.Equal("User", user.LastName);
+        Assert.Equal("user1", user.UserName);
+        Assert.Equal(originalHash, user.PasswordHash);
+        Assert.Equal(originalSalt, user.PasswordSalt);
+        Assert.Null(current.DeliveryToken);
+        Assert.False(current.DeliveryClaimed);
+    }
+
+    [Fact]
+    public async Task ResendReturnsTheSameGenericResponseForVerifiedAndUnknownAccounts()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var verifiedUser = await context.Users.SingleAsync(x => x.Id == 1);
+        verifiedUser.IsVerified = true;
+        await context.SaveChangesAsync();
+        var email = new Email();
+        var manager = Manager(context, emailService: email);
+
+        var verified = await manager.ResendVerificationAsync(new ResendVerificationDto
+        {
+            Email = " USER1@EXAMPLE.TEST "
+        });
+        var unknown = await manager.ResendVerificationAsync(new ResendVerificationDto
+        {
+            Email = "unknown@example.test"
+        });
+
+        Assert.True(verified.Success);
+        Assert.True(unknown.Success);
+        Assert.Equal(Messages.VerificationResendGeneric, verified.Message);
+        Assert.Equal(verified.Message, unknown.Message);
+        Assert.Empty(email.VerificationAttempts);
+    }
+
+    [Fact]
+    public async Task ConcurrentResendsOnExistingRowHaveOneWinnerAndOnlyWinnerSends()
+    {
+        using var database = new TestDatabase();
+        await using (var setup = database.CreateContext())
+        {
+            setup.EmailVerifications.Add(new EmailVerification
+            {
+                UserId = 1,
+                Code = "111111",
+                CreatedAt = DateTime.UtcNow
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        var winnerEmail = new Email();
+        var loserEmail = new Email();
+        await using var winnerContext = database.CreateContext();
+        var beforeLoserSave = new BeforeSaveInterceptor();
+        await using var loserContext = database.CreateContext(beforeLoserSave);
+        beforeLoserSave.Action = async () =>
+        {
+            var winner = await Manager(winnerContext, emailService: winnerEmail)
+                .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+            Assert.True(winner.Success);
+        };
+
+        var loser = await Manager(loserContext, emailService: loserEmail)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(loser.Success);
+        Assert.Single(winnerEmail.VerificationAttempts);
+        Assert.Empty(loserEmail.VerificationAttempts);
+        await using var verificationContext = database.CreateContext();
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+        Assert.Equal(winnerEmail.VerificationAttempts[0].Code, persisted.Code);
+        Assert.Null(persisted.DeliveryToken);
+        Assert.False(persisted.DeliveryClaimed);
+    }
+
+    [Fact]
+    public async Task ResendPersistedBeforeNewerResendCannotSendItsSupersededCode()
+    {
+        using var database = new TestDatabase();
+        await using (var setup = database.CreateContext())
+        {
+            setup.OperationClaims.Add(new OperationClaim { Id = 2, Name = "User" });
+            setup.EmailVerifications.Add(new EmailVerification
+            {
+                UserId = 1,
+                Code = "111111",
+                CreatedAt = DateTime.UtcNow
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        string? supersededCode = null;
+        var firstEmail = new Email();
+        var newerEmail = new Email();
+        var afterFirstPersistence = new AfterSaveInterceptor();
+        await using var firstContext = database.CreateContext(afterFirstPersistence);
+        afterFirstPersistence.Action = async () =>
+        {
+            await using (var inspectionContext = database.CreateContext())
+            {
+                supersededCode = (await inspectionContext.EmailVerifications
+                    .SingleAsync(x => x.UserId == 1 && !x.IsVerified)).Code;
+            }
+
+            await using var newerContext = database.CreateContext();
+            var newer = await Manager(newerContext, emailService: newerEmail)
+                .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+            Assert.True(newer.Success);
+        };
+
+        var first = await Manager(firstContext, emailService: firstEmail)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(first.Success);
+        Assert.NotNull(supersededCode);
+        Assert.Empty(firstEmail.VerificationAttempts);
+        Assert.Single(newerEmail.VerificationAttempts);
+        await using var verificationContext = database.CreateContext();
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+        Assert.NotEqual(supersededCode, persisted.Code);
+        Assert.Equal(newerEmail.VerificationAttempts[0].Code, persisted.Code);
+        Assert.Null(persisted.DeliveryToken);
+        Assert.False(persisted.DeliveryClaimed);
+
+        var staleVerification = await Manager(verificationContext).VerifyEmailAsync(new EmailVerificationDto
+        {
+            Email = "user1@example.test",
+            Code = supersededCode!
+        });
+        Assert.False(staleVerification.Success);
+    }
+
+    [Fact]
+    public async Task ConcurrentResendsWithoutExistingRowCreateOneUsableState()
+    {
+        using var database = new TestDatabase();
+        var winnerEmail = new Email();
+        var loserEmail = new Email();
+        await using var winnerContext = database.CreateContext();
+        var beforeLoserSave = new BeforeSaveInterceptor();
+        await using var loserContext = database.CreateContext(beforeLoserSave);
+        beforeLoserSave.Action = async () =>
+        {
+            var winner = await Manager(winnerContext, emailService: winnerEmail)
+                .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+            Assert.True(winner.Success);
+        };
+
+        var loser = await Manager(loserContext, emailService: loserEmail)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(loser.Success);
+        Assert.Single(winnerEmail.VerificationAttempts);
+        Assert.Empty(loserEmail.VerificationAttempts);
+        await using var verificationContext = database.CreateContext();
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+        Assert.Equal(winnerEmail.VerificationAttempts[0].Code, persisted.Code);
+        Assert.Null(persisted.DeliveryToken);
+        Assert.False(persisted.DeliveryClaimed);
+    }
+
+    [Fact]
+    public async Task VerifyWinningAgainstResendCannotBeReactivatedOrSendANewCode()
+    {
+        using var database = new TestDatabase();
+        await using (var setup = database.CreateContext())
+        {
+            setup.OperationClaims.Add(new OperationClaim { Id = 2, Name = "User" });
+            setup.EmailVerifications.Add(new EmailVerification
+            {
+                UserId = 1,
+                Code = "123456",
+                CreatedAt = DateTime.UtcNow,
+                DeliveryToken = Guid.NewGuid()
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        var resendEmail = new Email();
+        await using var verifyContext = database.CreateContext();
+        var beforeResendSave = new BeforeSaveInterceptor();
+        await using var resendContext = database.CreateContext(beforeResendSave);
+        beforeResendSave.Action = async () =>
+        {
+            var verified = await Manager(verifyContext).VerifyEmailAsync(new EmailVerificationDto
+            {
+                Email = "user1@example.test",
+                Code = "123456"
+            });
+            Assert.True(verified.Success);
+        };
+
+        var resend = await Manager(resendContext, emailService: resendEmail)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(resend.Success);
+        Assert.Empty(resendEmail.VerificationAttempts);
+        await using var verificationContext = database.CreateContext();
+        Assert.True((await verificationContext.Users.SingleAsync(x => x.Id == 1)).IsVerified);
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1);
+        Assert.True(persisted.IsVerified);
+        Assert.Null(persisted.DeliveryToken);
+        Assert.False(persisted.DeliveryClaimed);
+    }
+
+    [Fact]
+    public async Task ResendWinningAgainstVerifyInvalidatesTheOldCode()
+    {
+        using var database = new TestDatabase();
+        await using (var setup = database.CreateContext())
+        {
+            setup.OperationClaims.Add(new OperationClaim { Id = 2, Name = "User" });
+            setup.EmailVerifications.Add(new EmailVerification
+            {
+                UserId = 1,
+                Code = "123456",
+                CreatedAt = DateTime.UtcNow
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        var resendEmail = new Email();
+        await using var resendContext = database.CreateContext();
+        var beforeVerifySave = new BeforeSaveInterceptor();
+        await using var verifyContext = database.CreateContext(beforeVerifySave);
+        beforeVerifySave.Action = async () =>
+        {
+            var resend = await Manager(resendContext, emailService: resendEmail)
+                .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+            Assert.True(resend.Success);
+        };
+
+        var staleVerify = await Manager(verifyContext).VerifyEmailAsync(new EmailVerificationDto
+        {
+            Email = "user1@example.test",
+            Code = "123456"
+        });
+
+        Assert.False(staleVerify.Success);
+        Assert.Single(resendEmail.VerificationAttempts);
+        await using var verificationContext = database.CreateContext();
+        Assert.False((await verificationContext.Users.SingleAsync(x => x.Id == 1)).IsVerified);
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+        Assert.NotEqual("123456", persisted.Code);
+        Assert.Equal(resendEmail.VerificationAttempts[0].Code, persisted.Code);
+    }
+
+    [Fact]
+    public async Task ResendDeliveryFailureKeepsGenericResponseAndCoherentState()
+    {
+        using var database = new TestDatabase();
+        await using (var setup = database.CreateContext())
+        {
+            setup.EmailVerifications.Add(new EmailVerification
+            {
+                UserId = 1,
+                Code = "123456",
+                CreatedAt = DateTime.UtcNow
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        var email = new Email { FailVerificationDelivery = true };
+        await using var failedContext = database.CreateContext();
+        var failedDelivery = await Manager(failedContext, emailService: email)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+        var unknown = await Manager(failedContext, emailService: email)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "unknown@example.test" });
+
+        Assert.True(failedDelivery.Success);
+        Assert.Equal(Messages.VerificationResendGeneric, failedDelivery.Message);
+        Assert.Equal(failedDelivery.Message, unknown.Message);
+        Assert.Single(email.VerificationAttempts);
+        var failedCode = email.VerificationAttempts[0].Code;
+        await using (var failedVerificationContext = database.CreateContext())
+        {
+            var failedState = await failedVerificationContext.EmailVerifications
+                .SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+            Assert.Equal(failedCode, failedState.Code);
+            Assert.Null(failedState.DeliveryToken);
+            Assert.False(failedState.DeliveryClaimed);
+        }
+
+        email.FailVerificationDelivery = false;
+        await using var recoveryContext = database.CreateContext();
+        var recovered = await Manager(recoveryContext, emailService: email)
+            .ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(recovered.Success);
+        Assert.Equal(Messages.VerificationResendGeneric, recovered.Message);
+        Assert.Equal(2, email.VerificationAttempts.Count);
+        Assert.NotEqual(failedCode, email.VerificationAttempts[1].Code);
+        await using var verificationContext = database.CreateContext();
+        var persisted = await verificationContext.EmailVerifications.SingleAsync(x => x.UserId == 1 && !x.IsVerified);
+        Assert.Equal(email.VerificationAttempts[1].Code, persisted.Code);
+        Assert.Null(persisted.DeliveryToken);
+        Assert.False(persisted.DeliveryClaimed);
+    }
+
+    [Fact]
+    public void DeliveryOwnershipUsesTheRevisionAndOpaqueTokenAsConcurrencyState()
+    {
+        using var database = new TestDatabase();
+        using var context = database.CreateContext();
+        var entity = context.Model.FindEntityType(typeof(EmailVerification))!;
+
+        Assert.True(entity.FindProperty(nameof(EmailVerification.Version))!.IsConcurrencyToken);
+        Assert.True(entity.FindProperty(nameof(EmailVerification.DeliveryToken))!.IsConcurrencyToken);
     }
 
     [Theory]
@@ -519,6 +947,15 @@ public class AuthPasswordHardeningTests
         Assert.True((await verificationContext.RefreshTokens.SingleAsync(x => x.UserId == user.Id)).IsRevoked);
     }
 
+    private static UserForRegisterDto Registration(string email, string userName) => new()
+    {
+        Email = email,
+        UserName = userName,
+        FirstName = "Registration",
+        LastName = "Test",
+        Password = NewPassword
+    };
+
     private static PasswordResetRequest ResetRequest(int userId, string rawToken) => new()
     {
         UserId = userId,
@@ -544,10 +981,13 @@ public class AuthPasswordHardeningTests
 
     private static PasswordHashService Hasher() => PasswordHashServiceTests.Service();
 
-    private static AuthManager Manager(TaskTrackerDbContext context, int currentUserId = 1) => new(
+    private static AuthManager Manager(
+        TaskTrackerDbContext context,
+        int currentUserId = 1,
+        IEmailService? emailService = null) => new(
         new UnitOfWork(context),
         new Tokens(),
-        new Email(),
+        emailService ?? new Email(),
         new CurrentUser(currentUserId),
         new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -564,7 +1004,16 @@ public class AuthPasswordHardeningTests
 
     private sealed class Email : IEmailService
     {
-        public Task SendVerificationCodeAsync(string email, string code) => Task.CompletedTask;
+        public bool FailVerificationDelivery { get; set; }
+        public List<(string Email, string Code)> VerificationAttempts { get; } = [];
+
+        public Task SendVerificationCodeAsync(string email, string code)
+        {
+            VerificationAttempts.Add((email, code));
+            return FailVerificationDelivery
+                ? Task.FromException(new IOException("Simulated verification email failure."))
+                : Task.CompletedTask;
+        }
         public Task SendPasswordResetCodeAsync(string email, string code) => Task.CompletedTask;
         public Task SendTaskShareInvitationEmailAsync(string email, string taskTitle, string inviterUsername,
             string invitationUrl) => Task.CompletedTask;
@@ -595,6 +1044,19 @@ public class AuthPasswordHardeningTests
             ValueTask.FromException<InterceptionResult<int>>(new DbUpdateException("Simulated save failure."));
     }
 
+    private sealed class BreakVerificationSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var verification = eventData.Context!.ChangeTracker.Entries<EmailVerification>().Single();
+            verification.Property(x => x.Code).CurrentValue = null!;
+            return ValueTask.FromResult(result);
+        }
+    }
+
     private sealed class BeforeSaveInterceptor : SaveChangesInterceptor
     {
         public Func<Task>? Action { get; set; }
@@ -602,6 +1064,26 @@ public class AuthPasswordHardeningTests
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData,
             InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Action is not null)
+            {
+                var action = Action;
+                Action = null;
+                await action();
+            }
+
+            return result;
+        }
+    }
+
+    private sealed class AfterSaveInterceptor : SaveChangesInterceptor
+    {
+        public Func<Task>? Action { get; set; }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
             CancellationToken cancellationToken = default)
         {
             if (Action is not null)
