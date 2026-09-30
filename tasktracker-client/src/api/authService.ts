@@ -30,6 +30,10 @@ type VerifyEmailRequest = {
   code: string;
 };
 
+type ResendVerificationRequest = {
+  email: string;
+};
+
 type RefreshTokenRequest = {
   refreshToken: string;
 };
@@ -81,6 +85,12 @@ type ResultResponse = {
   message: string;
 };
 
+type RegisterResponse = {
+  success?: boolean;
+  code?: string;
+  message: string;
+};
+
 async function refreshToken(
   data: RefreshTokenRequest
 ): Promise<RefreshTokenResponse> {
@@ -93,7 +103,7 @@ async function login(data: LoginRequest): Promise<LoginResponse> {
   return response.data;
 }
 
-async function register(data: RegisterRequest) {
+async function register(data: RegisterRequest): Promise<RegisterResponse> {
   const response = await axiosClient.post("/Auth/register", data);
   return response.data;
 }
@@ -101,6 +111,13 @@ async function register(data: RegisterRequest) {
 
 async function verifyEmail(data: VerifyEmailRequest) {
   const response = await axiosClient.post("/Auth/verify-email", data);
+  return response.data;
+}
+
+async function resendVerification(
+  data: ResendVerificationRequest
+): Promise<ResultResponse> {
+  const response = await axiosClient.post("/Auth/resend-verification", data);
   return response.data;
 }
 
@@ -139,6 +156,7 @@ export {
   login,
   register,
   verifyEmail,
+  resendVerification,
   refreshToken,
   forgotPassword,
   verifyPasswordResetCode,

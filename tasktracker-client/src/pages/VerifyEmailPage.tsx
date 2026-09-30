@@ -86,7 +86,10 @@
 
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { verifyEmail } from "../api/authService";
+import { resendVerification, verifyEmail } from "../api/authService";
+
+const resendMessage =
+  "If the account exists and still requires verification, a new code has been sent.";
 
 function VerifyEmailPage() {
   const location = useLocation();
@@ -99,8 +102,33 @@ function VerifyEmailPage() {
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState(() => {
+    const state = location.state as { deliveryFailed?: unknown } | null;
+    return state?.deliveryFailed === true
+      ? "Your account was created, but email delivery failed. You can resend the verification code below."
+      : "";
+  });
+
+  const handleResend = async () => {
+    const canonicalEmail = email.trim().toLowerCase();
+    if (!canonicalEmail) {
+      setError("Email is required.");
+      return;
+    }
+
+    try {
+      setResendLoading(true);
+      setError("");
+      await resendVerification({ email: canonicalEmail });
+      setSuccessMessage(resendMessage);
+    } catch {
+      setError("Verification code could not be resent. Please try again.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleVerifyEmail = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -172,6 +200,14 @@ function VerifyEmailPage() {
 
           <button className="primary-button" type="submit" disabled={loading}>
             {loading ? "Verifying..." : "Verify Email"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={loading || resendLoading}
+          >
+            {resendLoading ? "Resending..." : "Resend code"}
           </button>
         </form>
 

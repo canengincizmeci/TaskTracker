@@ -155,7 +155,7 @@ function RegisterPage() {
       const canonicalEmail = email.trim().toLowerCase();
       const displayUserName = userName.trim();
 
-      await register({
+      const response = await register({
         firstName,
         lastName,
         email: canonicalEmail,
@@ -163,12 +163,33 @@ function RegisterPage() {
         password,
       });
 
+      if (response.code === "verification_delivery_failed") {
+        navigate("/verify-email", {
+          state: { email: canonicalEmail, deliveryFailed: true },
+        });
+        return;
+      }
+
       setSuccessMessage("Registration successful. Please verify your email.");
 
       setTimeout(() => {
         navigate("/verify-email", { state: { email: canonicalEmail } });
       }, 1200);
     } catch (requestError: unknown) {
+      const responseData = axios.isAxiosError<{
+        code?: string;
+        message?: string;
+      }>(requestError)
+        ? requestError.response?.data
+        : undefined;
+
+      if (responseData?.code === "verification_delivery_failed") {
+        navigate("/verify-email", {
+          state: { email: email.trim().toLowerCase(), deliveryFailed: true },
+        });
+        return;
+      }
+
       const message = axios.isAxiosError<{ message?: string }>(requestError)
         ? requestError.response?.data?.message
         : undefined;
