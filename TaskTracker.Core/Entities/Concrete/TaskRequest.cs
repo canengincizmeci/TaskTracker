@@ -8,6 +8,10 @@ namespace TaskTracker.Core.Entities.Concrete
 {
     public class TaskRequest : IEntity
     {
+        public const int MaxTitleLength = 150;
+        public const int MaxDescriptionLength = 10000;
+        public const int MaxCategoryLength = 150;
+
         public int Id { get; set; }
         public int OwnerId { get; set; }
         public int? WorkspaceId { get; set; }

@@ -17,11 +17,11 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.HasKey(tr => tr.Id);
             builder.Property(tr => tr.Id).ValueGeneratedOnAdd();
 
-            builder.Property(tr => tr.Title).IsRequired().HasMaxLength(150);
+            builder.Property(tr => tr.Title).IsRequired().HasMaxLength(TaskRequest.MaxTitleLength);
 
-            builder.Property(tr => tr.Description).IsRequired().HasMaxLength(10000);
+            builder.Property(tr => tr.Description).IsRequired().HasMaxLength(TaskRequest.MaxDescriptionLength);
 
-            builder.Property(tr => tr.Category).IsRequired().HasMaxLength(150);
+            builder.Property(tr => tr.Category).IsRequired().HasMaxLength(TaskRequest.MaxCategoryLength);
 
             builder.Property(tr => tr.Priority).IsRequired().HasConversion<string>().HasMaxLength(50);
 

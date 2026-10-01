@@ -26,6 +26,7 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskSubmission> TaskSubmissions { get; set; }
         public DbSet<TaskSubmissionReview> TaskSubmissionReviews { get; set; }
         public DbSet<TaskActivity> TaskActivities { get; set; }
+        public DbSet<TaskPlanningRevision> TaskPlanningRevisions { get; set; }
         public DbSet<TaskMessage> TaskMessages { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
@@ -56,7 +57,8 @@ namespace TaskTracker.Core.DataAccess
             // bypass these guards and must not be used for workflow history.
             foreach (var entry in ChangeTracker.Entries())
             {
-                if (entry.Entity is TaskSubmission or TaskSubmissionReview or TaskActivity or TaskMessage &&
+                if (entry.Entity is TaskSubmission or TaskSubmissionReview or TaskActivity or TaskMessage or
+                        TaskPlanningRevision &&
                     entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workflow history is immutable. Add a new revision or decision instead.");
 
