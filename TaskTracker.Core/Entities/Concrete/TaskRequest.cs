@@ -30,7 +30,10 @@ namespace TaskTracker.Core.Entities.Concrete
         public DateOnly? DueDate { get; set; } 
         public TaskVisibility Visibility { get; set; } = TaskVisibility.Private;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? DeletedAt { get; set; }
+        public int? DeletedByUserId { get; set; }
         public User Owner { get; set; } = null!;
+        public User? DeletedByUser { get; set; }
         public ICollection<TaskShare> TaskShares { get; set; } = new List<TaskShare>();
     }
 }

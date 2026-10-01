@@ -471,12 +471,16 @@ public class TaskRequestManager : ITaskRequestService
     public async Task<IResult> DeleteTask(int taskId, int currentUserId)
     {
         var task = await _unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
-        if (task is null) return new ErrorResult(Messages.DataNotFound);
+        if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
             return new ErrorResult(Messages.AuthorizationDenied);
+        var now = DateTime.UtcNow;
         task.Activity = false;
-        try { await _unitOfWork.SaveChangesAsync(); return new SuccessResult(Messages.DataUpdated); }
-        catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
+        task.DeletedAt = now;
+        task.DeletedByUserId = currentUserId;
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDeleted,
+            createdAt: now);
+        return await SaveTaskChange(task, activity, Messages.DataUpdated);
     }
 
     public async Task<IDataResult<List<GetTasksDto>>> GetTasksByUserId(int userId) =>

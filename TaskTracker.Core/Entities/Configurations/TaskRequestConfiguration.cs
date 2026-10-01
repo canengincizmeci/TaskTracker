@@ -12,7 +12,11 @@ namespace TaskTracker.Core.Entities.Configurations
     {
         public void Configure(EntityTypeBuilder<TaskRequest> builder)
         {
-            builder.ToTable("TaskRequests");
+            builder.ToTable("TaskRequests", table => table.HasCheckConstraint(
+                "CK_TaskRequests_DeletionAudit",
+                "(\"Activity\" = TRUE AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
+                "(\"Activity\" = FALSE AND ((\"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
+                "(\"DeletedAt\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL)))"));
 
             builder.HasKey(tr => tr.Id);
             builder.Property(tr => tr.Id).ValueGeneratedOnAdd();
@@ -38,6 +42,8 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.HasOne(x => x.Owner).WithMany(x => x.OwnedTaskRequests).HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.Assignee).WithMany().HasForeignKey(x => x.AssigneeUserId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(x => x.DeletedByUser).WithMany().HasForeignKey(x => x.DeletedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(x => x.Workspace).WithMany(x => x.Tasks).HasForeignKey(x => x.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             builder.HasIndex(x => x.WorkspaceId);

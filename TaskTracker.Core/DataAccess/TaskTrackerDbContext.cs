@@ -106,7 +106,9 @@ namespace TaskTracker.Core.DataAccess
                 if (entry.Entity is TaskActivity activity &&
                     (!Enum.IsDefined(activity.ActivityType) ||
                      (activity.FromStatus.HasValue && !Enum.IsDefined(activity.FromStatus.Value)) ||
-                     (activity.ToStatus.HasValue && !Enum.IsDefined(activity.ToStatus.Value))))
+                     (activity.ToStatus.HasValue && !Enum.IsDefined(activity.ToStatus.Value)) ||
+                     (activity.ActivityType == TaskActivityType.TaskDeleted &&
+                      (activity.FromStatus.HasValue || activity.ToStatus.HasValue))))
                     throw new ValidationException("Activity type and optional statuses must be defined values.");
             }
 

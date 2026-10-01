@@ -19,5 +19,6 @@ public enum TaskActivityType
     ParticipantRemoved = 15,
     ParticipantPermissionChanged = 16,
     InvitationCancelled = 17,
-    ResponsibilityReset = 18
+    ResponsibilityReset = 18,
+    TaskDeleted = 19
 }
