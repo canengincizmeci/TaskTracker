@@ -9,5 +9,6 @@ public interface ITaskActivityWriter
     Task<TaskActivity> WriteAsync(TaskRequest task, int actorUserId, TaskActivityType type,
         int? targetUserId = null, TaskShareInvitation? invitation = null,
         TaskStatus? fromStatus = null, TaskStatus? toStatus = null,
-        TaskSubmission? submission = null, TaskSubmissionReview? review = null);
+        TaskSubmission? submission = null, TaskSubmissionReview? review = null,
+        DateTime? createdAt = null);
 }

@@ -56,7 +56,8 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
-        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated,
+            createdAt: now);
         await _unitOfWork.SaveChangesAsync();
         await _collaboration.PublishActivityAsync(activity);
         return new SuccessResult(Messages.DataAdded);
@@ -90,7 +91,12 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
-        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated,
+            createdAt: now);
+        TaskActivity? assignmentActivity = null;
+        if (dto.AssigneeUserId.HasValue)
+            assignmentActivity = await _activityWriter.WriteAsync(task, currentUserId,
+                TaskActivityType.UserAssigned, dto.AssigneeUserId.Value, createdAt: now);
         _workspaceDal.TouchMembership(creator);
         if (assigneeMembership is not null && assigneeMembership.Id != creator.Id)
             _workspaceDal.TouchMembership(assigneeMembership);
@@ -98,6 +104,7 @@ public class TaskRequestManager : ITaskRequestService
         catch (DbUpdateConcurrencyException)
         { return new ConflictDataResult<TaskRequestDto>(WorkspaceMessages.ConcurrentChange); }
         await _collaboration.PublishActivityAsync(activity);
+        if (assignmentActivity is not null) await _collaboration.PublishActivityAsync(assignmentActivity);
         return await GetTaskById(task.Id, currentUserId);
     }
 
@@ -202,16 +209,25 @@ public class TaskRequestManager : ITaskRequestService
             return new ErrorResult("Assignee must be the owner or an accepted collaborator with Edit access.");
         if (task.AssigneeUserId == dto.AssigneeUserId) return new SuccessResult("Task is already assigned to this user.");
         var previous = task.AssigneeUserId;
-        if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
+        var resetsResponsibility = task.Status == TaskStatus.InProgress;
+        if (resetsResponsibility) task.Status = TaskStatus.Pending;
         task.AssigneeUserId = dto.AssigneeUserId;
         if (assigneeMembership is not null) _workspaceDal.TouchMembership(assigneeMembership);
+        var activityTime = DateTime.UtcNow;
         TaskActivity? previousActivity = null;
         if (previous.HasValue)
-            previousActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous);
-        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserAssigned, dto.AssigneeUserId);
+            previousActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned,
+                previous, createdAt: activityTime);
+        TaskActivity? resetActivity = null;
+        if (resetsResponsibility)
+            resetActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.ResponsibilityReset,
+                fromStatus: TaskStatus.InProgress, toStatus: TaskStatus.Pending, createdAt: activityTime);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserAssigned,
+            dto.AssigneeUserId, createdAt: activityTime);
         var result = await SaveTaskChange(task, activity, "Task assigned successfully.", publishActivity: false);
         if (!result.Success) return result;
         if (previousActivity is not null) await _collaboration.PublishActivityAsync(previousActivity);
+        if (resetActivity is not null) await _collaboration.PublishActivityAsync(resetActivity);
         await _collaboration.PublishActivityAsync(activity);
         await NotifyAssignment(task, previous, dto.AssigneeUserId);
         return result;
@@ -228,9 +244,20 @@ public class TaskRequestManager : ITaskRequestService
         if (!task.AssigneeUserId.HasValue) return new SuccessResult("Task is already unassigned.");
         var previous = task.AssigneeUserId.Value;
         task.AssigneeUserId = null;
-        if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
-        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous);
-        var result = await SaveTaskChange(task, activity, "Task unassigned successfully.");
+        var resetsResponsibility = task.Status == TaskStatus.InProgress;
+        if (resetsResponsibility) task.Status = TaskStatus.Pending;
+        var activityTime = DateTime.UtcNow;
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.UserUnassigned, previous,
+            createdAt: activityTime);
+        TaskActivity? resetActivity = null;
+        if (resetsResponsibility)
+            resetActivity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.ResponsibilityReset,
+                fromStatus: TaskStatus.InProgress, toStatus: TaskStatus.Pending, createdAt: activityTime);
+        var result = await SaveTaskChange(task, resetActivity ?? activity, "Task unassigned successfully.",
+            publishActivity: false);
+        if (!result.Success) return result;
+        await _collaboration.PublishActivityAsync(activity);
+        if (resetActivity is not null) await _collaboration.PublishActivityAsync(resetActivity);
         if (result.Success && previous != task.OwnerId)
             await TryNotify(previous, NotificationType.TaskAssignment, "Task unassigned",
                 $"You are no longer assigned to '{task.Title}'.", task.Id);

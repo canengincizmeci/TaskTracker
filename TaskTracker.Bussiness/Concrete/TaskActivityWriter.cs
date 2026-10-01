@@ -18,13 +18,14 @@ public class TaskActivityWriter : ITaskActivityWriter
     public async Task<TaskActivity> WriteAsync(TaskRequest task, int actorUserId, TaskActivityType type,
         int? targetUserId = null, TaskShareInvitation? invitation = null,
         TaskStatus? fromStatus = null, TaskStatus? toStatus = null,
-        TaskSubmission? submission = null, TaskSubmissionReview? review = null)
+        TaskSubmission? submission = null, TaskSubmissionReview? review = null,
+        DateTime? createdAt = null)
     {
         var activity = new TaskActivity
         {
             TaskRequest = task, ActorUserId = actorUserId, ActivityType = type,
             TargetUserId = targetUserId, Invitation = invitation, FromStatus = fromStatus,
-            ToStatus = toStatus, Submission = submission, Review = review, CreatedAt = DateTime.UtcNow
+            ToStatus = toStatus, Submission = submission, Review = review, CreatedAt = createdAt ?? DateTime.UtcNow
         };
         await _unitOfWork.GetRepository<TaskActivity>().AddAsync(activity);
         return activity;

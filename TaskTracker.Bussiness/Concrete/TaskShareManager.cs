@@ -310,18 +310,27 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             dto.Permission < TaskPermission.Edit)
             return new ConflictResult("The current assignee's working access cannot be reduced while the task is under review.");
         share.Permission = dto.Permission;
+        var activityTime = DateTime.UtcNow;
         TaskActivity? unassigned = null;
+        TaskActivity? resetActivity = null;
         if (task.AssigneeUserId == userId && dto.Permission < TaskPermission.Edit)
         {
             task.AssigneeUserId = null;
-            if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
-            unassigned = await activityWriter.WriteAsync(task, currentUserService.UserId, TaskActivityType.UserUnassigned, userId);
+            var resetsResponsibility = task.Status == TaskStatus.InProgress;
+            if (resetsResponsibility) task.Status = TaskStatus.Pending;
+            unassigned = await activityWriter.WriteAsync(task, currentUserService.UserId,
+                TaskActivityType.UserUnassigned, userId, createdAt: activityTime);
+            if (resetsResponsibility)
+                resetActivity = await activityWriter.WriteAsync(task, currentUserService.UserId,
+                    TaskActivityType.ResponsibilityReset, fromStatus: TaskStatus.InProgress,
+                    toStatus: TaskStatus.Pending, createdAt: activityTime);
         }
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
-            TaskActivityType.ParticipantPermissionChanged, userId);
+            TaskActivityType.ParticipantPermissionChanged, userId, createdAt: activityTime);
         var result = await SaveInvitationChange(task, "Participant permission updated.");
         if (!result.Success) return result;
         if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
+        if (resetActivity is not null) await collaborationService.PublishActivityAsync(resetActivity);
         await collaborationService.PublishActivityAsync(activity);
         await collaborationService.PublishTaskChangedAsync(task.Id);
         await TryTaskNotification(userId, "Task access changed",
@@ -340,19 +349,28 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task.Status == TaskStatus.InReview) return new ErrorResult("Participants cannot be removed while a task is under review.");
         var share = await taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == userId);
         if (share is null) return new ErrorResult("Participant not found.");
+        var activityTime = DateTime.UtcNow;
         TaskActivity? unassigned = null;
+        TaskActivity? resetActivity = null;
         if (task.AssigneeUserId == userId)
         {
             task.AssigneeUserId = null;
-            if (task.Status == TaskStatus.InProgress) task.Status = TaskStatus.Pending;
-            unassigned = await activityWriter.WriteAsync(task, currentUserService.UserId, TaskActivityType.UserUnassigned, userId);
+            var resetsResponsibility = task.Status == TaskStatus.InProgress;
+            if (resetsResponsibility) task.Status = TaskStatus.Pending;
+            unassigned = await activityWriter.WriteAsync(task, currentUserService.UserId,
+                TaskActivityType.UserUnassigned, userId, createdAt: activityTime);
+            if (resetsResponsibility)
+                resetActivity = await activityWriter.WriteAsync(task, currentUserService.UserId,
+                    TaskActivityType.ResponsibilityReset, fromStatus: TaskStatus.InProgress,
+                    toStatus: TaskStatus.Pending, createdAt: activityTime);
         }
         taskShareDal.Delete(share);
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
-            TaskActivityType.ParticipantRemoved, userId);
+            TaskActivityType.ParticipantRemoved, userId, createdAt: activityTime);
         var result = await SaveInvitationChange(task, "Participant removed.");
         if (!result.Success) return result;
         if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
+        if (resetActivity is not null) await collaborationService.PublishActivityAsync(resetActivity);
         await collaborationService.PublishActivityAsync(activity);
         await collaborationService.PublishTaskChangedAsync(task.Id);
         try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
