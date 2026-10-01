@@ -45,14 +45,17 @@ public class TaskRequestManager : ITaskRequestService
     [ValidationAspect(typeof(TaskRequestCreateDtoValidator))]
     public async Task<IResult> AddTaskRequestAsync(TaskRequestCreateDto dto, int currentUserId)
     {
+        var now = DateTime.UtcNow;
         var task = new TaskRequest
         {
             Title = dto.Title, Description = dto.Description, Category = dto.Category,
             Priority = dto.Priority, Status = TaskStatus.Pending, DueDate = dto.DueDate,
             OwnerId = currentUserId, Activity = true, Visibility = TaskVisibility.Private,
-            CreatedAt = DateTime.UtcNow, SharedCount = 0
+            CreatedAt = now, SharedCount = 0
         };
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
+            CreatePlanningRevision(task, 1, currentUserId, now));
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
         await _unitOfWork.SaveChangesAsync();
         await _collaboration.PublishActivityAsync(activity);
@@ -76,14 +79,17 @@ public class TaskRequestManager : ITaskRequestService
                 return new ConflictDataResult<TaskRequestDto>("Assignee must be an active member of this workspace.");
         }
 
+        var now = DateTime.UtcNow;
         var task = new TaskRequest
         {
             WorkspaceId = workspaceId, OwnerId = currentUserId, AssigneeUserId = dto.AssigneeUserId,
             Title = dto.Title, Description = dto.Description, Category = dto.Category,
             Priority = dto.Priority, Status = TaskStatus.Pending, DueDate = dto.DueDate,
-            Activity = true, Visibility = TaskVisibility.Private, CreatedAt = DateTime.UtcNow, SharedCount = 0
+            Activity = true, Visibility = TaskVisibility.Private, CreatedAt = now, SharedCount = 0
         };
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
+            CreatePlanningRevision(task, 1, currentUserId, now));
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated);
         _workspaceDal.TouchMembership(creator);
         if (assigneeMembership is not null && assigneeMembership.Id != creator.Id)
@@ -164,8 +170,12 @@ public class TaskRequestManager : ITaskRequestService
             return new ErrorResult("Due date must be today or later when changed.");
         if (task.Title == dto.Title && task.Description == dto.Description && task.Category == dto.Category &&
             task.Priority == dto.Priority && task.DueDate == dto.DueDate) return new SuccessResult(Messages.DataUpdated);
+        var revisionNumber = await _taskRequestDal.GetLatestPlanningRevisionNumberAsync(task.Id) + 1;
+        var changedAt = DateTime.UtcNow;
         task.Title = dto.Title; task.Description = dto.Description; task.Category = dto.Category;
         task.Priority = dto.Priority; task.DueDate = dto.DueDate;
+        await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
+            CreatePlanningRevision(task, revisionNumber, currentUserId, changedAt));
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated);
         return await SaveTaskChange(task, activity, Messages.DataUpdated);
     }
@@ -491,6 +501,8 @@ public class TaskRequestManager : ITaskRequestService
     {
         try { await _unitOfWork.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
+        catch (DbUpdateException ex) when (IsPlanningRevisionUniqueConflict(ex))
+        { return new ConflictResult(ConcurrentChange); }
         if (publishActivity) await _collaboration.PublishActivityAsync(activity);
         await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessResult(message);
@@ -531,7 +543,36 @@ public class TaskRequestManager : ITaskRequestService
         Feedback = review.Feedback, CreatedAt = review.CreatedAt
     };
 
+    private static TaskPlanningRevision CreatePlanningRevision(TaskRequest task, int revisionNumber,
+        int changedByUserId, DateTime changedAt) => new()
+    {
+        TaskRequest = task,
+        RevisionNumber = revisionNumber,
+        ChangedByUserId = changedByUserId,
+        ChangedAt = changedAt,
+        Title = task.Title,
+        Description = task.Description,
+        Category = task.Category,
+        Priority = task.Priority,
+        DueDate = task.DueDate
+    };
+
     private static bool IsUniqueConflict(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } ||
         exception.InnerException?.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsPlanningRevisionUniqueConflict(DbUpdateException exception)
+    {
+        const string constraintName = "IX_TaskPlanningRevisions_TaskRequestId_RevisionNumber";
+        if (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: constraintName
+            })
+            return true;
+
+        var message = exception.InnerException?.Message;
+        return message?.Contains("TaskPlanningRevisions.TaskRequestId", StringComparison.OrdinalIgnoreCase) == true &&
+               message.Contains("TaskPlanningRevisions.RevisionNumber", StringComparison.OrdinalIgnoreCase);
+    }
 }

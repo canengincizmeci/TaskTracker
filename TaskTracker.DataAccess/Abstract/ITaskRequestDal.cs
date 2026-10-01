@@ -16,6 +16,8 @@ namespace TaskTracker.DataAccess.Abstract
         Task<List<GetTasksDto>> GetWorkspaceTasksAsync(int workspaceId, int userId);
         Task<List<TaskRequest>> GetAssignedTasksAsync(int userId);
         Task<int> GetLatestRevisionNumberAsync(int taskId);
+        Task<int> GetLatestPlanningRevisionNumberAsync(int taskId);
+        Task<List<TaskPlanningRevision>> GetPlanningRevisionsAsync(int taskId);
         Task<TaskSubmission?> GetLatestSubmissionAsync(int taskId);
         Task<List<TaskSubmissionDto>> GetSubmissionHistoryAsync(int taskId);
         Task<List<AwaitingReviewTaskDto>> GetAwaitingReviewAsync(int ownerId);

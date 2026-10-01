@@ -92,6 +92,14 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             await _context.TaskSubmissions.Where(x => x.TaskRequestId == taskId)
                 .MaxAsync(x => (int?)x.RevisionNumber) ?? 0;
 
+        public async Task<int> GetLatestPlanningRevisionNumberAsync(int taskId) =>
+            await _context.TaskPlanningRevisions.Where(x => x.TaskRequestId == taskId)
+                .MaxAsync(x => (int?)x.RevisionNumber) ?? 0;
+
+        public Task<List<TaskPlanningRevision>> GetPlanningRevisionsAsync(int taskId) =>
+            _context.TaskPlanningRevisions.AsNoTracking().Where(x => x.TaskRequestId == taskId)
+                .OrderBy(x => x.RevisionNumber).ToListAsync();
+
         public Task<TaskSubmission?> GetLatestSubmissionAsync(int taskId) =>
             _context.TaskSubmissions.Include(x => x.SubmittedByUser)
                 .Where(x => x.TaskRequestId == taskId)
