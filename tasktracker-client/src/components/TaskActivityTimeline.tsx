@@ -30,8 +30,8 @@ export default function TaskActivityTimeline({ activities, loading, error }: {
   loading: boolean;
   error: string;
 }) {
-  return <section className="task-detail-section" aria-label="Activity / Work History">
-    <h2>Activity / Work History</h2>
+  return <section className="task-history-section" aria-label="Activity history">
+    <h3>Activity</h3>
     <p>Latest 100 events, oldest first.</p>
     {error && <p role="alert" className="error-message">{error}</p>}
     {loading && <p>Loading activity...</p>}

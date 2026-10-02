@@ -1,122 +1,103 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getTaskSubmissions, reviewSubmission, submitTask } from "../api/taskService";
-import { errorMessage } from "../api/errorMessage";
 import type { Task } from "../types/task";
-import type { TaskSubmission } from "../types/taskSubmission";
+import type { TaskSubmissionWorkflow } from "../hooks/useTaskSubmissionWorkflow";
 
-export default function TaskSubmissionPanel({ task, onChanged }: {
+export default function TaskSubmissionPanel({ task, workflow, onStart, onComplete, statusBusy }: {
   task: Task;
-  onChanged: () => Promise<void>;
+  workflow: TaskSubmissionWorkflow;
+  onStart: () => void;
+  onComplete: () => void;
+  statusBusy: boolean;
 }) {
-  const [submissions, setSubmissions] = useState<TaskSubmission[]>([]);
-  const [content, setContent] = useState("");
-  const [feedback, setFeedback] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
+  const selfManaged = !task.assigneeUserId || task.assigneeUserId === task.ownerId;
+  const changesRequested = workflow.latest?.review?.decision === "ChangesRequested";
 
-  const load = useCallback(async () => {
-    try {
-      setSubmissions(await getTaskSubmissions(task.id));
-      setFailure("");
-    } catch (reason) {
-      setFailure(errorMessage(reason, "Submission history could not be loaded."));
-    } finally {
-      setLoading(false);
-    }
-  }, [task.id]);
+  let title = "No action needed";
+  let message = "You can review the task details and discussion below.";
+  if (task.canReview) title = "Review submitted work";
+  else if (task.canSubmit) title = workflow.loading ? "Loading next action..." :
+    changesRequested ? "Revise & resubmit" : "Submit work";
+  else if (task.canStart) title = "Start task";
+  else if (task.isOwner && selfManaged && task.status === "InProgress") title = "Complete task";
+  else if (task.isOwner && !selfManaged && task.status === "Pending") {
+    title = "Waiting for assignee to start";
+    message = `${task.assigneeUserName ?? "The assignee"} can start this task when ready.`;
+  } else if (task.isOwner && !selfManaged && task.status === "InProgress") {
+    title = "Waiting for assignee to submit";
+    message = `${task.assigneeUserName ?? "The assignee"} is working on this task.`;
+  } else if (task.isAssignee && task.status === "InReview") {
+    title = "Waiting for review";
+    message = "The task owner will review your submitted work.";
+  } else if (task.status === "InReview") {
+    title = "Review unavailable";
+    message = "The submitted work cannot be reviewed in its current state.";
+  } else if (task.status === "Completed") {
+    title = "Task completed";
+    message = "No further workflow action is required.";
+  } else if (task.status === "Cancelled") {
+    title = "Task cancelled";
+    message = "The owner can reopen this task from More actions.";
+  }
 
-  useEffect(() => {
-    const initial = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(initial);
-  }, [load, task.version]);
+  const hasPrimaryAction = task.canStart || task.canSubmit || task.canReview ||
+    Boolean(task.isOwner && selfManaged && task.status === "InProgress");
 
-  useEffect(() => {
-    const refresh = () => { void Promise.allSettled([load(), onChanged()]); };
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [load, onChanged]);
+  return <section className="task-next-action" aria-labelledby="task-next-action-title">
+    <div className="task-next-action__heading"><p className="eyebrow">NEXT ACTION</p>
+      <h2 id="task-next-action-title">{title}</h2></div>
+    {workflow.failure && <p role="alert" className="error-message">{workflow.failure}</p>}
+    {workflow.loading && (task.canSubmit || task.canReview || task.status === "InReview") &&
+      <p role="status">Loading submitted work...</p>}
 
-  const latest = submissions.at(-1);
-  const latestChanges = useMemo(() => [...submissions].reverse()
-    .find((item) => item.review?.decision === "ChangesRequested"), [submissions]);
-
-  const refresh = async () => {
-    await Promise.allSettled([load(), onChanged()]);
-  };
-
-  const submit = async () => {
-    if (busy || !content.trim()) return;
-    setBusy(true); setFailure("");
-    try {
-      await submitTask(task.id, task.version, content);
-      setContent("");
-      await refresh();
-    } catch (reason) {
-      setFailure(errorMessage(reason, "Work could not be submitted. Your text has been kept."));
-      await refresh();
-    } finally { setBusy(false); }
-  };
-
-  const review = async (decision: "Approved" | "ChangesRequested") => {
-    if (busy || !latest || (decision === "ChangesRequested" && !feedback.trim())) return;
-    setBusy(true); setFailure("");
-    try {
-      await reviewSubmission(task.id, latest.id, task.version, decision, feedback);
-      setFeedback("");
-      await refresh();
-    } catch (reason) {
-      setFailure(errorMessage(reason, "The review could not be saved."));
-      await refresh();
-    } finally { setBusy(false); }
-  };
-
-  return <section className="task-detail-section submission-panel" aria-label="Work submission and review">
-    <div className="task-section-header"><div><p className="eyebrow">DELIVERY</p><h2>Submission and review</h2></div></div>
-    {failure && <p role="alert" className="error-message">{failure}</p>}
-    {loading && <p>Loading submission history...</p>}
-
-    {!loading && task.status === "InReview" && !latest && <div className="submission-notice submission-notice--warning">
-      <strong>Legacy review state</strong>
-      <p>This task has no valid submission to review. Cancel and reopen it to restart the delegated workflow.</p>
+    {!workflow.loading && !workflow.historyLoadFailed && task.status === "InReview" && !workflow.latest && <div className="submission-notice submission-notice--warning">
+      <strong>Submitted work is unavailable</strong>
+      <p>This task is waiting for review but has no valid submitted work. The owner can cancel and reopen it from More actions.</p>
     </div>}
 
-    {!loading && task.status === "InReview" && latest && <div className="submission-notice">
-      <strong>Waiting for review · Revision {latest.revisionNumber}</strong>
-      <p>Submitted by {latest.submittedByUserName} on {new Date(latest.createdAt).toLocaleString()}.</p>
-      <div className="submission-content">{latest.content}</div>
-    </div>}
-
-    {task.canSubmit && <div className="submission-form">
-      {latestChanges?.review?.feedback && <div className="submission-notice submission-notice--warning">
-        <strong>Changes requested for revision {latestChanges.revisionNumber}</strong>
-        <p>{latestChanges.review.feedback}</p>
-      </div>}
-      <label htmlFor="submission-content">Submit completed work</label>
-      <textarea id="submission-content" rows={6} maxLength={10000} value={content} disabled={busy}
-        onChange={(event) => setContent(event.target.value)} />
-      <button type="button" className="primary-button" disabled={busy || !content.trim()}
-        onClick={() => void submit()}>{busy ? "Submitting..." : "Submit work"}</button>
-    </div>}
-
-    {task.canReview && latest && <div className="submission-form">
+    {task.canReview && workflow.latest && <div className="submission-form">
+      <p>Submitted by <strong>{workflow.latest.submittedByUserName}</strong> on {new Date(workflow.latest.createdAt).toLocaleString()}.</p>
+      <div className="submission-content">{workflow.latest.content}</div>
       <label htmlFor="review-feedback">Feedback (required when requesting changes)</label>
-      <textarea id="review-feedback" rows={4} maxLength={5000} value={feedback} disabled={busy}
-        onChange={(event) => setFeedback(event.target.value)} />
-      <div className="task-detail-actions">
-        <button type="button" className="primary-button" disabled={busy}
-          onClick={() => void review("Approved")}>Approve</button>
-        <button type="button" className="secondary-button" disabled={busy || !feedback.trim()}
-          onClick={() => void review("ChangesRequested")}>Request changes</button>
+      <textarea id="review-feedback" rows={4} maxLength={5000} value={workflow.feedback}
+        disabled={workflow.busy} onChange={(event) => workflow.setFeedback(event.target.value)} />
+      <div className="task-next-action__buttons">
+        <button type="button" className="primary-button" disabled={workflow.busy}
+          onClick={() => void workflow.review("Approved")}>Approve</button>
+        <button type="button" className="secondary-button" disabled={workflow.busy || !workflow.feedback.trim()}
+          onClick={() => void workflow.review("ChangesRequested")}>Request changes</button>
       </div>
     </div>}
 
-    {!loading && submissions.length === 0 && task.status !== "InReview" &&
-      <p>No work has been submitted yet.</p>}
-    {submissions.length > 0 && <div className="submission-history">
-      <h3>Revision history</h3>
-      {[...submissions].reverse().map((item) => <article key={item.id} className="submission-revision">
-        <header><strong>Revision {item.revisionNumber}</strong><span>{item.submittedByUserName} · {new Date(item.createdAt).toLocaleString()}</span></header>
+    {task.canSubmit && !workflow.loading && <div className="submission-form">
+      {changesRequested && workflow.latest?.review?.feedback && <div className="submission-notice submission-notice--warning">
+        <strong>Changes requested</strong><p>{workflow.latest.review.feedback}</p>
+      </div>}
+      <label htmlFor="submission-content">{changesRequested ? "Updated work" : "Completed work"}</label>
+      <textarea id="submission-content" rows={6} maxLength={10000} value={workflow.content}
+        disabled={workflow.busy} onChange={(event) => workflow.setContent(event.target.value)} />
+      <button type="button" className="primary-button" disabled={workflow.busy || !workflow.content.trim()}
+        onClick={() => void workflow.submit()}>{workflow.busy ? "Submitting..." : changesRequested ? "Resubmit work" : "Submit work"}</button>
+    </div>}
+
+    {task.canStart && <button type="button" className="primary-button" disabled={statusBusy}
+      onClick={onStart}>{statusBusy ? "Starting..." : "Start task"}</button>}
+    {!task.canStart && !task.canSubmit && !task.canReview && task.isOwner && selfManaged && task.status === "InProgress" &&
+      <button type="button" className="primary-button" disabled={statusBusy}
+        onClick={onComplete}>{statusBusy ? "Completing..." : "Complete task"}</button>}
+    {!hasPrimaryAction && task.status !== "InReview" && <p className="task-next-action__message">{message}</p>}
+    {!hasPrimaryAction && task.status === "InReview" && workflow.latest && <p className="task-next-action__message">{message}</p>}
+  </section>;
+}
+
+export function TaskSubmissionHistory({ task, workflow }: { task: Task; workflow: TaskSubmissionWorkflow }) {
+  const delegated = task.assigneeUserId != null && task.assigneeUserId !== task.ownerId;
+  if (!delegated && task.status !== "InReview" && workflow.submissions.length === 0) return null;
+  return <section className="task-history-section" aria-labelledby="submitted-work-history-title">
+    <h3 id="submitted-work-history-title">Submitted work</h3>
+    {workflow.loading && <p>Loading submitted work history...</p>}
+    {!workflow.loading && workflow.submissions.length === 0 && <p>No submitted work history is available.</p>}
+    {workflow.submissions.length > 0 && <div className="submission-history">
+      {[...workflow.submissions].reverse().map((item) => <article key={item.id} className="submission-revision">
+        <header><strong>Submission {item.revisionNumber}</strong><span>{item.submittedByUserName} · {new Date(item.createdAt).toLocaleString()}</span></header>
         <div className="submission-content">{item.content}</div>
         {item.review && <div className={`submission-decision submission-decision--${item.review.decision.toLowerCase()}`}>
           <strong>{item.review.decision === "Approved" ? "Approved" : "Changes requested"}</strong>

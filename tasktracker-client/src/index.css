@@ -1767,6 +1767,274 @@ select {
   }
 }
 
+/* TASK DETAIL SIMPLIFICATION */
+
+.task-detail-page .task-detail-shell {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+}
+
+.task-detail-back {
+  justify-self: start;
+  color: #475569;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.task-detail-back:hover {
+  color: var(--brand);
+}
+
+.task-detail-hero,
+.task-next-action,
+.task-detail-page .task-detail-section,
+.task-people-card,
+.task-history-disclosure {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.task-detail-hero,
+.task-next-action,
+.task-detail-page .task-detail-section,
+.task-people-card {
+  padding: 26px;
+}
+
+.task-detail-hero__top,
+.task-access-heading,
+.task-next-action__buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-detail-hero .task-detail-badges {
+  margin: 0;
+}
+
+.task-detail-date {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.task-detail-hero h1 {
+  margin: 24px 0 12px;
+  color: #101828;
+  font-size: clamp(36px, 5vw, 58px);
+  line-height: 1.02;
+  letter-spacing: -2px;
+}
+
+.task-workspace-context {
+  display: inline-flex;
+  color: var(--brand);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.task-people-inline,
+.task-people-summary {
+  display: flex;
+  gap: 14px 28px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.task-people-inline span,
+.task-people-summary div {
+  color: var(--muted);
+}
+
+.task-people-inline strong,
+.task-people-summary strong {
+  color: #101828;
+  margin-left: 6px;
+}
+
+.task-people-summary div {
+  display: grid;
+  min-width: 180px;
+  gap: 5px;
+}
+
+.task-people-summary strong {
+  margin-left: 0;
+}
+
+.task-more-actions {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.task-more-actions__standard {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-cancel-button {
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  padding: 13px 17px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.task-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #fecaca;
+}
+
+.task-danger-zone div {
+  display: grid;
+  gap: 4px;
+}
+
+.task-danger-zone span,
+.task-control-note,
+.task-next-action__message {
+  color: var(--muted);
+}
+
+.task-next-action {
+  border-color: #bfdbfe;
+  box-shadow: 0 18px 55px rgba(37, 99, 235, 0.12);
+}
+
+.task-next-action__heading h2 {
+  margin: 7px 0 18px;
+  font-size: 30px;
+  color: #101828;
+}
+
+.task-next-action > .primary-button {
+  min-width: 170px;
+}
+
+.task-next-action .submission-form textarea,
+.task-assignment-controls select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.task-description-card .task-detail-description {
+  margin: 0;
+}
+
+.task-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.task-disclosure-button {
+  margin-top: 20px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.task-assignment-management {
+  display: grid;
+  gap: 22px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.task-assignment-controls,
+.task-access-management {
+  display: grid;
+  gap: 14px;
+}
+
+.task-assignment-controls > label {
+  font-weight: 800;
+}
+
+.task-history-disclosure {
+  overflow: hidden;
+}
+
+.task-history-disclosure > summary {
+  padding: 22px 26px;
+  color: #101828;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.task-history-disclosure[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.task-history-content {
+  display: grid;
+  gap: 24px;
+  padding: 26px;
+}
+
+.task-history-section h3 {
+  margin-top: 0;
+  font-size: 22px;
+}
+
+.task-detail-page :is(button, a, summary, select, textarea, input):focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 3px;
+}
+
+@media (max-width: 680px) {
+  .task-detail-hero,
+  .task-next-action,
+  .task-detail-page .task-detail-section,
+  .task-people-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .task-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-danger-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-next-action__buttons > *,
+  .task-more-actions__standard > * {
+    width: 100%;
+    text-align: center;
+  }
+}
+
 .task-detail-layout {
   max-width: 1180px;
   margin: 0 auto;

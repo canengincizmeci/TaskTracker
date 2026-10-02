@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HubConnectionBuilder } from "@microsoft/signalr";
 import { getTaskActivity, getTaskMessages } from "../api/taskCollaborationService";
 import { errorMessage } from "../api/errorMessage";
@@ -12,10 +12,12 @@ function mergeHistory<T extends { id: number; createdAt: string }>(current: T[],
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id - b.id).slice(-100);
 }
 
-export default function TaskCollaborationPanel({ taskId, onTaskChanged, onAccessRevoked }: {
+export default function TaskCollaborationPanel({ taskId, onTaskChanged, onAccessRevoked, middleContent, historyContent }: {
   taskId: number;
   onTaskChanged?: () => void | Promise<void>;
   onAccessRevoked?: () => void;
+  middleContent?: ReactNode;
+  historyContent?: ReactNode;
 }) {
   const [activities, setActivities] = useState<TaskActivity[]>([]);
   const [messages, setMessages] = useState<TaskMessage[]>([]);
@@ -109,8 +111,15 @@ export default function TaskCollaborationPanel({ taskId, onTaskChanged, onAccess
 
   return <>
     {liveError && <p role="status">{liveError}</p>}
-    <TaskActivityTimeline activities={activities} loading={loading} error={activityError} />
     <TaskDiscussion taskId={taskId} messages={messages} loading={loading} error={messageError}
       onMessage={(message) => setMessages((current) => mergeHistory(current, [message]))} />
+    {middleContent}
+    <details className="task-history-disclosure">
+      <summary>History</summary>
+      <div className="task-history-content">
+        <TaskActivityTimeline activities={activities} loading={loading} error={activityError} />
+        {historyContent}
+      </div>
+    </details>
   </>;
 }
