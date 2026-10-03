@@ -6,18 +6,18 @@ import type {
 } from "../types/workDashboard";
 
 const statusLabels: Record<WorkTaskStatus, string> = {
-  Pending: "Pending",
+  Pending: "Not started",
   InProgress: "In progress",
-  InReview: "In review",
+  InReview: "Waiting for review",
   Completed: "Completed",
   Cancelled: "Cancelled",
 };
 
 const actionLabels: Record<WorkTaskNextAction, string> = {
-  Start: "Start work",
+  Start: "Start task",
   Submit: "Submit work",
-  Revise: "Continue revision",
-  Review: "Review submission",
+  Revise: "Revise & resubmit",
+  Review: "Review submitted work",
   View: "Open task",
 };
 

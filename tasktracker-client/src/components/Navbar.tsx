@@ -12,15 +12,22 @@ type UnreadCountEventDetail = {
   reset?: boolean;
 };
 
+type AccountUnreadState = {
+  accountToken: string | null;
+  count: number;
+};
+
 function Navbar() {
   const navigate = useNavigate();
-  const { isAuthenticated, user, logout } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { isAuthenticated, token, user, logout } = useAuth();
+  const [unread, setUnread] = useState<AccountUnreadState>({ accountToken: null, count: 0 });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setUnreadCount(0);
-      return;
+    if (!isAuthenticated || !token) {
+      const reset = window.setTimeout(() => setUnread({ accountToken: null, count: 0 }), 0);
+      return () => window.clearTimeout(reset);
     }
 
     let isActive = true;
@@ -31,7 +38,8 @@ function Navbar() {
     const handleNotification = (notification: Notification) => {
       if (!notification.isRead && !knownUnreadIds.has(notification.id)) {
         knownUnreadIds.add(notification.id);
-        setUnreadCount((currentCount) => currentCount + 1);
+        setUnread((current) => ({ accountToken: token,
+          count: (current.accountToken === token ? current.count : 0) + 1 }));
       }
     };
 
@@ -44,14 +52,15 @@ function Navbar() {
         allMarkedRead = true;
         knownUnreadIds.clear();
         locallyReadIds.clear();
-        setUnreadCount(0);
+        setUnread({ accountToken: token, count: 0 });
         return;
       }
 
       if (notificationId !== undefined && !locallyReadIds.has(notificationId)) {
         locallyReadIds.add(notificationId);
         knownUnreadIds.delete(notificationId);
-        setUnreadCount((currentCount) => Math.max(0, currentCount - 1));
+        setUnread((current) => ({ accountToken: token,
+          count: Math.max(0, (current.accountToken === token ? current.count : 0) - 1) }));
       }
     };
 
@@ -75,7 +84,7 @@ function Navbar() {
             )
             .forEach((notification) => knownUnreadIds.add(notification.id));
 
-          setUnreadCount(knownUnreadIds.size);
+          setUnread({ accountToken: token, count: knownUnreadIds.size });
         }
       } catch (error) {
         console.error("Failed to load unread notification count:", error);
@@ -89,63 +98,72 @@ function Navbar() {
       notificationHubConnection.off("ReceiveNotification", handleNotification);
       window.removeEventListener(UNREAD_COUNT_EVENT, handleUnreadCountChange);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, token]);
 
   const handleLogout = () => {
+    setMenuOpen(false);
+    setAccountOpen(false);
+    setUnread({ accountToken: null, count: 0 });
     logout();
     navigate("/login");
   };
 
+  const closeMenus = () => {
+    setMenuOpen(false);
+    setAccountOpen(false);
+  };
+
+  const displayedUnreadCount = isAuthenticated && unread.accountToken === token ? unread.count : 0;
+
   return (
     <header className="navbar">
-      <Link to="/" className="navbar-logo">
+      <Link to={isAuthenticated && user?.role === "User" ? "/dashboard" : "/"}
+        className="navbar-logo" onClick={closeMenus}>
         TaskTracker
       </Link>
 
-      <nav className="navbar-links">
+      <button type="button" className="navbar-menu-button" aria-expanded={menuOpen}
+        aria-controls="primary-navigation" onClick={() => setMenuOpen((current) => !current)}>
+        <span aria-hidden="true">☰</span> Menu
+      </button>
+
+      <nav id="primary-navigation" className={`navbar-links${menuOpen ? " navbar-links--open" : ""}`}
+        aria-label="Primary navigation">
         {!isAuthenticated ? (
           <>
-            <Link to="/">Home</Link>
-            <Link to="/login">Login</Link>
-            <Link to="/register">Register</Link>
+            <Link to="/" onClick={closeMenus}>Home</Link>
+            <Link to="/login" onClick={closeMenus}>Login</Link>
+            <Link to="/register" onClick={closeMenus}>Register</Link>
           </>
         ) : (
           <>
             {user?.role === "User" && (
-              <>
-                <Link to="/dashboard">My Work</Link>
-                <Link to="/tasks/user-tasks">My Tasks</Link>
-                <Link to="/tasks/assigned-to-me">Assigned to Me</Link>
-                <Link to="/tasks/awaiting-review">Awaiting Review</Link>
-                <Link to="/tasks/shared-tasks">Shared</Link>
-                <Link to="/workspaces">Workspaces</Link>
-                <Link to="/tasks/invitations">Invitations</Link>
-                <Link to="/tasks/create-task" className="create-task-link">
-                  + Create Task
-                </Link>
-              </>
+              <div className="navbar-primary-links">
+                <Link to="/dashboard" onClick={closeMenus}>My Work</Link>
+                <Link to="/workspaces" onClick={closeMenus}>Workspaces</Link>
+                <Link to="/tasks/create-task" className="create-task-link" onClick={closeMenus}>Create task</Link>
+              </div>
             )}
 
-            {user?.role === "Admin" && (
-              <Link to="/admin-dashboard">Dashboard</Link>
-            )}
-
-            <Link
-              to="/notifications"
-              aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
-            >
-              <span aria-hidden="true">🔔</span> Notifications
-              {unreadCount > 0 && <span> ({unreadCount})</span>}
+            <Link className="navbar-inbox" to="/notifications" onClick={closeMenus}
+              aria-label={`Inbox${displayedUnreadCount > 0 ? ` (${displayedUnreadCount} unread)` : ""}`}>
+              Inbox
+              {displayedUnreadCount > 0 && <span className="navbar-unread-count">{displayedUnreadCount}</span>}
             </Link>
-            <Link to="/profile">Profile</Link>
 
-            <span className="navbar-user">
-              {user?.name ? `Hello, ${user.name}` : "Account"}
-            </span>
-
-            <button className="navbar-logout" onClick={handleLogout}>
-              Logout
-            </button>
+            <div className="navbar-account">
+              <button type="button" className="navbar-account-button" aria-expanded={accountOpen}
+                aria-controls="account-navigation" onClick={() => setAccountOpen((current) => !current)}>
+                Account <span aria-hidden="true">▾</span>
+              </button>
+              {accountOpen && <div id="account-navigation" className="navbar-account-menu">
+                <span>{user?.name ?? user?.email ?? "Signed in"}</span>
+                {user?.role === "Admin" && <Link to="/admin-dashboard" onClick={closeMenus}>Admin dashboard</Link>}
+                <Link to="/profile" onClick={closeMenus}>Profile</Link>
+                <Link to="/settings/security" onClick={closeMenus}>Security</Link>
+                <button type="button" className="navbar-logout" onClick={handleLogout}>Logout</button>
+              </div>}
+            </div>
           </>
         )}
       </nav>

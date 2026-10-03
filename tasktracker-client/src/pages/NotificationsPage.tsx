@@ -109,16 +109,18 @@ function NotificationsPage() {
   };
 
   return (
-    <main className="page public-page">
-      <section className="task-detail-layout">
+    <main className="page public-page inbox-page">
+      <section className="inbox-shell">
         <div className="task-detail-main">
           <div className="task-detail-header">
             <div>
-              <p className="eyebrow">NOTIFICATIONS</p>
-              <h1>Notification Center</h1>
+              <p className="eyebrow">INBOX</p>
+              <h1>Inbox</h1>
             </div>
 
-            <div className="task-detail-actions">
+            <div className="inbox-shortcuts" aria-label="Invitation queues">
+              <Link to="/tasks/invitations" className="secondary-button">Task invitations</Link>
+              <Link to="/workspaces" className="secondary-button">Workspace invitations</Link>
               <button
                 type="button"
                 className="secondary-button"
@@ -130,14 +132,14 @@ function NotificationsPage() {
           </div>
 
           <p className="task-detail-description">
-            Task invitations, updates and system notifications will appear here.
+            Review notifications and open invitation queues that need your response.
           </p>
 
           <section className="task-detail-section">
             <div className="task-section-header">
               <div>
-                <p className="eyebrow">RECENT</p>
-                <h2>Your notifications</h2>
+                <p className="eyebrow">UPDATES</p>
+                <h2>Notifications</h2>
               </div>
             </div>
 
@@ -173,20 +175,6 @@ function NotificationsPage() {
           </section>
         </div>
 
-        <aside className="task-detail-sidebar">
-          <div className="task-sidebar-card">
-            <div className="task-sidebar-header">
-              <p className="eyebrow">QUICK ACCESS</p>
-              <h2>Workspace links</h2>
-            </div>
-
-            <div className="task-sidebar-links">
-              <Link to="/tasks/user-tasks">My Tasks</Link>
-              <Link to="/tasks/create-task">Create Task</Link>
-              <Link to="/profile">Profile</Link>
-            </div>
-          </div>
-        </aside>
       </section>
     </main>
   );

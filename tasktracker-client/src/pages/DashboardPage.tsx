@@ -14,6 +14,7 @@ import type {
   WorkSort,
   WorkTaskPriority,
   WorkTaskQuery,
+  WorkTaskListItem,
   WorkTaskStatus,
 } from "../types/workDashboard";
 
@@ -25,9 +26,9 @@ const scopes: { value: WorkScope; label: string }[] = [
 ];
 
 const statuses: { value: WorkTaskStatus; label: string }[] = [
-  { value: "Pending", label: "Pending" },
+  { value: "Pending", label: "Not started" },
   { value: "InProgress", label: "In progress" },
-  { value: "InReview", label: "In review" },
+  { value: "InReview", label: "Waiting for review" },
   { value: "Completed", label: "Completed" },
   { value: "Cancelled", label: "Cancelled" },
 ];
@@ -67,6 +68,28 @@ function readPage(value: string | null) {
 
 function countText(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function isOverdue(task: WorkTaskListItem) {
+  if (!task.dueDate || task.status === "Completed" || task.status === "Cancelled") return false;
+  const today = new Date();
+  const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const [year, month, day] = task.dueDate.split("-").map(Number);
+  return new Date(year, month - 1, day) < localToday;
+}
+
+function DashboardTaskSection({ title, description, tasks }: {
+  title: string;
+  description: string;
+  tasks: WorkTaskListItem[];
+}) {
+  if (tasks.length === 0) return null;
+  return <section className="dashboard-task-section" aria-labelledby={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>
+    <header><div><h3 id={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>{title}</h3>
+      <p>{description}</p></div><span>{tasks.length}</span></header>
+    <div className="dashboard-work-list">{tasks.map((task) =>
+      <DashboardWorkItem key={task.taskId} task={task} />)}</div>
+  </section>;
 }
 
 export default function DashboardPage() {
@@ -199,6 +222,19 @@ export default function DashboardPage() {
   const filtersActive = Boolean(search || status || priority || due !== "all");
   const resultStart = work && work.totalCount > 0 ? (work.page - 1) * work.pageSize + 1 : 0;
   const resultEnd = work ? Math.min(work.page * work.pageSize, work.totalCount) : 0;
+  const groupedWork = useMemo(() => {
+    const groups = { attention: [] as WorkTaskListItem[], active: [] as WorkTaskListItem[],
+      awaiting: [] as WorkTaskListItem[], recent: [] as WorkTaskListItem[] };
+    for (const task of work?.items ?? []) {
+      const terminal = task.status === "Completed" || task.status === "Cancelled";
+      if (terminal) groups.recent.push(task);
+      else if (task.nextAction !== "View" || isOverdue(task)) groups.attention.push(task);
+      else if ((task.isOwned && task.assigneeUserId != null && task.assigneeUserId !== task.ownerId) ||
+        (task.isAssigned && task.status === "InReview")) groups.awaiting.push(task);
+      else groups.active.push(task);
+    }
+    return groups;
+  }, [work]);
 
   return (
     <main className="page public-page dashboard-page">
@@ -230,7 +266,11 @@ export default function DashboardPage() {
             <button type="button" onClick={() => void loadSummary()}>Retry</button>
           </div>}
 
-          <section className="dashboard-summary-grid" aria-label="Work requiring attention">
+          <section className="dashboard-attention" aria-labelledby="dashboard-attention-heading">
+            <div className="dashboard-section-heading"><div><p className="eyebrow">PRIORITY</p>
+              <h2 id="dashboard-attention-heading">Needs your attention</h2></div>
+              <Link to="/notifications">Open Inbox</Link></div>
+          <div className="dashboard-summary-grid">
             <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
               description={summary.assignedToMeCount === 0 ? "No active assigned tasks" :
                 `${countText(summary.assignedToMeCount, "active task")} to move forward`}
@@ -238,7 +278,7 @@ export default function DashboardPage() {
             <DashboardSummaryCard title="Awaiting my review" count={summary.awaitingMyReviewCount}
               description={summary.awaitingMyReviewCount === 0 ? "No submissions waiting" :
                 `${countText(summary.awaitingMyReviewCount, "submission")} waiting for a decision`}
-              tone="review" to="/tasks/awaiting-review" />
+              tone="review" to="/dashboard?scope=owned&status=InReview&sort=reviewAge" />
             <DashboardSummaryCard title="Overdue" count={summary.overdueCount}
               description={summary.overdueCount === 0 ? "No owned or assigned work is overdue" :
                 `${countText(summary.overdueCount, "task")} past the due date`}
@@ -252,7 +292,7 @@ export default function DashboardPage() {
                 "No workspace invitations need a response" :
                 `${countText(summary.pendingWorkspaceInvitationsCount, "invitation")} awaiting your response`}
               tone="invitation" to="/workspaces" />
-          </section>
+          </div></section>
 
           {allClear && <section className="dashboard-zero-state">
             <div className="dashboard-zero-state__icon" aria-hidden="true">✓</div>
@@ -260,15 +300,15 @@ export default function DashboardPage() {
               <p>Create a task when you are ready, or browse the work you already own.</p></div>
             <div className="dashboard-zero-state__actions">
               <Link className="primary-button" to="/tasks/create-task">Create Task</Link>
-              <Link className="secondary-button" to="/tasks/user-tasks">Owned Tasks</Link>
+              <Link className="secondary-button" to="/dashboard?scope=owned">Owned tasks</Link>
             </div>
           </section>}
         </>}
 
         <section className="dashboard-work" aria-labelledby="dashboard-work-heading">
           <header className="dashboard-work__header">
-            <div><p className="eyebrow">WORKSPACE</p><h2 id="dashboard-work-heading">My Work</h2>
-              <p>Find and open every task you own, are assigned, or can access.</p></div>
+            <div><p className="eyebrow">TASKS</p><h2 id="dashboard-work-heading">Your work</h2>
+              <p>Act on urgent work first, then track active tasks, waiting work, and recent outcomes.</p></div>
           </header>
 
           <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
@@ -336,8 +376,18 @@ export default function DashboardPage() {
             <button type="button" onClick={() => void loadWork()}>Retry</button>
           </div>}
 
-          {work && work.items.length > 0 && <div className="dashboard-work-list" aria-busy={workLoading}>
-            {work.items.map((task) => <DashboardWorkItem key={task.taskId} task={task} />)}
+          {work && work.items.length > 0 && <div className="dashboard-work-sections" aria-busy={workLoading}>
+            <DashboardTaskSection title="Needs your attention" description="Tasks with a clear next action or an overdue deadline."
+              tasks={groupedWork.attention} />
+            <DashboardTaskSection title="My active tasks" description="Other active work you own, are assigned, or can access."
+              tasks={groupedWork.active} />
+            <DashboardTaskSection title="Awaiting others" description="Delegated work and submitted work waiting on someone else."
+              tasks={groupedWork.awaiting} />
+            {groupedWork.recent.length > 0 && <details className="dashboard-recent">
+              <summary>Completed / recent <span>{groupedWork.recent.length}</span></summary>
+              <div className="dashboard-work-list">{groupedWork.recent.map((task) =>
+                <DashboardWorkItem key={task.taskId} task={task} />)}</div>
+            </details>}
           </div>}
 
           {work && !workLoading && work.items.length === 0 && <section className="dashboard-work-empty">

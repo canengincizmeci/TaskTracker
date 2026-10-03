@@ -30,7 +30,7 @@ function TaskCard({ task }: TaskCardProps) {
           {task.priority}
         </span>
 
-        <Link to={`/task/${task.id}`} className="details-link">
+        <Link to={`/tasks/task-detail/${task.id}`} className="details-link">
           View details
         </Link>
       </div>

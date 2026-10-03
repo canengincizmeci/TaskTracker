@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import RootRoute from "./RootRoute";
 import TaskDetailPage from "../pages/TaskDetailPage";
 import LoginRoute from "./LoginRoute";
@@ -9,19 +9,15 @@ import ProfilePage from "../pages/ProfilePage";
 import ProtectedRoute from "./ProtectedRoute";
 import GuestRoute from "./GuestRoute";
 import CreateTaskPage from "../pages/CreateTaskPage";
-import UserTasksPage from "../pages/UserTasksPage";
 import TaskSharePage from "../pages/TaskSharePage";
 import NotificationsPage from "../pages/NotificationsPage";
 import TaskInvitationsPage from "../pages/TaskInvitationsPage";
-import SharedTasksPage from "../pages/SharedTasksPage";
 import TaskInvitationDetailPage from "../pages/TaskInvitationDetailPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 import VerifyPasswordResetPage from "../pages/VerifyPasswordResetPage";
 import ResetPasswordPage from "../pages/ResetPasswordPage";
 import SecuritySettingsPage from "../pages/SecuritySettingsPage";
 import NotFoundPage from "../pages/NotFoundPage";
-import AssignedTasksPage from "../pages/AssignedTasksPage";
-import AwaitingReviewPage from "../pages/AwaitingReviewPage";
 import DashboardPage from "../pages/DashboardPage";
 import WorkspacesPage from "../pages/WorkspacesPage";
 import WorkspaceDetailPage from "../pages/WorkspaceDetailPage";
@@ -94,13 +90,17 @@ function AppRouter() {
       <Route
         path="/tasks/user-tasks"
         element={
-          <ProtectedRoute>
-            <UserTasksPage />
+          <ProtectedRoute requiredRole="User">
+            <Navigate to="/dashboard?scope=owned" replace />
           </ProtectedRoute>
         }
       />
-      <Route path="/tasks/assigned-to-me" element={<ProtectedRoute><AssignedTasksPage /></ProtectedRoute>} />
-      <Route path="/tasks/awaiting-review" element={<ProtectedRoute><AwaitingReviewPage /></ProtectedRoute>} />
+      <Route path="/tasks/assigned-to-me" element={<ProtectedRoute requiredRole="User">
+        <Navigate to="/dashboard?scope=assigned" replace />
+      </ProtectedRoute>} />
+      <Route path="/tasks/awaiting-review" element={<ProtectedRoute requiredRole="User">
+        <Navigate to="/dashboard?scope=owned&status=InReview&sort=reviewAge" replace />
+      </ProtectedRoute>} />
       <Route
         path="/tasks/task-detail/:taskId"
         element={
@@ -144,8 +144,8 @@ function AppRouter() {
       <Route
         path="/tasks/shared-tasks"
         element={
-          <ProtectedRoute>
-            <SharedTasksPage />
+          <ProtectedRoute requiredRole="User">
+            <Navigate to="/dashboard?scope=shared" replace />
           </ProtectedRoute>
         }
       />
