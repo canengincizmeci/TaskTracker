@@ -53,10 +53,12 @@ function InvitationDetails({ id }: { id: number }) {
           <p>Status: {invitation.status}</p>
           {invitation.unavailableReason && <p role="alert">{invitation.unavailableReason}</p>}
           <div className="task-detail-actions">
-            <button className="primary-button" onClick={() => respond(true)} disabled={loading || !invitation.canAccept}>
+            <button className="primary-button" onClick={() => respond(true)} disabled={loading || !invitation.canAccept}
+              type="button">
               {loading ? "Processing..." : "Accept Invitation"}
             </button>
-            <button className="secondary-button" onClick={() => respond(false)} disabled={loading || !invitation.canReject}>
+            <button className="secondary-button" onClick={() => respond(false)} disabled={loading || !invitation.canReject}
+              type="button">
               Reject Invitation
             </button>
           </div>

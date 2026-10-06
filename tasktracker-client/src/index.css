@@ -541,6 +541,11 @@ select {
   color: #344054;
 }
 
+.secondary-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .danger-button {
   border: 1px solid #fecaca;
   background: var(--red-soft);
@@ -2538,6 +2543,11 @@ select {
   text-decoration: underline;
 }
 
+.task-creation-form__options-toggle:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .task-creation-form__options {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(160px, 0.55fr);
@@ -2729,6 +2739,11 @@ select {
   padding: 22px;
   background: #f8fafc;
   transition: 0.18s ease;
+}
+
+.utasks-card--link {
+  color: inherit;
+  text-decoration: none;
 }
 
 .utasks-card:hover {
@@ -3709,6 +3724,29 @@ a.dashboard-summary-card:focus-visible {
   .inbox-shortcuts > * {
     justify-content: center;
     text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-row,
+  .form-group input,
+  .form-group textarea,
+  .form-group select,
+  .primary-button,
+  .profile-link-list a,
+  .task-sidebar-links a,
+  .create-task-link,
+  .utasks-create-button,
+  .utasks-card,
+  a.dashboard-summary-card,
+  .dashboard-work-list,
+  .dashboard-work-sections {
+    transition: none;
+  }
+
+  .loading-spinner,
+  .utasks-spinner {
+    animation: none;
   }
 }
 

@@ -150,7 +150,7 @@ function VerifyEmailPage() {
       setTimeout(() => {
         navigate("/login", { state: { email: canonicalEmail } });
       }, 1200);
-    } catch (error) {
+    } catch {
       setError("Email verification failed.");
     } finally {
       setLoading(false);
@@ -171,8 +171,9 @@ function VerifyEmailPage() {
 
         <form onSubmit={handleVerifyEmail} className="auth-form">
           <div className="form-group">
-            <label>Email</label>
+            <label htmlFor="verify-email">Email</label>
             <input
+              id="verify-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
@@ -182,8 +183,9 @@ function VerifyEmailPage() {
           </div>
 
           <div className="form-group">
-            <label>Verification code</label>
+            <label htmlFor="verification-code">Verification code</label>
             <input
+              id="verification-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="6-digit code"
@@ -192,10 +194,10 @@ function VerifyEmailPage() {
             />
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message" role="alert">{error}</p>}
 
           {successMessage && (
-            <p className="success-message">{successMessage}</p>
+            <p className="success-message" role="status">{successMessage}</p>
           )}
 
           <button className="primary-button" type="submit" disabled={loading}>

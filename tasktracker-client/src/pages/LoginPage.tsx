@@ -211,7 +211,7 @@ function LoginPage() {
       } else {
         navigate("/dashboard", { replace: true });
       }
-    } catch (error) {
+    } catch {
       setError("Email or password is wrong.");
       toast.error("Email or password is wrong.");
     } finally {
@@ -265,9 +265,10 @@ function LoginPage() {
 
           <form onSubmit={handleLogin} className="auth-form">
             <div className="form-group">
-              <label>Email</label>
+              <label htmlFor="login-email">Email</label>
 
               <input
+                id="login-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
@@ -277,9 +278,10 @@ function LoginPage() {
             </div>
 
             <div className="form-group">
-              <label>Password</label>
+              <label htmlFor="login-password">Password</label>
 
               <input
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password"
@@ -290,7 +292,7 @@ function LoginPage() {
 
             <Link to="/forgot-password">Forgot password?</Link>
 
-            {error && <p className="error-message">{error}</p>}
+            {error && <p className="error-message" role="alert">{error}</p>}
 
             <button className="primary-button" type="submit" disabled={loading}>
               {loading ? "Signing in..." : "Sign in"}

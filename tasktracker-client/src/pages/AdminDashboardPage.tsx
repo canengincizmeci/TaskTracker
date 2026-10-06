@@ -18,7 +18,7 @@ function AdminDashboardPage() {
       setError("");
       const data = await getAllTasks();
       setTasks(data);
-    } catch (error) {
+    } catch {
       setError("Tasks could not be loaded.");
     } finally {
       setLoading(false);
@@ -26,7 +26,11 @@ function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    loadTasks();
+    const request = window.setTimeout(() => {
+      void loadTasks();
+    }, 0);
+
+    return () => window.clearTimeout(request);
   }, []);
 
   const activeCount = tasks.filter((task) => task.status !== "Completed" && task.status !== "Cancelled").length;
@@ -52,7 +56,7 @@ function AdminDashboardPage() {
 
       await deleteTask(id);
       await loadTasks();
-    } catch (error) {
+    } catch {
       setError("Task could not be deleted.");
     } finally {
       setActionLoadingId(null);
@@ -85,11 +89,11 @@ function AdminDashboardPage() {
         </div>
 
         <div className="admin-topbar-actions">
-          <button className="secondary-button" onClick={loadTasks}>
+          <button className="secondary-button" onClick={() => void loadTasks()} type="button">
             Refresh
           </button>
 
-          <button className="secondary-button" onClick={handleLogout}>
+          <button className="secondary-button" onClick={handleLogout} type="button">
             Logout
           </button>
         </div>
@@ -107,7 +111,7 @@ function AdminDashboardPage() {
         </div>
 
         <div className="admin-metric-card">
-          <span>Pending</span>
+          <span>Not started</span>
           <strong>{pendingCount}</strong>
         </div>
 
@@ -123,7 +127,7 @@ function AdminDashboardPage() {
       </section>
 
       {error && (
-        <section className="admin-error-box">
+        <section className="admin-error-box" role="alert">
           <p className="error-message">{error}</p>
         </section>
       )}
@@ -154,6 +158,7 @@ function AdminDashboardPage() {
                     className="danger-button"
                     onClick={() => handleDeleteTask(task.id)}
                     disabled={actionLoadingId === task.id}
+                    type="button"
                   >
                     {actionLoadingId === task.id
                       ? "Deleting..."

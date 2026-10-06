@@ -57,7 +57,7 @@ function getValidStoredToken() {
 }
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(getValidStoredToken());
+  const [token, setToken] = useState<string | null>(getValidStoredToken);
   const connectionOperation = useRef(Promise.resolve());
 
   const user = token ? getUserFromToken(token) : null;
@@ -81,10 +81,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuthTokens();
     setToken(null);
   };
-
-  useEffect(() => {
-    setToken(getValidStoredToken());
-  }, []);
 
   useEffect(() => {
     if (token) {

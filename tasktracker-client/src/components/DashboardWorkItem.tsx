@@ -4,14 +4,7 @@ import type {
   WorkTaskNextAction,
   WorkTaskStatus,
 } from "../types/workDashboard";
-
-const statusLabels: Record<WorkTaskStatus, string> = {
-  Pending: "Not started",
-  InProgress: "In progress",
-  InReview: "Waiting for review",
-  Completed: "Completed",
-  Cancelled: "Cancelled",
-};
+import { taskStatusLabel } from "../utils/taskDisplay";
 
 const actionLabels: Record<WorkTaskNextAction, string> = {
   Start: "Start task",
@@ -54,7 +47,7 @@ export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) 
     <div className="dashboard-work-item__content">
       <div className="dashboard-work-item__badges">
         <span className={`dashboard-work-badge dashboard-work-badge--status dashboard-work-badge--${task.status.toLowerCase()}`}>
-          {statusLabels[task.status]}
+          {taskStatusLabel(task.status)}
         </span>
         <span className={`dashboard-work-badge dashboard-work-badge--priority-${task.priority.toLowerCase()}`}>
           {task.priority}

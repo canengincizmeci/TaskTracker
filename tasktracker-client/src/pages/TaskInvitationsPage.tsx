@@ -138,6 +138,7 @@ function TaskInvitationsPage() {
                       <button
                         className="primary-button"
                         disabled={busyIds.has(invitation.id) || !invitation.canAccept}
+                        type="button"
                         onClick={() =>
                           respond(invitation.id, true)
                         }
@@ -148,6 +149,7 @@ function TaskInvitationsPage() {
                       <button
                         className="secondary-button"
                         disabled={busyIds.has(invitation.id) || !invitation.canReject}
+                        type="button"
                         onClick={() =>
                           respond(invitation.id, false)
                         }

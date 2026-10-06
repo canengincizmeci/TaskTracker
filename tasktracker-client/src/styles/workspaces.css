@@ -731,83 +731,6 @@
   font-weight: 800;
 }
 
-.workspace-task-form {
-  display: grid;
-  gap: 18px;
-  margin-bottom: 22px;
-  padding: 22px;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background: #f8fafc;
-}
-
-.workspace-task-form__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.workspace-task-form__header h3 {
-  margin: 0 0 6px;
-  color: #101828;
-  font-size: 20px;
-}
-
-.workspace-task-form__header p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.workspace-task-form__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.workspace-task-form__field {
-  display: grid;
-  gap: 7px;
-}
-
-.workspace-task-form__field label {
-  color: #344054;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.workspace-task-form__field input,
-.workspace-task-form__field select,
-.workspace-task-form__field textarea {
-  width: 100%;
-  min-width: 0;
-  padding: 12px 13px;
-  border: 1px solid #cbd5e1;
-  border-radius: 13px;
-  background: #ffffff;
-  color: #0f172a;
-  font: inherit;
-}
-
-.workspace-task-form__field textarea {
-  resize: vertical;
-}
-
-.workspace-task-form__field input:focus,
-.workspace-task-form__field select:focus,
-.workspace-task-form__field textarea:focus {
-  border-color: var(--brand);
-  outline: 3px solid rgba(37, 99, 235, 0.13);
-}
-
-.workspace-task-form__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .workspace-task-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -905,26 +828,13 @@
     justify-content: space-between;
   }
 
-  .workspace-task-form__header {
-    flex-direction: column;
-  }
-
-  .workspace-task-form__grid,
   .workspace-task-grid {
     grid-template-columns: 1fr;
-  }
-
-  .workspace-task-form__actions {
-    flex-direction: column-reverse;
   }
 
   .workspace-rename-actions {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .workspace-task-form__actions button {
-    width: 100%;
   }
 
   .workspace-member {
@@ -948,5 +858,11 @@
 
   .workspace-invitation-row > .secondary-button {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-card {
+    transition: none;
   }
 }

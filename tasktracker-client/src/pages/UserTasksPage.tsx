@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import type { Task } from "../types/task";
 import { getUserTasks } from "../api/taskService";
+import { taskStatusLabel } from "../utils/taskDisplay";
 
 type LocationState = {
   successMessage?: string;
@@ -53,10 +54,6 @@ function UserTasksPage() {
     loadTasks();
   }, []);
 
-  const goToTaskDetail = (taskId: number) => {
-    navigate(`/tasks/task-detail/${taskId}`);
-  };
-
   return (
     <main className="utasks-page">
       <section className="utasks-hero">
@@ -77,8 +74,9 @@ function UserTasksPage() {
           <button
             className="utasks-create-button"
             onClick={() => navigate("/tasks/create-task")}
+            type="button"
           >
-            Create Task
+            Create task
           </button>
         </div>
       </section>
@@ -94,14 +92,14 @@ function UserTasksPage() {
         </div>
 
         {loading && (
-          <div className="utasks-state">
-            <div className="utasks-spinner" />
+          <div className="utasks-state" role="status">
+            <div className="utasks-spinner" aria-hidden="true" />
             <span>Loading tasks...</span>
           </div>
         )}
 
         {error && (
-          <div className="utasks-state utasks-state--error">{error}</div>
+          <div className="utasks-state utasks-state--error" role="alert">{error}</div>
         )}
 
         {!loading && !error && tasks.length === 0 && (
@@ -118,8 +116,9 @@ function UserTasksPage() {
             <button
               className="utasks-create-button"
               onClick={() => navigate("/tasks/create-task")}
+              type="button"
             >
-              Create First Task
+              Create first task
             </button>
           </div>
         )}
@@ -127,17 +126,10 @@ function UserTasksPage() {
         {!loading && !error && tasks.length > 0 && (
           <section className="utasks-grid">
             {tasks.map((task) => (
-              <article
+              <Link
                 key={task.id}
-                className="utasks-card"
-                onClick={() => goToTaskDetail(task.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    goToTaskDetail(task.id);
-                  }
-                }}
+                className="utasks-card utasks-card--link"
+                to={`/tasks/task-detail/${task.id}`}
               >
                 <div className="utasks-card__top">
                   <span className="utasks-pill utasks-pill--priority">
@@ -145,7 +137,7 @@ function UserTasksPage() {
                   </span>
 
                   <span className="utasks-pill utasks-pill--status">
-                    {task.status === "InReview" ? "Waiting for review" : task.status}
+                    {taskStatusLabel(task.status)}
                   </span>
                 </div>
 
@@ -160,17 +152,11 @@ function UserTasksPage() {
                 </div>
 
                 <div className="utasks-card__footer">
-                  <button
-                    className="utasks-detail-button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToTaskDetail(task.id);
-                    }}
-                  >
-                    View Details →
-                  </button>
+                  <span className="utasks-detail-button">
+                    View details →
+                  </span>
                 </div>
-              </article>
+              </Link>
             ))}
           </section>
         )}

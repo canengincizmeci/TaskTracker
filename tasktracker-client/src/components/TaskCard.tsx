@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Task } from "../types/task";
+import { taskStatusLabel } from "../utils/taskDisplay";
 
 type TaskCardProps = {
   task: Task;
@@ -12,7 +13,7 @@ function TaskCard({ task }: TaskCardProps) {
         <div className="task-row-top">
           <span className="task-category">{task.category}</span>
           <span className={`task-status status-${task.status.toLowerCase().replaceAll(" ", "-")}`}>
-            {task.status === "InReview" ? "Waiting for review" : task.status}
+            {taskStatusLabel(task.status)}
           </span>
         </div>
 

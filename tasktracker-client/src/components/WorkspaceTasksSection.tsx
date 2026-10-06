@@ -10,6 +10,7 @@ import {
   type TaskCreationFormValue,
 } from "../types/taskCreationForm";
 import type { WorkspaceDetail, WorkspaceTaskCreateRequest } from "../types/workspace";
+import { taskStatusLabel } from "../utils/taskDisplay";
 
 function formatDate(value: string) {
   const date = value.length === 10 ? new Date(`${value}T00:00:00`) : new Date(value);
@@ -193,7 +194,7 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
               <div className="utasks-card__top">
                 <span className="utasks-pill utasks-pill--priority">{task.priority}</span>
                 <span className="utasks-pill utasks-pill--status">
-                  {task.status === "InReview" ? "Waiting for review" : task.status}
+                  {taskStatusLabel(task.status)}
                 </span>
               </div>
               <h2>{task.title}</h2>

@@ -215,8 +215,9 @@ function RegisterPage() {
         <form onSubmit={handleRegister} className="auth-form">
           <div className="form-grid-two">
             <div className="form-group">
-              <label>First name</label>
+              <label htmlFor="register-first-name">First name</label>
               <input
+                id="register-first-name"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="First name"
@@ -225,8 +226,9 @@ function RegisterPage() {
             </div>
 
             <div className="form-group">
-              <label>Last name</label>
+              <label htmlFor="register-last-name">Last name</label>
               <input
+                id="register-last-name"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Last name"
@@ -236,8 +238,9 @@ function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label>Username</label>
+            <label htmlFor="register-username">Username</label>
             <input
+              id="register-username"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="Choose a username"
@@ -247,8 +250,9 @@ function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label>Email</label>
+            <label htmlFor="register-email">Email</label>
             <input
+              id="register-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
@@ -258,8 +262,9 @@ function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label htmlFor="register-password">Password</label>
             <input
+              id="register-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a password"
@@ -270,10 +275,10 @@ function RegisterPage() {
             />
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message" role="alert">{error}</p>}
 
           {successMessage && (
-            <p className="success-message">{successMessage}</p>
+            <p className="success-message" role="status">{successMessage}</p>
           )}
 
           <button className="primary-button" type="submit" disabled={loading}>
@@ -282,7 +287,7 @@ function RegisterPage() {
         </form>
 
         <p className="auth-bottom-text">
-          Already have an account? <button onClick={() => navigate("/login")}>Sign in</button>
+          Already have an account? <button type="button" onClick={() => navigate("/login")}>Sign in</button>
         </p>
       </section>
     </main>
