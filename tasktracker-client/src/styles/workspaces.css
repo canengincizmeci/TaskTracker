@@ -44,6 +44,17 @@
   line-height: 1.65;
 }
 
+.workspace-header > .secondary-button {
+  flex: 0 0 auto;
+}
+
+.workspace-detail-header__actions {
+  min-width: 310px;
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
 .workspace-detail-title {
   display: flex;
   align-items: baseline;
@@ -127,6 +138,12 @@
   gap: 8px;
 }
 
+.workspace-create-form > p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .workspace-create-form label {
   color: #344054;
   font-size: 14px;
@@ -173,6 +190,47 @@
   color: var(--muted);
   font-size: 14px;
   font-weight: 800;
+}
+
+.workspace-disclosure-card {
+  padding-block: 24px;
+}
+
+.workspace-disclosure-heading,
+.workspace-management-section__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workspace-disclosure-heading h2,
+.workspace-management-section__heading h3 {
+  margin: 0;
+  color: #101828;
+}
+
+.workspace-disclosure-heading p:last-child,
+.workspace-management-section__heading p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.workspace-disclosure-heading > .secondary-button,
+.workspace-management-section__heading > .secondary-button {
+  flex: 0 0 auto;
+}
+
+.workspace-disclosure-content {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-disclosure-content[hidden],
+.workspace-management-card[hidden] {
+  display: none;
 }
 
 .workspace-grid {
@@ -316,6 +374,84 @@
   display: block;
 }
 
+.workspace-tasks {
+  border-color: #bfdbfe;
+  box-shadow: 0 18px 45px rgba(37, 99, 235, 0.1);
+}
+
+.workspace-people-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.workspace-people-summary h2 {
+  margin: 0;
+}
+
+.workspace-people-summary p:not(.eyebrow) {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.workspace-people-summary > .secondary-button {
+  flex: 0 0 auto;
+}
+
+.workspace-people-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.workspace-people-preview span {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-management-card {
+  display: grid;
+  gap: 0;
+}
+
+.workspace-management-section {
+  min-width: 0;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-management-card > .workspace-section-heading + .workspace-management-section {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.workspace-management-section:last-child {
+  padding-bottom: 0;
+}
+
+.workspace-management-section__heading {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.workspace-management-section__heading > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .workspace-detail-summary span {
   margin-bottom: 7px;
   color: var(--muted);
@@ -411,6 +547,12 @@
 .workspace-text-button:disabled {
   opacity: 0.58;
   cursor: not-allowed;
+}
+
+.workspace-text-button:focus-visible {
+  border-radius: 6px;
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 3px;
 }
 
 .workspace-text-button--danger {
@@ -707,6 +849,11 @@
     flex-direction: column;
   }
 
+  .workspace-detail-header__actions {
+    min-width: 0;
+    justify-items: stretch;
+  }
+
   .workspace-detail-summary {
     min-width: 0;
   }
@@ -736,6 +883,21 @@
   .workspace-section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .workspace-header,
+  .workspace-disclosure-heading,
+  .workspace-management-section__heading,
+  .workspace-people-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-header > .secondary-button,
+  .workspace-disclosure-heading > .secondary-button,
+  .workspace-management-section__heading > .secondary-button,
+  .workspace-people-summary > .secondary-button {
+    width: 100%;
   }
 
   .workspace-tasks__heading-actions {

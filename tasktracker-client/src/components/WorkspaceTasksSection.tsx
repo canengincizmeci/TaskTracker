@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { createWorkspaceTask, getWorkspaceTasks } from "../api/workspaceService";
@@ -28,6 +28,8 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState("");
   const requestId = useRef(0);
+  const routeVersion = useRef(0);
+  const currentWorkspaceId = useRef(workspace.id);
 
   const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState<WorkspaceTaskCreateRequest>(emptyTask);
@@ -36,26 +38,40 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
   const [createNotice, setCreateNotice] = useState("");
   const createInProgress = useRef(false);
 
+  useLayoutEffect(() => {
+    if (currentWorkspaceId.current === workspace.id) return;
+    currentWorkspaceId.current = workspace.id;
+    routeVersion.current++;
+    requestId.current++;
+  }, [workspace.id]);
+
   const invalidateRequests = useCallback(() => {
     requestId.current++;
+    routeVersion.current++;
   }, []);
 
   const loadTasks = useCallback(async (initial = true) => {
+    const requestedWorkspaceId = workspace.id;
+    const route = routeVersion.current;
+    const isCurrentWorkspace = () => currentWorkspaceId.current === requestedWorkspaceId &&
+      routeVersion.current === route;
+    if (!isCurrentWorkspace()) return false;
     const currentRequest = ++requestId.current;
-    if (initial) setLoading(true);
+    const isCurrent = () => isCurrentWorkspace() && currentRequest === requestId.current;
+    if (initial && isCurrent()) setLoading(true);
     setFailure("");
 
     try {
-      const data = await getWorkspaceTasks(workspace.id);
-      if (currentRequest === requestId.current) setTasks(data);
-      return true;
+      const data = await getWorkspaceTasks(requestedWorkspaceId);
+      if (isCurrent()) setTasks(data);
+      return isCurrent();
     } catch (reason: unknown) {
-      if (currentRequest === requestId.current) {
+      if (isCurrent()) {
         setFailure(errorMessage(reason, "Workspace tasks could not be loaded."));
       }
       return false;
     } finally {
-      if (initial && currentRequest === requestId.current) setLoading(false);
+      if (initial && isCurrent()) setLoading(false);
     }
   }, [workspace.id]);
 
@@ -85,6 +101,10 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (createInProgress.current) return;
+    const requestedWorkspaceId = workspace.id;
+    const route = routeVersion.current;
+    const isCurrent = () => currentWorkspaceId.current === requestedWorkspaceId &&
+      routeVersion.current === route;
 
     const request: WorkspaceTaskCreateRequest = {
       ...draft,
@@ -112,18 +132,22 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
     setCreateNotice("");
 
     try {
-      await createWorkspaceTask(workspace.id, request);
+      await createWorkspaceTask(requestedWorkspaceId, request);
+      if (!isCurrent()) return;
       setDraft(emptyTask);
       setFormOpen(false);
       const refreshed = await loadTasks(false);
+      if (!isCurrent()) return;
       setCreateNotice(refreshed
         ? "Workspace task created successfully."
         : "The task was created, but the task list could not be refreshed.");
     } catch (reason: unknown) {
-      setCreateFailure(errorMessage(reason, "The workspace task could not be created."));
+      if (isCurrent()) setCreateFailure(errorMessage(reason, "The workspace task could not be created."));
     } finally {
-      createInProgress.current = false;
-      setCreating(false);
+      if (isCurrent()) {
+        createInProgress.current = false;
+        setCreating(false);
+      }
     }
   };
 
@@ -232,8 +256,8 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
         </div>
       ) : tasks.length === 0 ? (
         <div className="workspace-empty-row">
-          <strong>No Workspace tasks yet</strong>
-          <span>{canCreate ? "Create the first task for this Workspace." : "An Owner or Admin can create tasks here."}</span>
+          <strong>No workspace tasks yet</strong>
+          <span>{canCreate ? "Create the first task for this workspace." : "An Owner or Admin can create tasks here."}</span>
         </div>
       ) : (
         <div className="workspace-task-grid">
