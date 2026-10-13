@@ -78,13 +78,15 @@ function isOverdue(task: WorkTaskListItem) {
   return new Date(year, month - 1, day) < localToday;
 }
 
-function DashboardTaskSection({ title, description, tasks }: {
+function DashboardTaskSection({ title, description, tasks, kind = "standard" }: {
   title: string;
   description: string;
   tasks: WorkTaskListItem[];
+  kind?: "attention" | "standard";
 }) {
   if (tasks.length === 0) return null;
-  return <section className="dashboard-task-section" aria-labelledby={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>
+  return <section className={`dashboard-task-section dashboard-task-section--${kind}`}
+    aria-labelledby={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>
     <header><div><h3 id={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>{title}</h3>
       <p>{description}</p></div><span>{tasks.length}</span></header>
     <div className="dashboard-work-list">{tasks.map((task) =>
@@ -267,8 +269,8 @@ export default function DashboardPage() {
           </div>}
 
           <section className="dashboard-attention" aria-labelledby="dashboard-attention-heading">
-            <div className="dashboard-section-heading"><div><p className="eyebrow">PRIORITY</p>
-              <h2 id="dashboard-attention-heading">Needs your attention</h2></div>
+            <div className="dashboard-section-heading"><div><p className="eyebrow">AT A GLANCE</p>
+              <h2 id="dashboard-attention-heading">Work signals</h2></div>
               <Link to="/notifications">Open Inbox</Link></div>
           <div className="dashboard-summary-grid">
             <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
@@ -309,14 +311,13 @@ export default function DashboardPage() {
           <header className="dashboard-work__header">
             <div><p className="eyebrow">TASKS</p><h2 id="dashboard-work-heading">Your work</h2>
               <p>Act on urgent work first, then track active tasks, waiting work, and recent outcomes.</p></div>
+            <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
+              {scopes.map((item) => <button key={item.value} type="button"
+                className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
+                aria-pressed={scope === item.value}
+                onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
+            </div>
           </header>
-
-          <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
-            {scopes.map((item) => <button key={item.value} type="button"
-              className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
-              aria-pressed={scope === item.value}
-              onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
-          </div>
 
           <form className="dashboard-work-controls" onSubmit={submitSearch}>
             <div className="dashboard-search-control">
@@ -378,7 +379,7 @@ export default function DashboardPage() {
 
           {work && work.items.length > 0 && <div className="dashboard-work-sections" aria-busy={workLoading}>
             <DashboardTaskSection title="Needs your attention" description="Tasks with a clear next action or an overdue deadline."
-              tasks={groupedWork.attention} />
+              tasks={groupedWork.attention} kind="attention" />
             <DashboardTaskSection title="My active tasks" description="Other active work you own, are assigned, or can access."
               tasks={groupedWork.active} />
             <DashboardTaskSection title="Awaiting others" description="Delegated work and submitted work waiting on someone else."
