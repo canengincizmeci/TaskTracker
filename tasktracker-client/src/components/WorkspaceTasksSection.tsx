@@ -123,11 +123,13 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
   };
 
   return (
-    <section className="workspace-detail-card workspace-tasks" aria-labelledby="workspace-tasks-title">
+    <section id="workspace-tasks" className="workspace-product-section workspace-tasks"
+      aria-labelledby="workspace-tasks-title">
       <div className="workspace-section-heading">
         <div>
           <p className="eyebrow">Work</p>
           <h2 id="workspace-tasks-title">Tasks</h2>
+          <p>Workspace work, ownership, and delivery status.</p>
         </div>
         <div className="workspace-tasks__heading-actions">
           {!loading && !failure && <span>{tasks.length} total</span>}
@@ -188,25 +190,27 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
           <span>{canCreate ? "Create the first task for this workspace." : "An Owner or Admin can create tasks here."}</span>
         </div>
       ) : (
-        <div className="workspace-task-grid">
+        <div className="workspace-task-list">
           {tasks.map((task) => (
-            <Link className="utasks-card workspace-task-card" key={task.id} to={`/tasks/task-detail/${task.id}`}>
-              <div className="utasks-card__top">
-                <span className="utasks-pill utasks-pill--priority">{task.priority}</span>
-                <span className="utasks-pill utasks-pill--status">
-                  {taskStatusLabel(task.status)}
-                </span>
+            <Link className="workspace-task-row" key={task.id} to={`/tasks/task-detail/${task.id}`}>
+              <div className="workspace-task-row__main">
+                <div className="workspace-task-row__title">
+                  <h3>{task.title}</h3>
+                  <span className={`workspace-task-priority workspace-task-priority--${task.priority.toLowerCase()}`}>
+                    {task.priority}
+                  </span>
+                </div>
+                <p>{task.description}</p>
+                <div className="workspace-task-row__meta">
+                  <span>{task.category}</span>
+                  <span>Owner: {task.ownerUserName}</span>
+                  <span>Assignee: {task.assigneeUserName ?? "Unassigned"}</span>
+                  {task.dueDate && <span>Due {formatDate(task.dueDate)}</span>}
+                </div>
               </div>
-              <h2>{task.title}</h2>
-              <p>{task.description}</p>
-              <div className="utasks-card__meta">
-                <span>{task.category}</span>
-                <span>Owner: {task.ownerUserName}</span>
-                <span>Assignee: {task.assigneeUserName ?? "Unassigned"}</span>
-                {task.dueDate && <span>Due {formatDate(task.dueDate)}</span>}
-              </div>
-              <div className="utasks-card__footer">
-                <span className="utasks-detail-button">View details →</span>
+              <div className="workspace-task-row__state">
+                <span>{taskStatusLabel(task.status)}</span>
+                <span className="workspace-task-row__open" aria-hidden="true">→</span>
               </div>
             </Link>
           ))}
