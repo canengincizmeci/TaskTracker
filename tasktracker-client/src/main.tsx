@@ -7,6 +7,7 @@ import "./index.css";
 import "./styles/shell.css";
 import "./styles/dashboard.css";
 import "./styles/task-detail.css";
+import "./styles/inbox.css";
 import App from "./App.tsx";
 
 import { AuthProvider } from "./context/AuthContext.tsx";
