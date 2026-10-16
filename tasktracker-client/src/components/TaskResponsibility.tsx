@@ -66,7 +66,7 @@ export default function TaskResponsibility({ task, onChanged }: {
   const eligible = participants.filter((participant) =>
     participant.permission === "Edit" || participant.permission === "Manage");
 
-  return <section className="task-people-card" aria-labelledby="task-assignment-title">
+  return <section id="task-responsibility" className="task-people-card" aria-labelledby="task-assignment-title">
     <div className="task-section-header"><div><p className="eyebrow">PEOPLE</p>
       <h2 id="task-assignment-title">Assignment</h2></div></div>
     <div className="task-people-summary">
