@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getWorkDashboardSummary, getWorkDashboardTasks } from "../api/workDashboardService";
 import { errorMessage } from "../api/errorMessage";
 import DashboardSummaryCard from "../components/DashboardSummaryCard";
@@ -95,7 +95,13 @@ function DashboardTaskSection({ title, description, tasks, kind = "standard" }: 
 }
 
 export default function DashboardPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [successMessage] = useState(() => {
+    const state = location.state as { successMessage?: unknown } | null;
+    return typeof state?.successMessage === "string" ? state.successMessage : "";
+  });
   const scope = valueOrDefault(searchParams.get("scope"), validScope, "all");
   const search = searchParams.get("search")?.trim() ?? "";
   const status = valueOrDefault<WorkTaskStatus | "">(searchParams.get("status"),
@@ -117,6 +123,11 @@ export default function DashboardPage() {
   const [workFailure, setWorkFailure] = useState("");
   const workRequestId = useRef(0);
   const invalidateWorkRequests = useCallback(() => { workRequestId.current++; }, []);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, navigate, successMessage]);
 
   const query = useMemo<WorkTaskQuery>(() => ({
     scope,
@@ -241,6 +252,7 @@ export default function DashboardPage() {
   return (
     <main className="page public-page dashboard-page">
       <section className="dashboard-shell">
+        {successMessage && <p className="success-message" role="status">{successMessage}</p>}
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">ACTION CENTER</p>

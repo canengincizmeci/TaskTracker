@@ -68,9 +68,13 @@ function formatDate(value: string) {
   return date.toLocaleDateString();
 }
 
+function utcToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdatingStatus, isDeleting,
   editError, startEditing, cancelEditing, saveChanges, handleStatusUpdate, handleDeleteTask, refreshTask,
-  handleAccessRevoked }: {
+  handleAccessRevoked, successMessage }: {
   task: Task;
   isEditing: boolean;
   draft: EditDraft | null;
@@ -79,6 +83,7 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
   isUpdatingStatus: boolean;
   isDeleting: boolean;
   editError: string;
+  successMessage: string;
   startEditing: () => void;
   cancelEditing: () => void;
   saveChanges: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -137,6 +142,7 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
           </header>
 
           {editError && <p className="error-message task-detail-page-error" role="alert">{editError}</p>}
+          {successMessage && <p className="success-message" role="status">{successMessage}</p>}
 
           <TaskSubmissionPanel task={task} workflow={submissionWorkflow}
             onStart={() => void handleStatusUpdate("start")}
@@ -218,13 +224,15 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
             {isEditing && draft ? <form className="auth-form" onSubmit={saveChanges} aria-busy={isSaving}>
               <div className="form-group"><label htmlFor="edit-title">Title</label>
                 <input id="edit-title" type="text" value={draft.title} disabled={isSaving}
+                  required minLength={3} maxLength={100}
                   onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></div>
               <div className="form-group"><label htmlFor="edit-description">Description</label>
                 <textarea id="edit-description" rows={5} value={draft.description} disabled={isSaving}
+                  required minLength={5} maxLength={1000}
                   onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></div>
               <div className="task-edit-grid">
                 <div className="form-group"><label htmlFor="edit-category">Category</label>
-                  <input id="edit-category" type="text" value={draft.category} disabled={isSaving}
+                  <input id="edit-category" type="text" value={draft.category} disabled={isSaving} required
                     onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></div>
                 <div className="form-group"><label htmlFor="edit-priority">Priority</label>
                   <select id="edit-priority" value={draft.priority} disabled={isSaving}
@@ -264,6 +272,7 @@ export default function TaskDetailPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editError, setEditError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const routeVersion = useRef(0);
   const currentRouteTaskId = useRef(taskId);
   const saving = useRef(false);
@@ -298,6 +307,7 @@ export default function TaskDetailPage() {
   useEffect(() => {
     const request = window.setTimeout(() => {
       setTask(null); setIsEditing(false); setDraft(null); setEditError("");
+      setSuccessMessage("");
       setIsSaving(false); setIsUpdatingStatus(false); setIsDeleting(false); saving.current = false;
       void loadTask();
     }, 0);
@@ -308,30 +318,57 @@ export default function TaskDetailPage() {
     if (!task || task.canEdit !== true || saving.current) return;
     setDraft({ title: task.title, description: task.description, category: task.category,
       priority: task.priority, dueDate: task.dueDate ?? "" });
-    setEditError(""); setIsEditing(true);
+    setEditError(""); setSuccessMessage(""); setIsEditing(true);
   };
   const cancelEditing = () => { if (!saving.current) { setDraft(null); setEditError(""); setIsEditing(false); } };
 
   const saveChanges = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!task || task.canEdit !== true || !isEditing || !draft || saving.current) return;
-    const payload: UpdateTaskRequest = { id: task.id, title: draft.title, description: draft.description,
-      category: draft.category, priority: draft.priority, version: task.version, dueDate: draft.dueDate || null };
+    const normalized = { ...draft, title: draft.title.trim(), description: draft.description.trim(),
+      category: draft.category.trim() };
+    if (normalized.title.length < 3) {
+      setEditError("Title must contain at least 3 characters.");
+      document.getElementById("edit-title")?.focus();
+      return;
+    }
+    if (normalized.description.length < 5) {
+      setEditError("Description must contain at least 5 characters.");
+      document.getElementById("edit-description")?.focus();
+      return;
+    }
+    if (!normalized.category) {
+      setEditError("Category is required.");
+      document.getElementById("edit-category")?.focus();
+      return;
+    }
+    if (normalized.dueDate && normalized.dueDate !== (task.dueDate ?? "") && normalized.dueDate < utcToday()) {
+      setEditError("Due date must be today or later when changed.");
+      document.getElementById("edit-due-date")?.focus();
+      return;
+    }
+    const payload: UpdateTaskRequest = { id: task.id, title: normalized.title, description: normalized.description,
+      category: normalized.category, priority: normalized.priority, version: task.version,
+      dueDate: normalized.dueDate || null };
     const route = routeVersion.current;
     const isCurrent = () => routeVersion.current === route;
-    saving.current = true; setIsSaving(true); setEditError("");
+    saving.current = true; setIsSaving(true); setEditError(""); setSuccessMessage("");
     try {
       await updateTask(payload);
       if (!isCurrent()) return;
+      let refreshSucceeded = true;
       try {
         const refreshed = await getTaskById(task.id);
         if (!isCurrent()) return;
         setTask(refreshed);
       } catch {
         if (!isCurrent()) return;
-        setTask({ ...task, ...payload }); setEditError("Changes were saved, but task details could not be refreshed.");
+        refreshSucceeded = false;
+        setTask({ ...task, ...payload });
       }
-      setDraft(null); setIsEditing(false);
+      setDraft(null); setIsEditing(false); setSuccessMessage(refreshSucceeded
+        ? "Task details updated successfully."
+        : "Changes were saved, but the latest task details could not be loaded. Refresh the page to see the current state.");
     } catch (error) { if (isCurrent()) setEditError(getUpdateError(error)); }
     finally { if (isCurrent()) { saving.current = false; setIsSaving(false); } }
   };
@@ -341,14 +378,22 @@ export default function TaskDetailPage() {
     const snapshot = task;
     const route = routeVersion.current;
     const isCurrent = () => routeVersion.current === route;
-    saving.current = true; setIsUpdatingStatus(true); setEditError("");
+    saving.current = true; setIsUpdatingStatus(true); setEditError(""); setSuccessMessage("");
     try {
       await taskAction(snapshot.id, action, snapshot.version);
       if (!isCurrent()) return;
       try {
         const refreshed = await getTaskById(snapshot.id);
-        if (isCurrent()) setTask(refreshed);
-      } catch { if (isCurrent()) setEditError("The action succeeded, but task details could not be refreshed."); }
+        if (isCurrent()) {
+          setTask(refreshed);
+          setSuccessMessage(action === "start" ? "Task started successfully." :
+            action === "complete" ? "Task completed successfully." :
+            action === "cancel" ? "Task cancelled successfully." : "Task reopened successfully.");
+        }
+      } catch {
+        if (isCurrent()) setSuccessMessage(
+          "The task action was saved, but the latest task details could not be loaded. Refresh the page to see the current state.");
+      }
     } catch (error) { if (isCurrent()) setEditError(getUpdateError(error)); }
     finally { if (isCurrent()) { saving.current = false; setIsUpdatingStatus(false); } }
   };
@@ -380,5 +425,5 @@ export default function TaskDetailPage() {
     isSaving={isSaving} isUpdatingStatus={isUpdatingStatus} isDeleting={isDeleting} editError={editError}
     startEditing={startEditing} cancelEditing={cancelEditing} saveChanges={saveChanges}
     handleStatusUpdate={handleStatusUpdate} handleDeleteTask={handleDeleteTask} refreshTask={refreshTask}
-    handleAccessRevoked={handleAccessRevoked} />;
+    handleAccessRevoked={handleAccessRevoked} successMessage={successMessage} />;
 }
