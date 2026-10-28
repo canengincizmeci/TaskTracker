@@ -11,7 +11,7 @@ import "./styles/inbox.css";
 import "./styles/account.css";
 import App from "./App.tsx";
 
-import { AuthProvider } from "./context/AuthContext.tsx";
+import { AuthProvider } from "./context/AuthContext";
 
 
 

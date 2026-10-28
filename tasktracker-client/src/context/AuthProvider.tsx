@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HubConnectionState } from "@microsoft/signalr";
 import {
   clearAuthTokens,
@@ -7,26 +7,7 @@ import {
 } from "../utils/authStorage";
 import { decodeJwt, getRoleFromToken, isTokenExpired } from "../utils/jwtHelper";
 import { notificationHubConnection } from "../services/signalRService";
-
-type AuthUser = {
-  name: string | null;
-  email: string | null;
-  role: string | null;
-};
-
-type AuthContextType = {
-  token: string | null;
-  user: AuthUser | null;
-  isAuthenticated: boolean;
-  loginToContext: (
-    accessToken: string,
-    refreshToken: string,
-    expiration: string
-  ) => void;
-  logout: () => void;
-};
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext, type AuthUser } from "./authContextValue";
 
 const NAME_CLAIM =
   "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
@@ -56,26 +37,26 @@ function getValidStoredToken() {
   return storedToken;
 }
 
-function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(getValidStoredToken);
   const connectionOperation = useRef(Promise.resolve());
 
   const user = token ? getUserFromToken(token) : null;
 
   const loginToContext = (
-  accessToken: string,
-  refreshToken: string,
-  expiration: string
-) => {
-  if (isTokenExpired(accessToken)) {
-    clearAuthTokens();
-    setToken(null);
-    return;
-  }
+    accessToken: string,
+    refreshToken: string,
+    expiration: string
+  ) => {
+    if (isTokenExpired(accessToken)) {
+      clearAuthTokens();
+      setToken(null);
+      return;
+    }
 
-  saveAuthTokens(accessToken, refreshToken, expiration);
-  setToken(accessToken);
-};
+    saveAuthTokens(accessToken, refreshToken, expiration);
+    setToken(accessToken);
+  };
 
   const logout = () => {
     clearAuthTokens();
@@ -122,15 +103,3 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
-
-  return context;
-}
-
-export { AuthProvider, useAuth };
