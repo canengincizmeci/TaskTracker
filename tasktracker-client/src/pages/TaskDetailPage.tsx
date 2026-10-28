@@ -100,6 +100,9 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
   const backLabel = task.workspaceId ? `Back to ${task.workspaceName ?? "workspace"}` : "Back to My Work";
   const responsibility = task.isOwner ? "Task owner" : task.isAssignee ? "Assigned contributor" :
     task.isSharedWithMe ? "Collaborator" : null;
+  const hasMoreActions = task.canShare === true || task.canDelete === true || task.isOwner === true &&
+    (task.status === "Pending" || task.status === "InProgress" || task.status === "InReview" ||
+      task.status === "Completed" || task.status === "Cancelled");
 
   const closeMoreActions = () => {
     setMoreOpen(false);
@@ -182,7 +185,7 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
             <a href="#task-responsibility">Assignment and access</a>
           </nav>}
 
-          <section className="task-detail-rail__section task-detail-secondary-actions"
+          {hasMoreActions && <section className="task-detail-rail__section task-detail-secondary-actions"
             aria-labelledby="task-secondary-actions" onKeyDown={(event) => {
               if (event.key === "Escape" && moreOpen) closeMoreActions();
             }}>
@@ -195,8 +198,6 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
 
             {moreOpen && <div id="task-more-actions" className="task-more-actions">
               <div className="task-more-actions__standard">
-                {task.canEdit === true && task.status !== "InReview" && !isEditing && <button type="button"
-                  className="secondary-button" disabled={busy} onClick={startEditing}>Edit task</button>}
                 {task.canShare === true && <Link to={`/tasks/task-share/${task.id}`} className="secondary-button">
                   Share and access
                 </Link>}
@@ -214,13 +215,16 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
                 </button>
               </div>}
             </div>}
-          </section>
+          </section>}
         </aside>
 
         <div className="task-detail-main">
           <section className="task-detail-section task-description-card" aria-labelledby="task-description-title">
             <div className="task-section-header"><div><p className="eyebrow">TASK</p>
-              <h2 id="task-description-title">Description</h2></div></div>
+              <h2 id="task-description-title">Description</h2></div>
+              {task.canEdit === true && task.status !== "InReview" && !isEditing && <button type="button"
+                className="secondary-button" disabled={busy} onClick={startEditing}>Edit task</button>}
+            </div>
             {isEditing && draft ? <form className="auth-form" onSubmit={saveChanges} aria-busy={isSaving}>
               <div className="form-group"><label htmlFor="edit-title">Title</label>
                 <input id="edit-title" type="text" value={draft.title} disabled={isSaving}

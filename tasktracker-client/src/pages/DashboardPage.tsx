@@ -259,10 +259,13 @@ export default function DashboardPage() {
             <h1>My Work</h1>
             <p>See what needs your attention across assigned work, reviews, deadlines, and invitations.</p>
           </div>
-          {summary && <button type="button" className="secondary-button" disabled={summaryRefreshing}
-            onClick={() => void loadSummary()}>
-            {summaryRefreshing ? "Refreshing..." : "Refresh summary"}
-          </button>}
+          <div className="dashboard-header__actions">
+            <Link className="primary-button" to="/tasks/create-task">Create task</Link>
+            {summary && <button type="button" className="secondary-button" disabled={summaryRefreshing}
+              onClick={() => void loadSummary()}>
+              {summaryRefreshing ? "Refreshing..." : "Refresh summary"}
+            </button>}
+          </div>
         </header>
 
         {summaryLoading && !summary && <div className="dashboard-state" aria-live="polite">
