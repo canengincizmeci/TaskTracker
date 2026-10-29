@@ -1,7 +1,7 @@
 .inbox-page {
   min-width: 0;
   min-height: 100%;
-  padding: var(--page-gutter);
+  padding: 24px var(--page-gutter) 64px;
   color: var(--color-text);
   background: var(--color-page);
 }
@@ -10,7 +10,7 @@
   width: min(100%, 64rem);
   margin: 0 auto;
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 .inbox-page .inbox-shell--detail {
@@ -42,8 +42,8 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-6);
-  padding: var(--space-2) 0 var(--space-6);
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 0 var(--space-5);
+  border-bottom: 1px solid var(--color-border-strong);
 }
 
 .inbox-page .inbox-header > div:first-child {
@@ -52,8 +52,8 @@
 
 .inbox-page .eyebrow {
   margin: 0 0 var(--space-1);
-  color: var(--color-primary);
-  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -61,9 +61,10 @@
 .inbox-page .inbox-header h1 {
   margin: 0;
   color: var(--color-text);
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  line-height: 1.08;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
   overflow-wrap: anywhere;
 }
 
@@ -88,7 +89,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: 999px;
   color: var(--color-text-muted);
   background: var(--color-surface-muted);
@@ -105,7 +106,7 @@
   display: flex;
   gap: var(--space-1);
   padding: var(--space-2);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-surface) 94%, transparent);
   box-shadow: var(--shadow-sm);
@@ -128,8 +129,8 @@
 
 .inbox-page .inbox-local-nav__link:hover,
 .inbox-page .inbox-local-nav__link--active {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  color: var(--color-text);
+  background: var(--color-surface-muted);
 }
 
 .inbox-page .inbox-local-nav__link--active {
@@ -227,7 +228,10 @@
 .inbox-page .inbox-list {
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--color-border);
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   list-style: none;
 }
 
@@ -237,29 +241,32 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-2);
+  padding: var(--space-4);
   border-bottom: 1px solid var(--color-border);
-  background: transparent;
+  background: var(--color-surface);
+  transition: background-color var(--transition-fast);
 }
+
+.inbox-page .inbox-row:last-child { border-bottom: 0; }
+.inbox-page .inbox-row:hover { background: #f3f5f7; }
 
 .inbox-page .inbox-row--unread {
-  background: color-mix(in srgb, var(--color-primary-soft) 45%, transparent);
+  background: #f0f4f8;
+  box-shadow: inset 3px 0 #64748b;
 }
 
-.inbox-page .inbox-row--read .inbox-row__content {
-  opacity: 0.72;
-}
+.inbox-page .inbox-row--read .inbox-row__content { opacity: 0.78; }
 
 .inbox-page .inbox-row__marker {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--color-border-strong);
+  background: #a1a1aa;
 }
 
 .inbox-page .inbox-row--unread .inbox-row__marker,
 .inbox-page .inbox-invitation-row .inbox-row__marker {
-  background: var(--color-primary);
+  background: #475569;
 }
 
 .inbox-page .inbox-row__content {
@@ -277,7 +284,8 @@
 .inbox-page .inbox-row h3 {
   margin: 0;
   color: var(--color-text);
-  font-size: 0.9375rem;
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -285,7 +293,7 @@
 .inbox-page .inbox-row__content > p {
   margin: var(--space-1) 0 0;
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -329,6 +337,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
   border-radius: 999px;
   color: var(--color-text-muted);
   background: var(--color-surface-muted);
@@ -338,17 +347,20 @@
 
 .inbox-page .inbox-status--unread,
 .inbox-page .inbox-status--pending {
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 
 .inbox-page .inbox-status--accepted {
+  border-color: #bbf7d0;
   color: var(--color-success);
   background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
 }
 
 .inbox-page .inbox-status--rejected,
 .inbox-page .inbox-status--expired {
+  border-color: var(--color-border);
   color: var(--color-text-subtle);
   background: var(--color-surface-muted);
 }
@@ -372,9 +384,10 @@
 
 .inbox-page .inbox-invitation-detail {
   padding: var(--space-5);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .inbox-page .inbox-detail-list {

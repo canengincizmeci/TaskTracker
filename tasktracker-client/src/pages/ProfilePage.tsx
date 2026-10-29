@@ -41,6 +41,11 @@ export default function ProfilePage() {
             This information comes from your authenticated account and is read-only here.
           </p>
 
+          <dl className="account-detail-list">
+            <div><dt>Email address</dt><dd>{user?.email ?? "Unavailable"}</dd></div>
+            <div><dt>Account type</dt><dd>{user?.role ?? "User"}</dd></div>
+          </dl>
+
           <div className="account-section__actions">
             <Link to="/settings/security" className="primary-button">
               Manage security

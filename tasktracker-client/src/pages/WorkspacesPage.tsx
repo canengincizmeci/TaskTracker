@@ -238,7 +238,7 @@ export default function WorkspacesPage() {
               {workspaces.map((workspace) => (
                 <Link className="workspace-card" key={workspace.id} to={`/workspaces/${workspace.id}`}>
                   <div className="workspace-card__top">
-                    <span className="workspace-role">{workspace.role}</span>
+                    <span className={`workspace-role workspace-role--${workspace.role.toLowerCase()}`}>{workspace.role}</span>
                     <span className="workspace-card__open">Open <span aria-hidden="true">→</span></span>
                   </div>
                   <h3>{workspace.name}</h3>

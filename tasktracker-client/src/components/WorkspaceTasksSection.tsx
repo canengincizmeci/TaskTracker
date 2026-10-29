@@ -209,7 +209,8 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
                 </div>
               </div>
               <div className="workspace-task-row__state">
-                <span>{taskStatusLabel(task.status)}</span>
+                <span className={`workspace-task-status workspace-task-status--${task.status.toLowerCase()}`}>
+                  {taskStatusLabel(task.status)}</span>
                 <span className="workspace-task-row__open" aria-hidden="true">→</span>
               </div>
             </Link>
