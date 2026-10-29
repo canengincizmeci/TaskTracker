@@ -378,6 +378,10 @@ export default function DashboardPage() {
             {workLoading && work && <span className="dashboard-work__updating">Updating results…</span>}
           </div>
 
+          {work && work.items.length > 0 && <div className="dashboard-table-head" aria-hidden="true">
+            <span>Task</span><span>Category</span><span>Status</span><span>Priority</span><span>Due</span><span />
+          </div>}
+
           {workLoading && !work && <div className="dashboard-work-state">
             <LoadingSpinner text="Loading your work..." />
           </div>}
