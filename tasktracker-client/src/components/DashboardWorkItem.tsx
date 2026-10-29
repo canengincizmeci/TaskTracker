@@ -42,31 +42,36 @@ function duePresentation(value: string | null, status: WorkTaskStatus) {
 export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) {
   const due = duePresentation(task.dueDate, task.status);
   const detailPath = `/tasks/task-detail/${task.taskId}`;
+  const relationships = [
+    task.isOwned ? "Owned" : null,
+    task.isAssigned ? "Assigned to you" : null,
+    task.isShared ? "Shared" : null,
+  ].filter((relationship): relationship is string => relationship !== null);
 
-  return <article className="dashboard-work-item">
+  return <article className={`dashboard-work-item dashboard-work-item--${due.state}`}>
     <div className="dashboard-work-item__content">
-      <div className="dashboard-work-item__badges">
-        <span className={`dashboard-work-badge dashboard-work-badge--status dashboard-work-badge--${task.status.toLowerCase()}`}>
-          {taskStatusLabel(task.status)}
-        </span>
-        <span className={`dashboard-work-badge dashboard-work-badge--priority-${task.priority.toLowerCase()}`}>
-          {task.priority}
-        </span>
-        {task.isOwned && <span className="dashboard-work-badge dashboard-work-badge--relationship">Owned</span>}
-        {task.isAssigned && <span className="dashboard-work-badge dashboard-work-badge--relationship">Assigned to you</span>}
-        {task.isShared && <span className="dashboard-work-badge dashboard-work-badge--relationship">Shared</span>}
+      <div className="dashboard-work-item__heading">
+        <div>
+          <h3><Link to={detailPath}>{task.title}</Link></h3>
+          <div className="dashboard-work-item__signals">
+            <span className={`dashboard-work-badge dashboard-work-badge--status dashboard-work-badge--${task.status.toLowerCase()}`}>
+              {taskStatusLabel(task.status)}
+            </span>
+            <span className={`dashboard-work-item__priority dashboard-work-item__priority--${task.priority.toLowerCase()}`}>
+              {task.priority} priority
+            </span>
+          </div>
+        </div>
+        <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
       </div>
 
-      <div>
-        <h3><Link to={detailPath}>{task.title}</Link></h3>
-        <p className="dashboard-work-item__description">{task.description}</p>
-      </div>
+      <p className="dashboard-work-item__description">{task.description}</p>
 
       <div className="dashboard-work-item__meta">
+        {relationships.length > 0 && <span>{relationships.join(" · ")}</span>}
         <span>Owner: <strong>{task.ownerUserName}</strong></span>
         <span>Assignee: <strong>{task.assigneeUserName ?? "Unassigned"}</strong></span>
         <span>Category: <strong>{task.category}</strong></span>
-        <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
       </div>
     </div>
 

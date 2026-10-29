@@ -44,6 +44,13 @@ function isPendingAndCurrent(invitation: WorkspaceInvitation) {
     (!invitation.expiresAt || new Date(invitation.expiresAt).getTime() > Date.now());
 }
 
+function invitationDisplayStatus(invitation: WorkspaceInvitation) {
+  return invitation.status === "Pending" && invitation.expiresAt &&
+    new Date(invitation.expiresAt).getTime() <= Date.now()
+    ? "Expired"
+    : invitation.status;
+}
+
 export default function WorkspaceDetailPage() {
   const { workspaceId } = useParams();
   const parsedWorkspaceId = Number(workspaceId);
@@ -75,7 +82,6 @@ export default function WorkspaceDetailPage() {
   const [busyOperations, setBusyOperations] = useState<Set<string>>(new Set());
   const [memberFailure, setMemberFailure] = useState("");
   const [memberNotice, setMemberNotice] = useState("");
-  const [managementOpen, setManagementOpen] = useState(false);
   const routeVersion = useRef(0);
   const currentRouteWorkspaceId = useRef(parsedWorkspaceId);
 
@@ -177,7 +183,6 @@ export default function WorkspaceDetailPage() {
       setBusyOperations(new Set());
       setMemberFailure("");
       setMemberNotice("");
-      setManagementOpen(false);
       void loadWorkspace();
     }, 0);
 
@@ -194,6 +199,8 @@ export default function WorkspaceDetailPage() {
   const currentFailure = failureWorkspaceId === parsedWorkspaceId ? failure : "";
   const invitationsBelongToCurrentWorkspace = invitationsWorkspaceId === parsedWorkspaceId;
   const currentInvitations = invitationsBelongToCurrentWorkspace ? invitations : [];
+  const currentPendingInvitations = currentInvitations.filter(isPendingAndCurrent);
+  const currentInvitationHistory = currentInvitations.filter((invitation) => !isPendingAndCurrent(invitation));
   const currentInvitationFailure = invitationsBelongToCurrentWorkspace ? invitationFailure : "";
   const currentInvitationsLoading = invitationsLoading || !invitationsBelongToCurrentWorkspace;
 
@@ -473,140 +480,88 @@ export default function WorkspaceDetailPage() {
           </div>
         ) : (
           <>
-            <header className="workspace-detail-header">
-              <div>
+            <header id="workspace-overview" className="workspace-detail-header">
+              <div className="workspace-detail-heading">
                 <p className="eyebrow">Workspace</p>
                 <div className="workspace-detail-title"><h1>{workspace.name}</h1></div>
-                <p className="workspace-detail-meta">Created {formatDate(workspace.createdAt)}</p>
+                <div className="workspace-detail-meta" aria-label="Workspace details">
+                  <span className="workspace-role">{workspace.currentUserRole}</span>
+                  <span>{workspace.memberCount} {workspace.memberCount === 1 ? "member" : "members"}</span>
+                  <span>Created {formatDate(workspace.createdAt)}</span>
+                </div>
               </div>
               <div className="workspace-detail-header__actions">
-                <div className="workspace-detail-summary">
-                  <div><span>Your role</span><strong>{workspace.currentUserRole}</strong></div>
-                  <div><span>People</span><strong>{workspace.memberCount}</strong></div>
-                </div>
-                {canManageWorkspace && (
-                  <button className="secondary-button" type="button" aria-expanded={managementOpen}
-                    aria-controls="workspace-management-panel"
-                    onClick={() => setManagementOpen((current) => !current)}>
-                    {managementOpen ? "Close management" : "Manage workspace"}
-                  </button>
-                )}
+                {canManageInvitations && <a className="primary-button" href="#workspace-invitations">Invite member</a>}
+                <a className="secondary-button"
+                  href={workspace.currentUserRole === "Owner" ? "#workspace-settings" : "#workspace-people"}>
+                  {workspace.currentUserRole === "Owner" ? "Workspace settings" : "View people"}
+                </a>
               </div>
             </header>
 
+            <nav className="workspace-local-nav" aria-label="Workspace sections">
+              <a href="#workspace-overview">Overview</a>
+              <a href="#workspace-tasks">Tasks</a>
+              <a href="#workspace-people">People</a>
+              {workspace.currentUserRole === "Owner" && <a href="#workspace-settings">Settings</a>}
+            </nav>
+
             <WorkspaceTasksSection key={workspace.id} workspace={workspace} />
 
-            <section className="workspace-detail-card workspace-people-summary"
+            <section id="workspace-people" className="workspace-product-section workspace-people-section"
               aria-labelledby="workspace-people-title">
-              <div>
-                <p className="eyebrow">People</p>
-                <h2 id="workspace-people-title">{workspace.memberCount} {workspace.memberCount === 1 ? "member" : "members"}</h2>
-                <p>{workspace.memberCount === 1
-                  ? "Only the workspace owner is here so far."
-                  : "The people who can collaborate on this workspace's tasks."}</p>
-                <div className="workspace-people-preview" aria-label="Workspace members">
-                  {workspace.members.slice(0, 3).map((member) => (
-                    <span key={member.userId}>{member.userName}</span>
-                  ))}
-                  {workspace.memberCount > 3 && <span>+{workspace.memberCount - 3} more</span>}
-                </div>
-              </div>
-              <button className="secondary-button" type="button" aria-expanded={managementOpen}
-                aria-controls="workspace-management-panel"
-                onClick={() => setManagementOpen((current) => !current)}>
-                {managementOpen ? "Hide people" : canManageWorkspace ? "Manage people" : "View people"}
-              </button>
-            </section>
-
-            <section id="workspace-management-panel" className="workspace-detail-card workspace-management-card"
-              aria-labelledby="workspace-management-title" hidden={!managementOpen}>
               <div className="workspace-section-heading">
                 <div>
-                  <p className="eyebrow">{canManageWorkspace ? "Management" : "People"}</p>
-                  <h2 id="workspace-management-title">{canManageWorkspace ? "Manage workspace" : "Workspace people"}</h2>
+                  <p className="eyebrow">Collaboration</p>
+                  <h2 id="workspace-people-title">People</h2>
+                  <p>{canManageWorkspace ? "Review members and manage access where permitted." :
+                    "People who currently belong to this workspace."}</p>
                 </div>
-                <button className="workspace-text-button" type="button"
-                  onClick={() => setManagementOpen(false)}>Close</button>
+                <span>{workspace.memberCount} total</span>
               </div>
-
-              {workspace.currentUserRole === "Owner" && (
-                <div className="workspace-management-section" aria-labelledby="workspace-name-title">
-                  <div className="workspace-management-section__heading">
-                    <div><h3 id="workspace-name-title">Workspace name</h3>
-                      <p>Keep the workspace name clear for everyone.</p></div>
-                    {!editingName && <button className="secondary-button" onClick={beginRename}
-                      type="button">Rename workspace</button>}
-                  </div>
-                  {editingName && (
-                    <form className="workspace-rename-form" onSubmit={handleRename}>
-                      <label htmlFor="workspace-rename-name">Workspace name</label>
-                      <input id="workspace-rename-name" autoFocus disabled={renaming} maxLength={150}
-                        onChange={(event) => {
-                          setWorkspaceName(event.target.value);
-                          if (renameFailure) setRenameFailure("");
-                        }} value={workspaceName} />
-                      <div className="workspace-rename-actions">
-                        <button className="primary-button" disabled={renaming || !workspaceName.trim()}
-                          type="submit">{renaming ? "Saving..." : "Save name"}</button>
-                        <button className="secondary-button" disabled={renaming} onClick={cancelRename}
-                          type="button">Cancel</button>
+              {memberFailure && <p className="workspace-section-alert" role="alert">{memberFailure}</p>}
+              {memberNotice && <p className="workspace-section-notice" role="status">{memberNotice}</p>}
+              <div className="workspace-member-list">
+                {workspace.members.map((member) => {
+                  const memberBusy = busyOperations.has(`member:${member.userId}`);
+                  const canChangeRole = workspace.currentUserRole === "Owner" && member.role !== "Owner";
+                  const canRemove = canRemoveMember(workspace.currentUserRole, member.role);
+                  return (
+                    <article className="workspace-member" key={member.userId}>
+                      <div className="workspace-member__avatar" aria-hidden="true">
+                        {member.userName.trim().charAt(0).toUpperCase() || "?"}
                       </div>
-                    </form>
-                  )}
-                  {renameFailure && <p className="workspace-rename-message workspace-rename-message--error"
-                    role="alert">{renameFailure}</p>}
-                  {renameNotice && <p className="workspace-rename-message" role="status">{renameNotice}</p>}
-                </div>
-              )}
-
-              <div className="workspace-management-section" aria-labelledby="workspace-members-title">
-                <div className="workspace-management-section__heading">
-                  <div><h3 id="workspace-members-title">People</h3>
-                    <p>{canManageWorkspace ? "Review members and update access where permitted." :
-                      "People who currently belong to this workspace."}</p></div>
-                  <span>{workspace.memberCount} total</span>
-                </div>
-                {memberFailure && <p className="workspace-section-alert" role="alert">{memberFailure}</p>}
-                {memberNotice && <p className="workspace-section-notice" role="status">{memberNotice}</p>}
-                <div className="workspace-member-list">
-                  {workspace.members.map((member) => {
-                    const memberBusy = busyOperations.has(`member:${member.userId}`);
-                    const canChangeRole = workspace.currentUserRole === "Owner" && member.role !== "Owner";
-                    const canRemove = canRemoveMember(workspace.currentUserRole, member.role);
-                    return (
-                      <article className="workspace-member" key={member.userId}>
-                        <div className="workspace-member__avatar" aria-hidden="true">
-                          {member.userName.trim().charAt(0).toUpperCase() || "?"}
-                        </div>
-                        <div><h3>{member.userName}</h3><p>Joined {formatDate(member.joinedAt)}</p></div>
-                        <div className="workspace-member__controls">
-                          <span className="workspace-role">{member.role}</span>
-                          {(canChangeRole || canRemove) && (
-                            <div className="workspace-row-actions">
-                              {canChangeRole && <button className="workspace-text-button" disabled={memberBusy}
-                                onClick={() => void handleRoleChange(member)} type="button">
-                                {member.role === "Member" ? "Change to Admin" : "Change to Member"}
-                              </button>}
-                              {canRemove && <button className="workspace-text-button workspace-text-button--danger"
-                                disabled={memberBusy} onClick={() => void handleRemoveMember(member)} type="button">
-                                {memberBusy ? "Working..." : "Remove member"}
-                              </button>}
-                            </div>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                      <div className="workspace-member__identity">
+                        <h3>{member.userName}</h3><p>Joined {formatDate(member.joinedAt)}</p>
+                      </div>
+                      <div className="workspace-member__controls">
+                        <span className="workspace-role">{member.role}</span>
+                        {(canChangeRole || canRemove) && (
+                          <div className="workspace-row-actions">
+                            {canChangeRole && <button className="workspace-text-button" disabled={memberBusy}
+                              onClick={() => void handleRoleChange(member)} type="button">
+                              {member.role === "Member" ? "Change to Admin" : "Change to Member"}
+                            </button>}
+                            {canRemove && <button className="workspace-text-button workspace-text-button--danger"
+                              disabled={memberBusy} onClick={() => void handleRemoveMember(member)} type="button">
+                              {memberBusy ? "Working..." : "Remove member"}
+                            </button>}
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
 
               {canManageInvitations && (
-                <div className="workspace-management-section" aria-labelledby="workspace-management-invitations-title">
+                <section id="workspace-invitations" className="workspace-people-invitations"
+                  aria-labelledby="workspace-management-invitations-title">
                   <div className="workspace-management-section__heading">
                     <div><h3 id="workspace-management-invitations-title">Invite members</h3>
                       <p>Invite someone by username. New members join with the Member role.</p></div>
                     {!currentInvitationsLoading && !currentInvitationFailure &&
-                      <span>{currentInvitations.filter(isPendingAndCurrent).length} pending</span>}
+                      <span>{currentPendingInvitations.length} pending</span>}
                   </div>
                   <form className="workspace-invite-form" onSubmit={handleInvite}>
                     <label htmlFor="workspace-invite-username">Username</label>
@@ -633,30 +588,79 @@ export default function WorkspaceDetailPage() {
                     <div className="workspace-empty-row"><strong>No pending invitations</strong>
                       <span>Invite a member when you are ready to grow this workspace.</span></div>
                   ) : (
-                    <div className="workspace-invitation-list">
-                      {currentInvitations.map((invitation) => {
-                        const cancelBusy = busyOperations.has(`invitation:${invitation.id}`);
-                        const canCancel = isPendingAndCurrent(invitation);
-                        return (
-                          <article className="workspace-invitation-row" key={invitation.id}>
-                            <div><div className="workspace-invitation-row__title">
-                              <h3>{invitation.invitedUserName}</h3>
-                              <span className={`workspace-invitation-status workspace-invitation-status--${invitation.status.toLowerCase()}`}>
-                                {invitation.status}</span>
-                            </div><p>Invited {formatDate(invitation.createdAt)}</p>
-                              {invitation.expiresAt && <p>Expires {formatDate(invitation.expiresAt)}</p>}</div>
-                            {canCancel && <button className="secondary-button" disabled={cancelBusy}
-                              onClick={() => void handleCancelInvitation(invitation)} type="button">
-                              {cancelBusy ? "Cancelling..." : "Cancel invitation"}
-                            </button>}
-                          </article>
-                        );
-                      })}
+                    <div className="workspace-invitation-groups">
+                      {[
+                        { label: "Pending", items: currentPendingInvitations, history: false },
+                        { label: "History", items: currentInvitationHistory, history: true },
+                      ].filter((group) => group.items.length > 0).map((group) => (
+                        <section className={`workspace-invitation-group${group.history ? " workspace-invitation-group--history" : ""}`}
+                          aria-labelledby={`workspace-management-invitation-group-${group.label.toLowerCase()}`}
+                          key={group.label}>
+                          <h4 id={`workspace-management-invitation-group-${group.label.toLowerCase()}`}>{group.label}</h4>
+                          <div className="workspace-invitation-list">
+                            {group.items.map((invitation) => {
+                              const cancelBusy = busyOperations.has(`invitation:${invitation.id}`);
+                              const canCancel = isPendingAndCurrent(invitation);
+                              const displayStatus = invitationDisplayStatus(invitation);
+                              return (
+                                <article className="workspace-invitation-row" key={invitation.id}>
+                                  <div><div className="workspace-invitation-row__title">
+                                    <h5>{invitation.invitedUserName}</h5>
+                                    <span className={`workspace-invitation-status workspace-invitation-status--${displayStatus.toLowerCase()}`}>
+                                      {displayStatus}</span>
+                                  </div><p>Invited {formatDate(invitation.createdAt)}</p>
+                                    {invitation.expiresAt && <p>Expires {formatDate(invitation.expiresAt)}</p>}</div>
+                                  {canCancel && <button className="secondary-button" disabled={cancelBusy}
+                                    onClick={() => void handleCancelInvitation(invitation)} type="button">
+                                    {cancelBusy ? "Cancelling..." : "Cancel invitation"}
+                                  </button>}
+                                </article>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
             </section>
+
+            {workspace.currentUserRole === "Owner" && (
+              <section id="workspace-settings" className="workspace-product-section workspace-settings-section"
+                aria-labelledby="workspace-settings-title">
+                <div className="workspace-section-heading">
+                  <div><p className="eyebrow">Owner controls</p>
+                    <h2 id="workspace-settings-title">Settings</h2>
+                    <p>Manage workspace-level details.</p></div>
+                </div>
+                <div className="workspace-settings-row" aria-labelledby="workspace-name-title">
+                  <div><h3 id="workspace-name-title">Workspace name</h3>
+                    <p>Keep the workspace name clear for everyone.</p></div>
+                  {!editingName && <button className="secondary-button" onClick={beginRename}
+                    type="button">Rename workspace</button>}
+                </div>
+                {editingName && (
+                  <form className="workspace-rename-form" onSubmit={handleRename}>
+                    <label htmlFor="workspace-rename-name">Workspace name</label>
+                    <input id="workspace-rename-name" autoFocus disabled={renaming} maxLength={150}
+                      onChange={(event) => {
+                        setWorkspaceName(event.target.value);
+                        if (renameFailure) setRenameFailure("");
+                      }} value={workspaceName} />
+                    <div className="workspace-rename-actions">
+                      <button className="primary-button" disabled={renaming || !workspaceName.trim()}
+                        type="submit">{renaming ? "Saving..." : "Save name"}</button>
+                      <button className="secondary-button" disabled={renaming} onClick={cancelRename}
+                        type="button">Cancel</button>
+                    </div>
+                  </form>
+                )}
+                {renameFailure && <p className="workspace-rename-message workspace-rename-message--error"
+                  role="alert">{renameFailure}</p>}
+                {renameNotice && <p className="workspace-rename-message" role="status">{renameNotice}</p>}
+              </section>
+            )}
           </>
         )}
       </div>

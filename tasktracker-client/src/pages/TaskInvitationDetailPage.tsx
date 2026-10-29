@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { acceptTaskInvitation, rejectTaskInvitation, getTaskInvitation } from "../api/taskInvitationService";
 import { errorMessage } from "../api/errorMessage";
 import { permissionText } from "../types/taskPermission";
 import type { TaskInvitation } from "../types/taskInvitation";
+import InboxLocalNav from "../components/InboxLocalNav";
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function invitationStatus(invitation: TaskInvitation) {
+  return invitation.status.toLowerCase() === "pending" && invitation.expiresAt &&
+    new Date(invitation.expiresAt).getTime() <= Date.now() ? "Expired" : invitation.status;
+}
 
 function InvitationDetails({ id }: { id: number }) {
   const navigate = useNavigate();
@@ -40,30 +50,46 @@ function InvitationDetails({ id }: { id: number }) {
     }
   };
 
+  const status = invitation ? invitationStatus(invitation) : "";
+  const canRespond = status.toLowerCase() === "pending" &&
+    Boolean(invitation?.canAccept || invitation?.canReject);
+
   return (
-    <main className="task-detail-page">
-      <section className="task-detail-card">
-        <p className="eyebrow">TASK INVITATION</p>
-        <h1>{invitation?.taskTitle ?? "Task invitation"}</h1>
-        {error && <p role="alert" className="error-message">{error}</p>}
-        {!invitation && !error && <p>Loading invitation...</p>}
-        {invitation && <>
-          <p>Invited by: {invitation.inviterUserName}</p>
-          <p>Permission: {permissionText(invitation.permission)}</p>
-          <p>Status: {invitation.status}</p>
-          {invitation.unavailableReason && <p role="alert">{invitation.unavailableReason}</p>}
-          <div className="task-detail-actions">
-            <button className="primary-button" onClick={() => respond(true)} disabled={loading || !invitation.canAccept}
-              type="button">
-              {loading ? "Processing..." : "Accept Invitation"}
-            </button>
-            <button className="secondary-button" onClick={() => respond(false)} disabled={loading || !invitation.canReject}
-              type="button">
-              Reject Invitation
-            </button>
-          </div>
-        </>}
-      </section>
+    <main className="page public-page inbox-page">
+      <div className="inbox-shell inbox-shell--detail">
+        <Link className="inbox-back-link" to="/tasks/invitations">← Back to task invitations</Link>
+        <header className="inbox-header inbox-header--detail">
+          <div><p className="eyebrow">TASK INVITATION</p>
+            <h1>{invitation?.taskTitle ?? "Task invitation"}</h1>
+            <p>Review the invitation context and respond when action is available.</p></div>
+          {invitation && <span className={`inbox-status inbox-status--${status.toLowerCase()}`}>{status}</span>}
+        </header>
+
+        <InboxLocalNav />
+
+        {error && <p role="alert" className="inbox-alert">{error}</p>}
+        {!invitation && !error && <div className="inbox-state" role="status">Loading invitation...</div>}
+        {invitation && <section className="inbox-invitation-detail" aria-labelledby="invitation-context-title">
+          <div className="inbox-section__heading"><div><p className="eyebrow">CONTEXT</p>
+            <h2 id="invitation-context-title">Invitation details</h2></div></div>
+          <dl className="inbox-detail-list">
+            <div><dt>Task</dt><dd>{invitation.taskTitle}</dd></div>
+            <div><dt>Invited by</dt><dd>{invitation.inviterUserName}</dd></div>
+            <div><dt>Access</dt><dd>{permissionText(invitation.permission)}</dd></div>
+            <div><dt>Received</dt><dd><time dateTime={invitation.createdAt}>{formatDate(invitation.createdAt)}</time></dd></div>
+            {invitation.expiresAt && <div><dt>Expires</dt><dd>
+              <time dateTime={invitation.expiresAt}>{formatDate(invitation.expiresAt)}</time></dd></div>}
+          </dl>
+          {invitation.unavailableReason && <p className="inbox-row__warning" role="alert">
+            {invitation.unavailableReason}</p>}
+          {canRespond ? <div className="inbox-detail-actions">
+            {invitation.canAccept && <button className="primary-button" onClick={() => respond(true)} disabled={loading}
+              type="button">{loading ? "Processing..." : "Accept invitation"}</button>}
+            {invitation.canReject && <button className="secondary-button" onClick={() => respond(false)} disabled={loading}
+              type="button">{loading ? "Processing..." : "Reject invitation"}</button>}
+          </div> : <p className="inbox-history-note" role="status">This invitation no longer needs a response.</p>}
+        </section>}
+      </div>
     </main>
   );
 }
@@ -73,5 +99,9 @@ export default function TaskInvitationDetailPage() {
   const id = Number(invitationId);
   return Number.isInteger(id) && id > 0
     ? <InvitationDetails key={id} id={id} />
-    : <p role="alert">Invalid invitation id.</p>;
+    : <main className="page public-page inbox-page"><div className="inbox-shell inbox-shell--detail">
+      <Link className="inbox-back-link" to="/tasks/invitations">← Back to task invitations</Link>
+      <div className="inbox-state inbox-state--error" role="alert"><h1>Invitation unavailable</h1>
+        <span>This invitation address is invalid.</span></div>
+    </div></main>;
 }

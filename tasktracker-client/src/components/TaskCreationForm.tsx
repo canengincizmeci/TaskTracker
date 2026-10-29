@@ -43,13 +43,11 @@ export default function TaskCreationForm({
   description,
   embedded = false,
 }: TaskCreationFormProps) {
-  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
   const [validationError, setValidationError] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const categoryRef = useRef<HTMLInputElement>(null);
   const dueDateRef = useRef<HTMLInputElement>(null);
-  const optionsId = `${idPrefix}-more-options`;
 
   const updateField = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value: fieldValue } = event.target;
@@ -83,9 +81,8 @@ export default function TaskCreationForm({
       return;
     }
     if (!normalized.category) {
-      setMoreOptionsOpen(true);
       setValidationError("Category is required.");
-      window.requestAnimationFrame(() => categoryRef.current?.focus());
+      categoryRef.current?.focus();
       return;
     }
     if (normalized.dueDate && normalized.dueDate < utcToday()) {
@@ -124,48 +121,48 @@ export default function TaskCreationForm({
           rows={4} required placeholder="Add the details someone needs to complete this task." />
       </div>
 
-      <div className="task-creation-form__field">
-        <label htmlFor={`${idPrefix}-due-date`}>Due date <span className="task-creation-form__optional">Optional</span></label>
-        <input ref={dueDateRef} id={`${idPrefix}-due-date`} name="dueDate" type="date" value={value.dueDate ?? ""}
-          min={utcToday()} onChange={updateField} disabled={submitting} />
-      </div>
-
-      <button className="task-creation-form__options-toggle" type="button"
-        aria-expanded={moreOptionsOpen} aria-controls={optionsId}
-        onClick={() => setMoreOptionsOpen((current) => !current)} disabled={submitting}>
-        More options <span aria-hidden="true">{moreOptionsOpen ? "−" : "+"}</span>
-      </button>
-
-      <div id={optionsId} className="task-creation-form__options" hidden={!moreOptionsOpen}>
-        <div className="task-creation-form__field">
-          <label htmlFor={`${idPrefix}-category`}>Category <span aria-hidden="true">*</span></label>
-          <input ref={categoryRef} id={`${idPrefix}-category`} name="category" value={value.category}
-            onChange={updateField} disabled={submitting} required
-            placeholder="Example: Product, Operations, School" />
-          <span className="task-creation-form__hint">Required for every task.</span>
+      <section className="task-creation-form__planning" aria-labelledby={`${idPrefix}-planning-title`}>
+        <div className="task-creation-form__planning-heading">
+          <h3 id={`${idPrefix}-planning-title`}>Planning details</h3>
+          <p>Group the task, set its urgency, and establish a realistic deadline.</p>
         </div>
 
-        <div className="task-creation-form__field">
-          <label htmlFor={`${idPrefix}-priority`}>Priority</label>
-          <select id={`${idPrefix}-priority`} name="priority" value={value.priority}
-            onChange={updateField} disabled={submitting}>
-            {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-          </select>
-        </div>
-
-        {assignees && (
+        <div className="task-creation-form__planning-grid">
           <div className="task-creation-form__field">
-            <label htmlFor={`${idPrefix}-assignee`}>Assignee <span className="task-creation-form__optional">Optional</span></label>
-            <select id={`${idPrefix}-assignee`} name="assigneeUserId"
-              value={value.assigneeUserId ?? ""} onChange={updateField} disabled={submitting}>
-              <option value="">Unassigned</option>
-              {assignees.map((assignee) => (
-                <option key={assignee.id} value={assignee.id}>{assignee.label}</option>
-              ))}
+            <label htmlFor={`${idPrefix}-category`}>Category <span aria-hidden="true">*</span></label>
+            <input ref={categoryRef} id={`${idPrefix}-category`} name="category" value={value.category}
+              onChange={updateField} disabled={submitting} required
+              placeholder="Example: Product, Operations, School" />
+          </div>
+
+          <div className="task-creation-form__field">
+            <label htmlFor={`${idPrefix}-priority`}>Priority</label>
+            <select id={`${idPrefix}-priority`} name="priority" value={value.priority}
+              onChange={updateField} disabled={submitting}>
+              {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
             </select>
           </div>
-        )}
-      </div>
+
+          <div className="task-creation-form__field">
+            <label htmlFor={`${idPrefix}-due-date`}>Due date <span className="task-creation-form__optional">Optional</span></label>
+            <input ref={dueDateRef} id={`${idPrefix}-due-date`} name="dueDate" type="date"
+              value={value.dueDate ?? ""} min={utcToday()} onChange={updateField} disabled={submitting} />
+          </div>
+
+          {assignees && (
+            <div className="task-creation-form__field">
+              <label htmlFor={`${idPrefix}-assignee`}>Assignee <span className="task-creation-form__optional">Optional</span></label>
+              <select id={`${idPrefix}-assignee`} name="assigneeUserId"
+                value={value.assigneeUserId ?? ""} onChange={updateField} disabled={submitting}>
+                <option value="">Unassigned</option>
+                {assignees.map((assignee) => (
+                  <option key={assignee.id} value={assignee.id}>{assignee.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </section>
 
       {displayedError && <p className="task-creation-form__error" role="alert">{displayedError}</p>}
 

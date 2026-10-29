@@ -32,8 +32,8 @@ export default function TaskDiscussion({ taskId, messages, loading, error, onMes
     }
   };
 
-  return <section className="task-detail-section" aria-label="Discussion">
-    <h2>Discussion</h2>
+  return <section id="task-discussion" className="task-detail-section" aria-labelledby="task-discussion-title">
+    <h2 id="task-discussion-title">Discussion</h2>
     <p>Latest 100 messages, oldest first.</p>
     {error && <p role="alert" className="error-message">{error}</p>}
     {loading && <p>Loading discussion...</p>}

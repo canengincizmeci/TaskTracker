@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getWorkDashboardSummary, getWorkDashboardTasks } from "../api/workDashboardService";
 import { errorMessage } from "../api/errorMessage";
 import DashboardSummaryCard from "../components/DashboardSummaryCard";
@@ -78,13 +78,15 @@ function isOverdue(task: WorkTaskListItem) {
   return new Date(year, month - 1, day) < localToday;
 }
 
-function DashboardTaskSection({ title, description, tasks }: {
+function DashboardTaskSection({ title, description, tasks, kind = "standard" }: {
   title: string;
   description: string;
   tasks: WorkTaskListItem[];
+  kind?: "attention" | "standard";
 }) {
   if (tasks.length === 0) return null;
-  return <section className="dashboard-task-section" aria-labelledby={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>
+  return <section className={`dashboard-task-section dashboard-task-section--${kind}`}
+    aria-labelledby={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>
     <header><div><h3 id={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>{title}</h3>
       <p>{description}</p></div><span>{tasks.length}</span></header>
     <div className="dashboard-work-list">{tasks.map((task) =>
@@ -93,7 +95,13 @@ function DashboardTaskSection({ title, description, tasks }: {
 }
 
 export default function DashboardPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [successMessage] = useState(() => {
+    const state = location.state as { successMessage?: unknown } | null;
+    return typeof state?.successMessage === "string" ? state.successMessage : "";
+  });
   const scope = valueOrDefault(searchParams.get("scope"), validScope, "all");
   const search = searchParams.get("search")?.trim() ?? "";
   const status = valueOrDefault<WorkTaskStatus | "">(searchParams.get("status"),
@@ -115,6 +123,11 @@ export default function DashboardPage() {
   const [workFailure, setWorkFailure] = useState("");
   const workRequestId = useRef(0);
   const invalidateWorkRequests = useCallback(() => { workRequestId.current++; }, []);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, navigate, successMessage]);
 
   const query = useMemo<WorkTaskQuery>(() => ({
     scope,
@@ -239,16 +252,20 @@ export default function DashboardPage() {
   return (
     <main className="page public-page dashboard-page">
       <section className="dashboard-shell">
+        {successMessage && <p className="success-message" role="status">{successMessage}</p>}
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">ACTION CENTER</p>
             <h1>My Work</h1>
             <p>See what needs your attention across assigned work, reviews, deadlines, and invitations.</p>
           </div>
-          {summary && <button type="button" className="secondary-button" disabled={summaryRefreshing}
-            onClick={() => void loadSummary()}>
-            {summaryRefreshing ? "Refreshing..." : "Refresh summary"}
-          </button>}
+          <div className="dashboard-header__actions">
+            <Link className="primary-button" to="/tasks/create-task">Create task</Link>
+            {summary && <button type="button" className="secondary-button" disabled={summaryRefreshing}
+              onClick={() => void loadSummary()}>
+              {summaryRefreshing ? "Refreshing..." : "Refresh summary"}
+            </button>}
+          </div>
         </header>
 
         {summaryLoading && !summary && <div className="dashboard-state" aria-live="polite">
@@ -267,8 +284,8 @@ export default function DashboardPage() {
           </div>}
 
           <section className="dashboard-attention" aria-labelledby="dashboard-attention-heading">
-            <div className="dashboard-section-heading"><div><p className="eyebrow">PRIORITY</p>
-              <h2 id="dashboard-attention-heading">Needs your attention</h2></div>
+            <div className="dashboard-section-heading"><div><p className="eyebrow">AT A GLANCE</p>
+              <h2 id="dashboard-attention-heading">Work signals</h2></div>
               <Link to="/notifications">Open Inbox</Link></div>
           <div className="dashboard-summary-grid">
             <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
@@ -309,14 +326,13 @@ export default function DashboardPage() {
           <header className="dashboard-work__header">
             <div><p className="eyebrow">TASKS</p><h2 id="dashboard-work-heading">Your work</h2>
               <p>Act on urgent work first, then track active tasks, waiting work, and recent outcomes.</p></div>
+            <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
+              {scopes.map((item) => <button key={item.value} type="button"
+                className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
+                aria-pressed={scope === item.value}
+                onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
+            </div>
           </header>
-
-          <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
-            {scopes.map((item) => <button key={item.value} type="button"
-              className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
-              aria-pressed={scope === item.value}
-              onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
-          </div>
 
           <form className="dashboard-work-controls" onSubmit={submitSearch}>
             <div className="dashboard-search-control">
@@ -378,7 +394,7 @@ export default function DashboardPage() {
 
           {work && work.items.length > 0 && <div className="dashboard-work-sections" aria-busy={workLoading}>
             <DashboardTaskSection title="Needs your attention" description="Tasks with a clear next action or an overdue deadline."
-              tasks={groupedWork.attention} />
+              tasks={groupedWork.attention} kind="attention" />
             <DashboardTaskSection title="My active tasks" description="Other active work you own, are assigned, or can access."
               tasks={groupedWork.active} />
             <DashboardTaskSection title="Awaiting others" description="Delegated work and submitted work waiting on someone else."

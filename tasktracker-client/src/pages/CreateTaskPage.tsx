@@ -68,7 +68,7 @@ function CreateTaskPage() {
         <div className="create-task-page__header">
           <p className="create-task-page__eyebrow">My Work</p>
           <h1>Create a task</h1>
-          <p>Capture the essentials now. You can add workflow details after creation.</p>
+          <p>Define the work and its plan now. You can manage assignment and collaboration after creation.</p>
         </div>
 
         <TaskCreationForm
@@ -76,7 +76,7 @@ function CreateTaskPage() {
           value={draft}
           onChange={setDraft}
           onSubmit={handleSubmit}
-          onCancel={() => navigate(-1)}
+          onCancel={() => navigate("/dashboard")}
           submitting={submitting}
           error={error}
           onClearError={() => setError("")}

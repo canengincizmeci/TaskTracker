@@ -41,7 +41,8 @@ export default function TaskSubmissionPanel({ task, workflow, onStart, onComplet
   const hasPrimaryAction = task.canStart || task.canSubmit || task.canReview ||
     Boolean(task.isOwner && selfManaged && task.status === "InProgress");
 
-  return <section className="task-next-action" aria-labelledby="task-next-action-title">
+  return <section className={`task-next-action${hasPrimaryAction ? " task-next-action--active" : ""}`}
+    aria-labelledby="task-next-action-title">
     <div className="task-next-action__heading"><p className="eyebrow">NEXT ACTION</p>
       <h2 id="task-next-action-title">{title}</h2></div>
     {workflow.failure && <p role="alert" className="error-message">{workflow.failure}</p>}

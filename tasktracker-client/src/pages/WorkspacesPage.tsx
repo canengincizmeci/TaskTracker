@@ -31,6 +31,13 @@ function isPendingAndCurrent(invitation: WorkspaceInvitation) {
     (!invitation.expiresAt || new Date(invitation.expiresAt).getTime() > Date.now());
 }
 
+function invitationDisplayStatus(invitation: WorkspaceInvitation) {
+  return invitation.status === "Pending" && invitation.expiresAt &&
+    new Date(invitation.expiresAt).getTime() <= Date.now()
+    ? "Expired"
+    : invitation.status;
+}
+
 export default function WorkspacesPage() {
   const navigate = useNavigate();
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([]);
@@ -157,7 +164,9 @@ export default function WorkspacesPage() {
     }
   };
 
-  const pendingInvitationCount = invitations.filter(isPendingAndCurrent).length;
+  const pendingInvitations = invitations.filter(isPendingAndCurrent);
+  const invitationHistory = invitations.filter((invitation) => !isPendingAndCurrent(invitation));
+  const pendingInvitationCount = pendingInvitations.length;
 
   return (
     <main className="page workspace-page">
@@ -168,13 +177,38 @@ export default function WorkspacesPage() {
             <h1>Workspaces</h1>
             <p>Open the team and project spaces where your work lives.</p>
           </div>
-          <button className="secondary-button" type="button" aria-expanded={createOpen}
+          <button className="primary-button" type="button" aria-expanded={createOpen}
             aria-controls="create-workspace-panel" onClick={() => setCreateOpen((current) => !current)}>
             {createOpen ? "Close" : "Create workspace"}
           </button>
         </header>
 
-        <section className="workspace-list-card" aria-labelledby="your-workspaces-title">
+        <section id="create-workspace-panel" className="workspace-compose-panel"
+          aria-labelledby="create-workspace-title" hidden={!createOpen}>
+          <div>
+            <p className="eyebrow">New workspace</p>
+            <h2 id="create-workspace-title">Create a workspace</h2>
+            <p>Start a focused space for a team or project.</p>
+          </div>
+          <form className="workspace-create-form" onSubmit={handleCreate}>
+            <label htmlFor="workspace-name">Workspace name</label>
+            <div>
+              <input id="workspace-name" value={name} maxLength={150}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  if (createFailure) setCreateFailure("");
+                }}
+                placeholder="Example: Product launch" disabled={creating} required />
+              <button className="primary-button" disabled={!name.trim() || creating} type="submit">
+                {creating ? "Creating..." : "Create workspace"}
+              </button>
+            </div>
+            <p>You will be its owner and can invite collaborators from the workspace.</p>
+            {createFailure && <p className="workspace-inline-error" role="alert">{createFailure}</p>}
+          </form>
+        </section>
+
+        <section className="workspace-collection" aria-labelledby="your-workspaces-title">
           <div className="workspace-section-heading">
             <div>
               <p className="eyebrow">Your spaces</p>
@@ -205,7 +239,7 @@ export default function WorkspacesPage() {
                 <Link className="workspace-card" key={workspace.id} to={`/workspaces/${workspace.id}`}>
                   <div className="workspace-card__top">
                     <span className="workspace-role">{workspace.role}</span>
-                    <span aria-hidden="true">→</span>
+                    <span className="workspace-card__open">Open <span aria-hidden="true">→</span></span>
                   </div>
                   <h3>{workspace.name}</h3>
                   <p>Created {formatDate(workspace.createdAt)}</p>
@@ -215,40 +249,7 @@ export default function WorkspacesPage() {
           )}
         </section>
 
-        <section className="workspace-list-card workspace-disclosure-card"
-          aria-labelledby="create-workspace-title">
-          <div className="workspace-disclosure-heading">
-            <div>
-              <p className="eyebrow">New workspace</p>
-              <h2 id="create-workspace-title">Create workspace</h2>
-              <p>Start a focused space for a team or project.</p>
-            </div>
-            <button className="secondary-button" type="button" aria-expanded={createOpen}
-              aria-controls="create-workspace-panel" onClick={() => setCreateOpen((current) => !current)}>
-              {createOpen ? "Close" : "Create"}
-            </button>
-          </div>
-          <div id="create-workspace-panel" className="workspace-disclosure-content" hidden={!createOpen}>
-            <form className="workspace-create-form" onSubmit={handleCreate}>
-              <label htmlFor="workspace-name">Workspace name</label>
-              <div>
-                <input id="workspace-name" value={name} maxLength={150}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    if (createFailure) setCreateFailure("");
-                  }}
-                  placeholder="Example: Product launch" disabled={creating} required />
-                <button className="primary-button" disabled={!name.trim() || creating} type="submit">
-                  {creating ? "Creating..." : "Create workspace"}
-                </button>
-              </div>
-              <p>You will be its owner and can invite collaborators from the workspace.</p>
-              {createFailure && <p className="workspace-inline-error" role="alert">{createFailure}</p>}
-            </form>
-          </div>
-        </section>
-
-        <section className="workspace-list-card workspace-disclosure-card"
+        <section className="workspace-invitations-summary"
           aria-labelledby="workspace-invitations-title">
           <div className="workspace-disclosure-heading">
             <div>
@@ -285,37 +286,49 @@ export default function WorkspacesPage() {
                 <span>Workspace invitations sent to you will appear here.</span>
               </div>
             ) : (
-              <div className="workspace-invitation-list">
-                {invitations.map((invitation) => {
-                  const busy = busyInvitationIds.has(invitation.id);
-                  const canRespond = isPendingAndCurrent(invitation);
-                  return (
-                    <article className="workspace-invitation-row" key={invitation.id}>
-                      <div>
-                        <div className="workspace-invitation-row__title">
-                          <h3>{invitation.workspaceName}</h3>
-                          <span className={`workspace-invitation-status workspace-invitation-status--${invitation.status.toLowerCase()}`}>
-                            {invitation.status}
-                          </span>
-                        </div>
-                        <p>Invited by {invitation.invitedByUserName} · {formatDate(invitation.createdAt)}</p>
-                        {invitation.expiresAt && <p>Expires {formatDate(invitation.expiresAt)}</p>}
-                      </div>
-                      {canRespond && (
-                        <div className="workspace-row-actions">
-                          <button className="primary-button" disabled={busy}
-                            onClick={() => void respondToInvitation(invitation, true)} type="button">
-                            {busy ? "Working..." : "Accept"}
-                          </button>
-                          <button className="secondary-button" disabled={busy}
-                            onClick={() => void respondToInvitation(invitation, false)} type="button">
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
+              <div className="workspace-invitation-groups">
+                {[
+                  { label: "Pending", items: pendingInvitations, history: false },
+                  { label: "History", items: invitationHistory, history: true },
+                ].filter((group) => group.items.length > 0).map((group) => (
+                  <section className={`workspace-invitation-group${group.history ? " workspace-invitation-group--history" : ""}`}
+                    aria-labelledby={`workspace-invitation-group-${group.label.toLowerCase()}`} key={group.label}>
+                    <h3 id={`workspace-invitation-group-${group.label.toLowerCase()}`}>{group.label}</h3>
+                    <div className="workspace-invitation-list">
+                      {group.items.map((invitation) => {
+                        const busy = busyInvitationIds.has(invitation.id);
+                        const canRespond = isPendingAndCurrent(invitation);
+                        const displayStatus = invitationDisplayStatus(invitation);
+                        return (
+                          <article className="workspace-invitation-row" key={invitation.id}>
+                            <div>
+                              <div className="workspace-invitation-row__title">
+                                <h4>{invitation.workspaceName}</h4>
+                                <span className={`workspace-invitation-status workspace-invitation-status--${displayStatus.toLowerCase()}`}>
+                                  {displayStatus}
+                                </span>
+                              </div>
+                              <p>Invited by {invitation.invitedByUserName} · {formatDate(invitation.createdAt)}</p>
+                              {invitation.expiresAt && <p>Expires {formatDate(invitation.expiresAt)}</p>}
+                            </div>
+                            {canRespond && (
+                              <div className="workspace-row-actions">
+                                <button className="primary-button" disabled={busy}
+                                  onClick={() => void respondToInvitation(invitation, true)} type="button">
+                                  {busy ? "Working..." : "Accept"}
+                                </button>
+                                <button className="secondary-button" disabled={busy}
+                                  onClick={() => void respondToInvitation(invitation, false)} type="button">
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
               </div>
             )}
           </div>
