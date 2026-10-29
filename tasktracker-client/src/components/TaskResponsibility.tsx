@@ -32,6 +32,8 @@ export default function TaskResponsibility({ task, onChanged }: {
     : task.isOwner === true);
   const canInspectAccess = !isWorkspaceTask && task.canViewParticipants === true;
   const canOpen = canManageAssignment || canInspectAccess;
+  const responsibility = task.isOwner ? "Task owner" : task.isAssignee ? "Assigned contributor" :
+    task.isSharedWithMe ? "Collaborator" : "Viewer";
 
   useEffect(() => {
     if (!open || loaded) return;
@@ -72,6 +74,7 @@ export default function TaskResponsibility({ task, onChanged }: {
     <div className="task-people-summary">
       <div><span>Owner</span><strong>{task.ownerUserName}</strong></div>
       <div><span>Assigned to</span><strong>{task.assigneeUserName ?? "Unassigned"}</strong></div>
+      <div><span>Your responsibility</span><strong>{responsibility}</strong></div>
     </div>
 
     {canOpen && <button type="button" className="task-disclosure-button" aria-expanded={open}

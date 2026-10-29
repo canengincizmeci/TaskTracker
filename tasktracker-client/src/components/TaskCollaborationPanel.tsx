@@ -113,13 +113,14 @@ export default function TaskCollaborationPanel({ taskId, onTaskChanged, onAccess
     {liveError && <p role="status">{liveError}</p>}
     <TaskDiscussion taskId={taskId} messages={messages} loading={loading} error={messageError}
       onMessage={(message) => setMessages((current) => mergeHistory(current, [message]))} />
+    {middleContent}
     <details id="task-history" className="task-history-disclosure">
-      <summary><span>History</span><small>Activity and submitted work</small></summary>
+      <summary><span className="task-history-summary__title"><span aria-hidden="true">›</span>History</span>
+        <small>Activity and submitted work</small></summary>
       <div className="task-history-content">
         <TaskActivityTimeline activities={activities} loading={loading} error={activityError} />
         {historyContent}
       </div>
     </details>
-    {middleContent}
   </>;
 }

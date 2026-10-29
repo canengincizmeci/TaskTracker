@@ -32,9 +32,9 @@ export default function TaskDiscussion({ taskId, messages, loading, error, onMes
     }
   };
 
-  return <section id="task-discussion" className="task-detail-section" aria-labelledby="task-discussion-title">
+  return <section id="task-discussion" className="task-detail-section task-discussion" aria-labelledby="task-discussion-title">
     <h2 id="task-discussion-title">Discussion</h2>
-    <p>Latest 100 messages, oldest first.</p>
+    <p className="task-discussion__intro">Latest 100 messages · oldest first</p>
     {error && <p role="alert" className="error-message">{error}</p>}
     {loading && <p>Loading discussion...</p>}
     {!loading && !error && messages.length === 0 && <p>No messages yet.</p>}
@@ -45,7 +45,7 @@ export default function TaskDiscussion({ taskId, messages, loading, error, onMes
         <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{message.content}</p>
       </li>)}
     </ol>
-    <form onSubmit={send} className="auth-form">
+    <form onSubmit={send} className="auth-form task-discussion__composer">
       <label htmlFor="task-message">Message</label>
       <textarea id="task-message" rows={3} maxLength={4000} value={content} disabled={sending}
         onChange={(event) => setContent(event.target.value)} />

@@ -98,8 +98,6 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
   const busy = isSaving || isUpdatingStatus || isDeleting || submissionWorkflow.busy;
   const backPath = task.workspaceId ? `/workspaces/${task.workspaceId}` : "/dashboard";
   const backLabel = task.workspaceId ? `Back to ${task.workspaceName ?? "workspace"}` : "Back to My Work";
-  const responsibility = task.isOwner ? "Task owner" : task.isAssignee ? "Assigned contributor" :
-    task.isSharedWithMe ? "Collaborator" : null;
   const hasMoreActions = task.canShare === true || task.canDelete === true || task.isOwner === true &&
     (task.status === "Pending" || task.status === "InProgress" || task.status === "InReview" ||
       task.status === "Completed" || task.status === "Cancelled");
@@ -129,14 +127,15 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
       <div className="task-detail-workspace">
         <div className="task-detail-primary">
           <header className="task-detail-hero">
-            <p className="eyebrow">TASK WORKSPACE</p>
-            <h1>{task.title}</h1>
-            <div className="task-detail-hero__context">
-              {task.workspaceId != null && task.workspaceName && <Link className="task-workspace-context"
-                to={`/workspaces/${task.workspaceId}`}>{task.workspaceName}</Link>}
-              <span>Owned by <strong>{task.ownerUserName}</strong></span>
-              <span>Assigned to <strong>{task.assigneeUserName ?? "Unassigned"}</strong></span>
+            <div className="task-detail-hero__heading">
+              <div><p className="eyebrow">TASK WORKSPACE</p><h1>{task.title}</h1></div>
+              {task.canEdit === true && task.status !== "InReview" && !isEditing && <button type="button"
+                className="secondary-button" disabled={busy} onClick={startEditing}>Edit task</button>}
             </div>
+            {task.workspaceId != null && task.workspaceName && <div className="task-detail-hero__context">
+              <Link className="task-workspace-context"
+                to={`/workspaces/${task.workspaceId}`}>{task.workspaceName}</Link>
+            </div>}
             <div className="task-detail-badges" aria-label="Task status and timing">
               <span className="task-status">{taskStatusLabel(task.status)}</span>
               <span className={`priority-pill priority-${task.priority.toLowerCase()}`}>{task.priority} priority</span>
@@ -157,32 +156,37 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
           <section className="task-detail-rail__section" aria-labelledby="task-context-details">
             <h2 id="task-context-details">Details</h2>
             <dl className="task-context-list">
-              <div><dt>Status</dt><dd>{taskStatusLabel(task.status)}</dd></div>
-              <div><dt>Priority</dt><dd>{task.priority}</dd></div>
-              <div><dt>Due date</dt><dd>{task.dueDate ? formatDate(task.dueDate) : "No due date"}</dd></div>
               <div><dt>Category</dt><dd>{task.category}</dd></div>
               <div><dt>Workspace</dt><dd>{task.workspaceId != null && task.workspaceName ?
                 <Link to={`/workspaces/${task.workspaceId}`}>{task.workspaceName}</Link> : "Personal task"}</dd></div>
             </dl>
           </section>
 
-          <section className="task-detail-rail__section" aria-labelledby="task-context-people">
+          {(task.currentUserPermission || task.visibility) && <section className="task-detail-rail__section"
+            aria-labelledby="task-context-access">
+            <h2 id="task-context-access">Access</h2>
+            <dl className="task-context-list">
+              {task.currentUserPermission && <div><dt>Access</dt><dd>{task.currentUserPermission}</dd></div>}
+              {task.visibility && <div><dt>Visibility</dt><dd>{task.visibility}</dd></div>}
+            </dl>
+          </section>}
+
+          {!task.canViewParticipants && <section className="task-detail-rail__section"
+            aria-labelledby="task-context-people">
             <h2 id="task-context-people">People</h2>
             <dl className="task-context-list">
               <div><dt>Owner</dt><dd>{task.ownerUserName}</dd></div>
               <div><dt>Assignee</dt><dd>{task.assigneeUserName ?? "Unassigned"}</dd></div>
-              {responsibility && <div><dt>Your responsibility</dt><dd>{responsibility}</dd></div>}
-              {task.currentUserPermission && <div><dt>Access</dt><dd>{task.currentUserPermission}</dd></div>}
             </dl>
-          </section>
+          </section>}
 
           {task.canViewParticipants && <nav className="task-detail-rail__section task-detail-jump-links"
             aria-label="Task sections">
             <h2>On this task</h2>
             <a href="#task-description-title">Description</a>
             <a href="#task-discussion">Discussion</a>
-            <a href="#task-history" onClick={openHistory}>History</a>
             <a href="#task-responsibility">Assignment and access</a>
+            <a href="#task-history" onClick={openHistory}>History</a>
           </nav>}
 
           {hasMoreActions && <section className="task-detail-rail__section task-detail-secondary-actions"
@@ -222,8 +226,6 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
           <section className="task-detail-section task-description-card" aria-labelledby="task-description-title">
             <div className="task-section-header"><div><p className="eyebrow">TASK</p>
               <h2 id="task-description-title">Description</h2></div>
-              {task.canEdit === true && task.status !== "InReview" && !isEditing && <button type="button"
-                className="secondary-button" disabled={busy} onClick={startEditing}>Edit task</button>}
             </div>
             {isEditing && draft ? <form className="auth-form" onSubmit={saveChanges} aria-busy={isSaving}>
               <div className="form-group"><label htmlFor="edit-title">Title</label>
