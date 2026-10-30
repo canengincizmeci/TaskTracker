@@ -253,84 +253,19 @@ export default function DashboardPage() {
     <main className="page public-page dashboard-page">
       <section className="dashboard-shell">
         {successMessage && <p className="success-message" role="status">{successMessage}</p>}
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">ACTION CENTER</p>
-            <h1>My Work</h1>
-            <p>See what needs your attention across assigned work, reviews, deadlines, and invitations.</p>
-          </div>
-          <div className="dashboard-header__actions">
-            <Link className="primary-button" to="/tasks/create-task">Create task</Link>
-            {summary && <button type="button" className="secondary-button" disabled={summaryRefreshing}
-              onClick={() => void loadSummary()}>
-              {summaryRefreshing ? "Refreshing..." : "Refresh summary"}
-            </button>}
-          </div>
-        </header>
-
-        {summaryLoading && !summary && <div className="dashboard-state" aria-live="polite">
-          <LoadingSpinner text="Loading your work summary..." />
-        </div>}
-
-        {summaryFailure && !summary && <section className="dashboard-state dashboard-state--error" role="alert">
-          <div><h2>We could not load your summary</h2><p>{summaryFailure}</p></div>
-          <button type="button" className="primary-button" onClick={() => void loadSummary(true)}>Retry</button>
-        </section>}
-
-        {summary && <>
-          {summaryFailure && <div className="dashboard-refresh-error" role="alert">
-            <span>{summaryFailure}</span>
-            <button type="button" onClick={() => void loadSummary()}>Retry</button>
-          </div>}
-
-          <section className="dashboard-attention" aria-labelledby="dashboard-attention-heading">
-            <div className="dashboard-section-heading"><div><p className="eyebrow">AT A GLANCE</p>
-              <h2 id="dashboard-attention-heading">Work signals</h2></div>
-              <Link to="/notifications">Open Inbox</Link></div>
-          <div className="dashboard-summary-grid">
-            <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
-              description={summary.assignedToMeCount === 0 ? "No active assigned tasks" :
-                `${countText(summary.assignedToMeCount, "active task")} to move forward`}
-              tone="assigned" to="/dashboard?scope=assigned" />
-            <DashboardSummaryCard title="Awaiting my review" count={summary.awaitingMyReviewCount}
-              description={summary.awaitingMyReviewCount === 0 ? "No submissions waiting" :
-                `${countText(summary.awaitingMyReviewCount, "submission")} waiting for a decision`}
-              tone="review" to="/dashboard?scope=owned&status=InReview&sort=reviewAge" />
-            <DashboardSummaryCard title="Overdue" count={summary.overdueCount}
-              description={summary.overdueCount === 0 ? "No owned or assigned work is overdue" :
-                `${countText(summary.overdueCount, "task")} past the due date`}
-              tone="overdue" to="/dashboard?due=overdue" />
-            <DashboardSummaryCard title="Task invitations" count={summary.pendingTaskInvitationsCount}
-              description={summary.pendingTaskInvitationsCount === 0 ? "No task invitations need a response" :
-                `${countText(summary.pendingTaskInvitationsCount, "invitation")} awaiting your response`}
-              tone="invitation" to="/tasks/invitations" />
-            <DashboardSummaryCard title="Workspace invitations" count={summary.pendingWorkspaceInvitationsCount}
-              description={summary.pendingWorkspaceInvitationsCount === 0 ?
-                "No workspace invitations need a response" :
-                `${countText(summary.pendingWorkspaceInvitationsCount, "invitation")} awaiting your response`}
-              tone="invitation" to="/workspaces" />
-          </div></section>
-
-          {allClear && <section className="dashboard-zero-state">
-            <div className="dashboard-zero-state__icon" aria-hidden="true">✓</div>
-            <div><h2>Nothing needs your attention right now</h2>
-              <p>Create a task when you are ready, or browse the work you already own.</p></div>
-            <div className="dashboard-zero-state__actions">
-              <Link className="primary-button" to="/tasks/create-task">Create Task</Link>
-              <Link className="secondary-button" to="/dashboard?scope=owned">Owned tasks</Link>
-            </div>
-          </section>}
-        </>}
-
+        <div className="dashboard-command-layout">
         <section className="dashboard-work" aria-labelledby="dashboard-work-heading">
           <header className="dashboard-work__header">
-            <div><p className="eyebrow">TASKS</p><h2 id="dashboard-work-heading">Your work</h2>
-              <p>Act on urgent work first, then track active tasks, waiting work, and recent outcomes.</p></div>
-            <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
-              {scopes.map((item) => <button key={item.value} type="button"
-                className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
-                aria-pressed={scope === item.value}
-                onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
+            <div><h1 id="dashboard-work-heading">My work</h1>
+              <p>Priorities, handoffs, and next moves in one place.</p></div>
+            <div className="dashboard-work__header-actions">
+              <div className="dashboard-scope-tabs" role="group" aria-label="Work scope">
+                {scopes.map((item) => <button key={item.value} type="button"
+                  className={scope === item.value ? "dashboard-scope-tab dashboard-scope-tab--active" : "dashboard-scope-tab"}
+                  aria-pressed={scope === item.value}
+                  onClick={() => updateQuery({ scope: item.value, page: 1 })}>{item.label}</button>)}
+              </div>
+              <Link className="primary-button" to="/tasks/create-task"><span aria-hidden="true">＋</span> New task</Link>
             </div>
           </header>
 
@@ -377,10 +312,6 @@ export default function DashboardPage() {
               `Showing ${resultStart}–${resultEnd} of ${work.totalCount}` : "Loading results"}</span>
             {workLoading && work && <span className="dashboard-work__updating">Updating results…</span>}
           </div>
-
-          {work && work.items.length > 0 && <div className="dashboard-table-head" aria-hidden="true">
-            <span>Task</span><span>Category</span><span>Status</span><span>Priority</span><span>Due</span><span />
-          </div>}
 
           {workLoading && !work && <div className="dashboard-work-state">
             <LoadingSpinner text="Loading your work..." />
@@ -432,6 +363,64 @@ export default function DashboardPage() {
               onClick={() => updateQuery({ page: page + 1 })}>Next</button>
           </nav>}
         </section>
+
+        <aside className="dashboard-pulse" aria-labelledby="dashboard-attention-heading">
+          <header className="dashboard-pulse__header">
+            <div><span className="dashboard-section-number">02</span>
+              <h2 id="dashboard-attention-heading">Pulse</h2></div>
+            {summary && <button type="button" className="dashboard-icon-button" disabled={summaryRefreshing}
+              aria-label="Refresh work summary" title="Refresh summary" onClick={() => void loadSummary()}>
+              <span aria-hidden="true" className={summaryRefreshing ? "is-spinning" : ""}>↻</span>
+            </button>}
+          </header>
+          <p className="dashboard-pulse__intro">Signals that may need a quick response.</p>
+
+          {summaryLoading && !summary && <div className="dashboard-state" aria-live="polite">
+            <LoadingSpinner text="Loading your pulse..." />
+          </div>}
+
+          {summaryFailure && !summary && <section className="dashboard-state dashboard-state--error" role="alert">
+            <div><h3>Pulse is unavailable</h3><p>{summaryFailure}</p></div>
+            <button type="button" className="secondary-button" onClick={() => void loadSummary(true)}>Retry</button>
+          </section>}
+
+          {summary && <>
+            {summaryFailure && <div className="dashboard-refresh-error" role="alert">
+              <span>{summaryFailure}</span><button type="button" onClick={() => void loadSummary()}>Retry</button>
+            </div>}
+            <div className="dashboard-summary-grid">
+              <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
+                description={summary.assignedToMeCount === 0 ? "No active assigned tasks" :
+                  `${countText(summary.assignedToMeCount, "active task")} to move forward`}
+                tone="assigned" to="/dashboard?scope=assigned" />
+              <DashboardSummaryCard title="Awaiting my review" count={summary.awaitingMyReviewCount}
+                description={summary.awaitingMyReviewCount === 0 ? "No submissions waiting" :
+                  `${countText(summary.awaitingMyReviewCount, "submission")} waiting for a decision`}
+                tone="review" to="/dashboard?scope=owned&status=InReview&sort=reviewAge" />
+              <DashboardSummaryCard title="Overdue" count={summary.overdueCount}
+                description={summary.overdueCount === 0 ? "Everything is on schedule" :
+                  `${countText(summary.overdueCount, "task")} past the due date`}
+                tone="overdue" to="/dashboard?due=overdue" />
+              <DashboardSummaryCard title="Task invitations" count={summary.pendingTaskInvitationsCount}
+                description={summary.pendingTaskInvitationsCount === 0 ? "No responses needed" :
+                  `${countText(summary.pendingTaskInvitationsCount, "invitation")} awaiting your response`}
+                tone="invitation" to="/tasks/invitations" />
+              <DashboardSummaryCard title="Workspace invitations" count={summary.pendingWorkspaceInvitationsCount}
+                description={summary.pendingWorkspaceInvitationsCount === 0 ? "No responses needed" :
+                  `${countText(summary.pendingWorkspaceInvitationsCount, "invitation")} awaiting your response`}
+                tone="invitation" to="/workspaces" />
+            </div>
+            {allClear && <div className="dashboard-all-clear">
+              <span aria-hidden="true">✓</span><div><strong>All clear</strong><p>Nothing needs your attention.</p></div>
+            </div>}
+          </>}
+
+          <div className="dashboard-pulse__footer">
+            <Link to="/notifications"><span>Open Inbox</span><span aria-hidden="true">→</span></Link>
+            <Link to="/workspaces"><span>Browse workspaces</span><span aria-hidden="true">→</span></Link>
+          </div>
+        </aside>
+        </div>
       </section>
     </main>
   );

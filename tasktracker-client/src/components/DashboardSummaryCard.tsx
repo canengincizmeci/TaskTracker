@@ -17,11 +17,11 @@ export default function DashboardSummaryCard({
 }: DashboardSummaryCardProps) {
   const content = <>
     <span className="dashboard-summary-card__marker" aria-hidden="true" />
+    <strong className="dashboard-summary-card__count">{count}</strong>
     <span className="dashboard-summary-card__copy">
       <span className="dashboard-summary-card__label">{title}</span>
       <span className="dashboard-summary-card__description">{description}</span>
     </span>
-    <strong className="dashboard-summary-card__count">{count}</strong>
     {to && <span className="dashboard-summary-card__action" aria-hidden="true">→</span>}
   </>;
 

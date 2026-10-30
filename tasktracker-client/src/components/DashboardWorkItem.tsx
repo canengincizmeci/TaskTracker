@@ -49,23 +49,28 @@ export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) 
   ].filter((relationship): relationship is string => relationship !== null);
 
   return <article className={`dashboard-work-item dashboard-work-item--${due.state}`}>
-    <div className="dashboard-work-item__task" data-label="Task">
-      <h3><Link to={detailPath}>{task.title}</Link></h3>
-      <p>{task.description}</p>
-      <span>{relationships.join(" · ") || "Available"} · {task.assigneeUserName ?? task.ownerUserName}</span>
+    <span className={`dashboard-work-item__signal dashboard-work-item__signal--${task.status.toLowerCase()}`}
+      aria-hidden="true" />
+    <div className="dashboard-work-item__body">
+      <div className="dashboard-work-item__title-row">
+        <h3><Link to={detailPath}>{task.title}</Link></h3>
+        <span className={`dashboard-work-item__priority dashboard-work-item__priority--${task.priority.toLowerCase()}`}>
+          <span aria-hidden="true" />{task.priority}
+        </span>
+      </div>
+      {task.description && <p>{task.description}</p>}
+      <div className="dashboard-work-item__context">
+        <span className="dashboard-work-item__category">{task.category}</span>
+        <span>{relationships.join(" · ") || "Available"}</span>
+        <span>{task.assigneeUserName ?? task.ownerUserName}</span>
+      </div>
     </div>
-    <div className="dashboard-work-item__category" data-label="Category">{task.category}</div>
-    <div data-label="Status">
-      <span className={`dashboard-work-badge dashboard-work-badge--status dashboard-work-badge--${task.status.toLowerCase()}`}>
+    <div className="dashboard-work-item__state">
+      <span className={`dashboard-work-badge dashboard-work-badge--${task.status.toLowerCase()}`}>
         {taskStatusLabel(task.status)}
       </span>
+      <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
     </div>
-    <div data-label="Priority">
-      <span className={`dashboard-work-item__priority dashboard-work-item__priority--${task.priority.toLowerCase()}`}>
-        {task.priority}
-      </span>
-    </div>
-    <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`} data-label="Due">{due.label}</span>
     <Link className="dashboard-work-item__action" to={detailPath}
       aria-label={`${actionLabels[task.nextAction]}: ${task.title}`}>
       <span>{actionLabels[task.nextAction]}</span><span aria-hidden="true">→</span>
