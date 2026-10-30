@@ -140,6 +140,8 @@ function TaskDetailContent({ task, isEditing, draft, setDraft, isSaving, isUpdat
               <span className="task-status">{taskStatusLabel(task.status)}</span>
               <span className={`priority-pill priority-${task.priority.toLowerCase()}`}>{task.priority} priority</span>
               <span className="task-detail-date">{task.dueDate ? `Due ${formatDate(task.dueDate)}` : "No due date"}</span>
+              <span className="task-detail-person">Owner · {task.ownerUserName}</span>
+              {task.assigneeUserName && <span className="task-detail-person">Assigned · {task.assigneeUserName}</span>}
             </div>
           </header>
 

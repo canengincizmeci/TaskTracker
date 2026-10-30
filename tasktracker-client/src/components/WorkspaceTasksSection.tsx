@@ -193,6 +193,8 @@ export default function WorkspaceTasksSection({ workspace }: { workspace: Worksp
         <div className="workspace-task-list">
           {tasks.map((task) => (
             <Link className="workspace-task-row" key={task.id} to={`/tasks/task-detail/${task.id}`}>
+              <span className={`workspace-task-signal workspace-task-signal--${task.status.toLowerCase()}`}
+                aria-hidden="true" />
               <div className="workspace-task-row__main">
                 <div className="workspace-task-row__title">
                   <h3>{task.title}</h3>
