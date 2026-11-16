@@ -1,143 +1,101 @@
 import { Link } from "react-router-dom";
 
+const previewTasks = [
+  { title: "Finalize launch checklist", meta: "Product · Due today", status: "In progress", tone: "active", action: "Open task" },
+  { title: "Review onboarding copy", meta: "Content · High priority", status: "In review", tone: "review", action: "Review" },
+  { title: "Confirm workspace access", meta: "Operations · Assigned to you", status: "Not started", tone: "pending", action: "Start task" },
+];
+
+function ProductPreview() {
+  return <div className="landing-preview" aria-label="Illustrative TaskTracker dashboard preview">
+    <header className="landing-preview__topbar">
+      <div><span className="landing-preview__mark">T</span><strong>TaskTracker</strong></div>
+      <span className="landing-preview__label">Illustrative product view</span>
+    </header>
+    <div className="landing-preview__body">
+      <section className="landing-preview__work" aria-label="Illustrative task list">
+        <header><div><small>MY WORK</small><h2>What needs attention</h2></div><span>＋ New task</span></header>
+        <div className="landing-preview__scopes"><strong>All work</strong><span>Owned</span><span>Assigned</span><span>Shared</span></div>
+        <div className="landing-preview__group-heading"><span>Needs your attention</span><strong>3</strong></div>
+        <div className="landing-preview__tasks">
+          {previewTasks.map((task) => <article className="landing-preview-task" key={task.title}>
+            <span className={`landing-preview-task__signal landing-preview-task__signal--${task.tone}`} aria-hidden="true" />
+            <div><h3>{task.title}</h3><p>{task.meta}</p></div>
+            <span className={`landing-preview-task__status landing-preview-task__status--${task.tone}`}>{task.status}</span>
+            <strong>{task.action} <span aria-hidden="true">→</span></strong>
+          </article>)}
+        </div>
+      </section>
+      <aside className="landing-preview__pulse" aria-label="Illustrative work summary">
+        <header><div><small>WORK SIGNALS</small><h2>Pulse</h2></div><span aria-hidden="true">↻</span></header>
+        <div className="landing-pulse-row"><span /><div><strong>2</strong><small>Assigned to me</small></div></div>
+        <div className="landing-pulse-row landing-pulse-row--warm"><span /><div><strong>1</strong><small>Awaiting review</small></div></div>
+        <div className="landing-pulse-row landing-pulse-row--clear"><span /><div><strong>0</strong><small>Overdue</small></div></div>
+        <div className="landing-preview__workspace"><small>WORKSPACE</small><strong>Product launch</strong><span>Tasks and people in one shared space</span></div>
+      </aside>
+    </div>
+  </div>;
+}
+
 function HomePage() {
-  return (
-    <main className="page public-page home-landing-page">
-      <section className="home-hero">
-        <div className="home-hero-content">
-          <span className="product-pill">TaskTracker / Collaborative Task Management</span>
-
-          <h1>Organize your tasks, share work, and keep ownership clear.</h1>
-
-          <p>
-            TaskTracker helps users create tasks, manage priorities, and share
-            responsibilities with the right people without losing context.
-          </p>
-
-          <div className="home-hero-actions">
-            <Link to="/register" className="primary-button home-action-button">
-              Create account
-            </Link>
-
-            <Link to="/login" className="secondary-button home-action-button">
-              Sign in
-            </Link>
-          </div>
+  return <main className="home-landing-page">
+    <section className="landing-hero" aria-labelledby="landing-title">
+      <div className="landing-hero__copy">
+        <p className="landing-kicker"><span aria-hidden="true" /> Collaborative task management</p>
+        <h1 id="landing-title">Know what needs action. Keep ownership clear.</h1>
+        <p>TaskTracker brings personal tasks, shared workspaces, responsibility, due dates, and task history into one focused workflow.</p>
+        <div className="landing-actions">
+          <Link className="landing-button landing-button--primary" to="/register">Create account <span aria-hidden="true">→</span></Link>
+          <Link className="landing-button landing-button--secondary" to="/login">Sign in</Link>
         </div>
-
-        <div className="home-preview-card">
-          <div className="preview-card-header">
-            <span>Workspace preview</span>
-            <strong>Live structure</strong>
-          </div>
-
-          <div className="preview-task-card">
-            <div>
-              <span className="task-category">Product</span>
-              <h3>Prepare task sharing flow</h3>
-              <p>Owner can invite another user with selected permission.</p>
-            </div>
-
-            <span className="priority-pill priority-high">High</span>
-          </div>
-
-          <div className="preview-task-card">
-            <div>
-              <span className="task-category">Backend</span>
-              <h3>Connect permissions to UI</h3>
-              <p>Shared users can view or edit based on task access.</p>
-            </div>
-
-            <span className="priority-pill priority-medium">Medium</span>
-          </div>
-
-          <div className="preview-users">
-            <span>Shared with</span>
-
-            <div>
-              <strong>CE</strong>
-              <strong>AK</strong>
-              <strong>MY</strong>
-            </div>
-          </div>
+        <div className="landing-hero__capabilities" aria-label="Core capabilities">
+          <span>Personal work</span><span>Shared workspaces</span><span>Clear responsibility</span>
         </div>
-      </section>
+      </div>
+      <ProductPreview />
+    </section>
 
-      <section className="home-section">
-        <div className="section-heading">
-          <span className="eyebrow">WHY TASKTRACKER</span>
-          <h2>Built for real task ownership.</h2>
-          <p>
-            Not just a public board. TaskTracker is moving toward a user-based
-            workspace where every task has an owner, visibility and sharing
-            rules.
-          </p>
-        </div>
+    <section className="landing-value" aria-labelledby="landing-value-title">
+      <div className="landing-value__intro">
+        <p className="landing-section-kicker">Built around the work</p>
+        <h2 id="landing-value-title">Less status hunting. More forward motion.</h2>
+        <p>Every view keeps the task, the responsible people, and the next permitted action close together.</p>
+      </div>
+      <div className="landing-value__list">
+        <article><span>01</span><div><h3>Focus your day</h3><p>See assigned work, reviews, overdue tasks, and invitations without turning your dashboard into a spreadsheet.</p></div></article>
+        <article><span>02</span><div><h3>Move work through its lifecycle</h3><p>Start, submit, review, complete, or reopen work through actions that respect each person’s role.</p></div></article>
+        <article><span>03</span><div><h3>Keep context attached</h3><p>Discussion, submissions, decisions, and task activity remain available alongside the work they describe.</p></div></article>
+      </div>
+    </section>
 
-        <div className="feature-grid">
-          <article className="feature-card">
-            <span>01</span>
-            <h3>User based tasks</h3>
-            <p>
-              Users can create their own tasks and keep personal work separated
-              from shared work.
-            </p>
-          </article>
+    <section className="landing-ownership" aria-labelledby="landing-ownership-title">
+      <div className="landing-ownership__copy">
+        <p className="landing-section-kicker">Collaboration without ambiguity</p>
+        <h2 id="landing-ownership-title">One task. Clear responsibility.</h2>
+        <p>Create personal work or bring tasks into a workspace. Owners retain control, assignees know what to do next, and collaborators see only what their access permits.</p>
+        <Link to="/register">Create your workspace <span aria-hidden="true">→</span></Link>
+      </div>
+      <div className="landing-responsibility" aria-label="Illustration of task responsibility">
+        <header><small>TASK RESPONSIBILITY</small><strong>Prepare release notes</strong><span>In progress</span></header>
+        <div><span className="landing-avatar">OW</span><p><small>Owner</small><strong>Sets direction and reviews work</strong></p></div>
+        <div><span className="landing-avatar landing-avatar--accent">AS</span><p><small>Assignee</small><strong>Moves the task to its next state</strong></p></div>
+        <div><span className="landing-avatar landing-avatar--soft">CO</span><p><small>Collaborator</small><strong>Contributes with explicit access</strong></p></div>
+        <footer><span>Priority · High</span><span>Due · Friday</span><span>History available</span></footer>
+      </div>
+    </section>
 
-          <article className="feature-card">
-            <span>02</span>
-            <h3>Task sharing</h3>
-            <p>
-              Add people to a task and control who can access the details of
-              that work item.
-            </p>
-          </article>
+    <section className="landing-final" aria-labelledby="landing-final-title">
+      <div><p className="landing-section-kicker">Start with the next task</p><h2 id="landing-final-title">Bring your work into focus.</h2></div>
+      <div><p>Create an account to organize personal tasks and collaborate in shared workspaces.</p>
+        <Link className="landing-button landing-button--light" to="/register">Create account <span aria-hidden="true">→</span></Link></div>
+    </section>
 
-          <article className="feature-card">
-            <span>03</span>
-            <h3>Permission focused</h3>
-            <p>
-              The system is designed around ownership and access rules instead
-              of simple open CRUD screens.
-            </p>
-          </article>
-        </div>
-      </section>
-
-      <section className="home-split-section">
-        <div>
-          <span className="eyebrow">WORKFLOW</span>
-          <h2>From personal task to shared responsibility.</h2>
-          <p>
-            Create a task, define its priority, invite another user when needed,
-            and continue tracking the work from one place.
-          </p>
-        </div>
-
-        <div className="workflow-list">
-          <div>
-            <strong>1</strong>
-            <span>Create your task</span>
-          </div>
-
-          <div>
-            <strong>2</strong>
-            <span>Assign visibility and priority</span>
-          </div>
-
-          <div>
-            <strong>3</strong>
-            <span>Share with another user</span>
-          </div>
-
-          <div>
-            <strong>4</strong>
-            <span>Track progress from dashboard</span>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+    <footer className="landing-footer">
+      <Link to="/" className="landing-footer__brand"><span aria-hidden="true">T</span><strong>TaskTracker</strong></Link>
+      <p>Focused task management for personal and shared work.</p>
+      <nav aria-label="Footer navigation"><Link to="/">Home</Link><Link to="/login">Sign in</Link><Link to="/register">Create account</Link></nav>
+    </footer>
+  </main>;
 }
 
 export default HomePage;

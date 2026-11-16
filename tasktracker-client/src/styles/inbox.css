@@ -99,16 +99,14 @@
 }
 
 .inbox-page .inbox-local-nav {
-  position: sticky;
-  top: var(--shell-topbar-height);
-  z-index: 12;
+  position: static;
   min-width: 0;
   display: flex;
   gap: var(--space-1);
   padding: var(--space-2);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   overflow-x: auto;
   scrollbar-width: thin;
@@ -140,6 +138,7 @@
 .inbox-page .inbox-section,
 .inbox-page .inbox-invitation-detail {
   min-width: 0;
+  scroll-margin-top: calc(var(--shell-topbar-height) + var(--space-4));
 }
 
 .inbox-page .inbox-section__heading {

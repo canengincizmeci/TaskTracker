@@ -16,7 +16,7 @@ function Navbar() {
   return (
     <header className="navbar">
       <Link to="/" className="navbar-logo" onClick={() => setMenuOpen(false)}>
-        TaskTracker
+        <span className="navbar-logo-mark" aria-hidden="true">T</span><span>TaskTracker</span>
       </Link>
 
       <button type="button" className="navbar-menu-button" aria-expanded={menuOpen}
@@ -28,8 +28,8 @@ function Navbar() {
       <nav id="primary-navigation" className={`navbar-links${menuOpen ? " navbar-links--open" : ""}`}
         aria-label="Primary navigation">
         <Link to="/" onClick={() => setMenuOpen(false)}>Home</Link>
-        <Link to="/login" onClick={() => setMenuOpen(false)}>Login</Link>
-        <Link to="/register" onClick={() => setMenuOpen(false)}>Register</Link>
+        <Link to="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
+        <Link className="navbar-register-link" to="/register" onClick={() => setMenuOpen(false)}>Create account</Link>
       </nav>
     </header>
   );

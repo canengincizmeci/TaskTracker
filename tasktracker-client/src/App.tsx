@@ -3,9 +3,22 @@ import Navbar from "./components/Navbar";
 import AppShell from "./components/AppShell";
 import { useAuth } from "./context/AuthContext";
 import { Toaster } from "react-hot-toast";
+import { useLocation } from "react-router-dom";
+
+const standalonePublicRoutes = new Set([
+  "/login",
+  "/register",
+  "/verify-email",
+  "/forgot-password",
+  "/verify-password-reset",
+  "/reset-password",
+]);
 
 function App() {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const normalizedPathname = location.pathname.replace(/\/+$/, "") || "/";
+  const showPublicNavbar = !standalonePublicRoutes.has(normalizedPathname);
 
   return (
     <>
@@ -15,7 +28,7 @@ function App() {
         </AppShell>
       ) : (
         <>
-          <Navbar />
+          {showPublicNavbar && <Navbar />}
           <AppRouter />
         </>
       )}
