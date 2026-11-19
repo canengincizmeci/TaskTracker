@@ -130,22 +130,53 @@ public class SubmissionReviewTests
         await SeedDelegated(context);
         var manager = TaskCollaborationTestServices.TaskRequests(context);
         var first = await manager.SubmitAsync(1, new() { Version = 0, Content = "Revision one" }, 2);
+        var ownerReview = (await manager.GetTaskById(1, 1)).Data;
+        Assert.True(ownerReview.CanReview);
+        Assert.Equal(first.Data.Id, ownerReview.WorkflowSubmissionId);
+        Assert.False((await manager.GetTaskById(1, 3)).Data.CanReview);
         var changes = await manager.ReviewAsync(1, first.Data.Id,
             new() { Version = 1, Decision = TaskReviewDecision.ChangesRequested, Feedback = "Add evidence" }, 1);
         Assert.True(changes.Success);
         Assert.Equal(TaskStatus.InProgress, (await context.TaskRequests.SingleAsync()).Status);
+        var assigneeRework = (await manager.GetTaskById(1, 2)).Data;
+        Assert.True(assigneeRework.CanSubmit);
+        Assert.Equal(first.Data.Id, assigneeRework.WorkflowSubmissionId);
 
         var second = await manager.SubmitAsync(1, new() { Version = 2, Content = "Revision two" }, 2);
         Assert.Equal(2, second.Data.RevisionNumber);
+        Assert.Equal(second.Data.Id, (await manager.GetTaskById(1, 1)).Data.WorkflowSubmissionId);
         var approval = await manager.ReviewAsync(1, second.Data.Id,
             new() { Version = 3, Decision = TaskReviewDecision.Approved }, 1);
 
         Assert.True(approval.Success);
         Assert.Equal(TaskStatus.Completed, (await context.TaskRequests.SingleAsync()).Status);
+        var completed = (await manager.GetTaskById(1, 1)).Data;
+        Assert.False(completed.CanReview);
+        Assert.Equal(second.Data.Id, completed.WorkflowSubmissionId);
+        Assert.Empty(await context.TaskPlanningRevisions.ToListAsync());
         var history = (await manager.GetSubmissionHistoryAsync(1, 2)).Data;
         Assert.Collection(history,
             revision => { Assert.Equal("Revision one", revision.Content); Assert.Equal("ChangesRequested", revision.Review!.Decision); },
             revision => { Assert.Equal("Revision two", revision.Content); Assert.Equal("Approved", revision.Review!.Decision); });
+    }
+
+    [Fact]
+    public async Task Previous_changes_requested_do_not_resume_after_reassignment_and_return()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        await SeedDelegated(context);
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
+        var submission = await manager.SubmitAsync(1, new() { Version = 0, Content = "Original" }, 2);
+        Assert.True((await manager.ReviewAsync(1, submission.Data.Id,
+            new() { Version = 1, Decision = TaskReviewDecision.ChangesRequested, Feedback = "Previous cycle feedback" }, 1)).Success);
+        Assert.Equal(submission.Data.Id, (await manager.GetTaskById(1, 2)).Data.WorkflowSubmissionId);
+        Assert.True((await manager.AssignTaskAsync(1, new() { Version = 2, AssigneeUserId = 3 }, 1)).Success);
+        Assert.True((await manager.AssignTaskAsync(1, new() { Version = 3, AssigneeUserId = 2 }, 1)).Success);
+        Assert.True((await manager.StartTaskAsync(1, new() { Version = 4 }, 2)).Success);
+        var task = (await manager.GetTaskById(1, 2)).Data;
+        Assert.True(task.CanSubmit);
+        Assert.Null(task.WorkflowSubmissionId);
+        Assert.Equal("Previous cycle feedback", Assert.Single((await manager.GetSubmissionHistoryAsync(1, 2)).Data).Review!.Feedback);
     }
 
     [Fact]

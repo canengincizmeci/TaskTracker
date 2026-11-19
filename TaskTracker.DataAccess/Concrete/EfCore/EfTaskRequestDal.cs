@@ -105,6 +105,12 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                 .Where(x => x.TaskRequestId == taskId)
                 .OrderByDescending(x => x.RevisionNumber).FirstOrDefaultAsync();
 
+        public Task<int?> GetSubmissionForLatestTransitionAsync(int taskId, TaskActivityType transition) =>
+            _context.TaskActivities.Where(x => x.TaskRequestId == taskId && x.ToStatus != null)
+                .OrderByDescending(x => x.Id)
+                .Select(x => x.ActivityType == transition ? x.SubmissionId : null)
+                .FirstOrDefaultAsync();
+
         public Task<List<TaskSubmissionDto>> GetSubmissionHistoryAsync(int taskId) =>
             _context.TaskSubmissions.AsNoTracking().Where(x => x.TaskRequestId == taskId)
                 .OrderBy(x => x.RevisionNumber)

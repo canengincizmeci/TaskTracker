@@ -135,6 +135,17 @@ public class TaskRequestManager : ITaskRequestService
         var latest = task.Status == TaskStatus.InReview ? await _taskRequestDal.GetLatestSubmissionAsync(task.Id) : null;
         var latestReviewed = latest is not null && await _unitOfWork.GetRepository<TaskSubmissionReview>()
             .AnyAsync(x => x.TaskSubmissionId == latest.Id);
+        var canReadWorkflow = task.WorkspaceId.HasValue ? workspaceMembership is not null : isOwner || validShare;
+        var workflowSubmissionId = !canReadWorkflow ? null : task.Status switch
+        {
+            TaskStatus.InReview when validAssignee && latest?.SubmittedByUserId == task.AssigneeUserId && !latestReviewed
+                => latest?.Id,
+            TaskStatus.InProgress when validAssignee
+                => await _taskRequestDal.GetSubmissionForLatestTransitionAsync(task.Id, TaskActivityType.ChangesRequested),
+            TaskStatus.Completed
+                => await _taskRequestDal.GetSubmissionForLatestTransitionAsync(task.Id, TaskActivityType.SubmissionApproved),
+            _ => null
+        };
         return new SuccessDataResult<TaskRequestDto>(new TaskRequestDto
         {
             Id = task.Id, OwnerId = task.OwnerId, OwnerUserName = task.Owner.UserName,
@@ -147,7 +158,7 @@ public class TaskRequestManager : ITaskRequestService
             CanView = canView, CanEdit = canEdit,
             CanShare = isOwner && task.WorkspaceId is null,
             CanDelete = isOwner && (task.WorkspaceId is null || workspaceMembership is not null),
-            CanViewParticipants = task.WorkspaceId.HasValue ? workspaceMembership is not null : isOwner || validShare,
+            CanViewParticipants = canReadWorkflow,
             CanManageResponsibility = isOwner && (task.WorkspaceId is null || workspaceMembership is not null),
             CanStart = task.Status == TaskStatus.Pending && (task.AssigneeUserId.HasValue
                 ? task.AssigneeUserId == currentUserId && (task.WorkspaceId.HasValue
@@ -156,8 +167,8 @@ public class TaskRequestManager : ITaskRequestService
                 : isOwner && (task.WorkspaceId is null || workspaceMembership is not null)),
             CanSubmit = !isOwner && task.AssigneeUserId == currentUserId && validAssignee &&
                 task.Status == TaskStatus.InProgress,
-            CanReview = isOwner && validAssignee && task.Status == TaskStatus.InReview && latest is not null &&
-                latest.SubmittedByUserId == task.AssigneeUserId && !latestReviewed,
+            CanReview = isOwner && task.Status == TaskStatus.InReview && workflowSubmissionId.HasValue,
+            WorkflowSubmissionId = workflowSubmissionId,
             CurrentUserPermission = isOwner ? "Owner" : validShare ? share!.Permission.ToString() : null
         });
     }
@@ -376,10 +387,10 @@ public class TaskRequestManager : ITaskRequestService
         catch (DbUpdateException ex) when (IsUniqueConflict(ex))
         { return new ConflictDataResult<TaskSubmissionDto>("The task was submitted by another request. Refresh and retry."); }
 
-        await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Task submitted for review",
-            $"Revision {submission.RevisionNumber} of '{task.Title}' is waiting for review.", task.Id);
         await _collaboration.PublishActivityAsync(activity);
         await _collaboration.PublishTaskChangedAsync(task.Id);
+        await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Task submitted for review",
+            $"Revision {submission.RevisionNumber} of '{task.Title}' is waiting for review.", task.Id);
         return new SuccessDataResult<TaskSubmissionDto>(MapSubmission(submission), "Work submitted for review.");
     }
 
@@ -435,13 +446,13 @@ public class TaskRequestManager : ITaskRequestService
         catch (DbUpdateException ex) when (IsUniqueConflict(ex))
         { return new ConflictDataResult<TaskSubmissionReviewDto>("This submission was already reviewed."); }
 
+        await _collaboration.PublishActivityAsync(activity);
+        await _collaboration.PublishTaskChangedAsync(task.Id);
         await TryNotify(latest.SubmittedByUserId, NotificationType.TaskUpdated,
             dto.Decision == TaskReviewDecision.Approved ? "Submission approved" : "Changes requested",
             dto.Decision == TaskReviewDecision.Approved
                 ? $"Revision {latest.RevisionNumber} of '{task.Title}' was approved."
                 : $"Changes were requested for revision {latest.RevisionNumber} of '{task.Title}'.", task.Id);
-        await _collaboration.PublishActivityAsync(activity);
-        await _collaboration.PublishTaskChangedAsync(task.Id);
         return new SuccessDataResult<TaskSubmissionReviewDto>(MapReview(review),
             dto.Decision == TaskReviewDecision.Approved ? "Submission approved." : "Changes requested.");
     }
