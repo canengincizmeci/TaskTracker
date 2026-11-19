@@ -116,5 +116,7 @@ export async function createWorkspaceTask(
   workspaceId: number,
   request: WorkspaceTaskCreateRequest
 ): Promise<Task> {
-  return (await axiosClient.post<Task>(`/workspaces/${workspaceId}/tasks`, request)).data;
+  return (await axiosClient.post<Task>(`/workspaces/${workspaceId}/tasks`, {
+    ...request, utcOffsetMinutes: -new Date().getTimezoneOffset(),
+  })).data;
 }

@@ -12,4 +12,7 @@ export interface TaskInvitation {
   unavailableReason: string | null;
   createdAt: string;
   expiresAt?: string | null;
+  respondedAt?: string | null;
+  message?: string | null;
+  responseMessage?: string | null;
 }

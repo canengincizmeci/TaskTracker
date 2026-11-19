@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { TaskPriority } from "../types/CreateTaskRequest";
 import type { TaskCreationFormValue } from "../types/taskCreationForm";
+import { localCalendarDate, maxTaskCategoryLength } from "../utils/localCalendarDate";
 
 export type TaskCreationAssignee = {
   id: number;
@@ -24,10 +25,6 @@ type TaskCreationFormProps = {
 };
 
 const priorities: TaskPriority[] = ["Low", "Medium", "High", "Critical"];
-
-function utcToday() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export default function TaskCreationForm({
   idPrefix,
@@ -80,12 +77,12 @@ export default function TaskCreationForm({
       descriptionRef.current?.focus();
       return;
     }
-    if (!normalized.category) {
-      setValidationError("Category is required.");
+    if (!normalized.category || normalized.category.length > maxTaskCategoryLength) {
+      setValidationError("Category must contain 1 to 150 characters.");
       categoryRef.current?.focus();
       return;
     }
-    if (normalized.dueDate && normalized.dueDate < utcToday()) {
+    if (normalized.dueDate && normalized.dueDate < localCalendarDate()) {
       setValidationError("Due date cannot be in the past.");
       dueDateRef.current?.focus();
       return;
@@ -131,7 +128,7 @@ export default function TaskCreationForm({
           <div className="task-creation-form__field">
             <label htmlFor={`${idPrefix}-category`}>Category <span aria-hidden="true">*</span></label>
             <input ref={categoryRef} id={`${idPrefix}-category`} name="category" value={value.category}
-              onChange={updateField} disabled={submitting} required
+              onChange={updateField} disabled={submitting} required maxLength={maxTaskCategoryLength}
               placeholder="Example: Product, Operations, School" />
           </div>
 
@@ -146,7 +143,7 @@ export default function TaskCreationForm({
           <div className="task-creation-form__field">
             <label htmlFor={`${idPrefix}-due-date`}>Due date <span className="task-creation-form__optional">Optional</span></label>
             <input ref={dueDateRef} id={`${idPrefix}-due-date`} name="dueDate" type="date"
-              value={value.dueDate ?? ""} min={utcToday()} onChange={updateField} disabled={submitting} />
+              value={value.dueDate ?? ""} min={localCalendarDate()} onChange={updateField} disabled={submitting} />
           </div>
 
           {assignees && (

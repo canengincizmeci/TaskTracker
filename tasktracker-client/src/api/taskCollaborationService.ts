@@ -19,6 +19,9 @@ export type OutgoingInvitation = {
   createdAt: string;
   expiresAt: string | null;
   canCancel: boolean;
+  respondedAt: string | null;
+  message: string | null;
+  responseMessage: string | null;
 };
 
 export async function getParticipants(taskId: number): Promise<Participant[]> {

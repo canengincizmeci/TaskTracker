@@ -1,6 +1,5 @@
-/* Phase 7 — sharing, invitation detail, administration, and not-found surfaces. */
+/* Phase 7 — invitation detail, administration, and not-found surfaces. */
 
-.task-share-page,
 .admin-dashboard-page,
 .not-found-page {
   min-width: 0;
@@ -8,39 +7,6 @@
   background: var(--color-page);
 }
 
-.task-share-page {
-  min-height: 100%;
-  padding: 24px var(--page-gutter) 64px;
-}
-
-.task-share-shell {
-  width: min(100%, 64rem);
-  margin: 0 auto;
-  display: grid;
-  gap: var(--space-5);
-}
-
-.task-share-back {
-  width: fit-content;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  font-weight: 750;
-  text-decoration: none;
-}
-
-.task-share-back:hover { color: var(--color-primary); text-decoration: underline; }
-
-.task-share-header {
-  min-width: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-5);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--color-border-strong);
-}
-
-.task-share-page .eyebrow,
 .admin-dashboard-page .eyebrow,
 .not-found-page .eyebrow {
   margin: 0 0 var(--space-1);
@@ -50,7 +16,6 @@
   letter-spacing: 0.12em;
 }
 
-.task-share-header h1,
 .admin-dashboard-page .admin-topbar h1 {
   margin: 0;
   color: var(--color-text);
@@ -60,7 +25,6 @@
   letter-spacing: -0.03em;
 }
 
-.task-share-header p:last-child,
 .admin-dashboard-page .admin-topbar p {
   max-width: 42rem;
   margin: var(--space-2) 0 0;
@@ -69,138 +33,6 @@
   line-height: 1.55;
 }
 
-.task-share-context-label {
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 999px;
-  color: var(--color-text-muted);
-  background: var(--color-surface-muted);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-
-.task-share-layout {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem);
-  gap: var(--space-5);
-  align-items: start;
-}
-
-.task-share-panel,
-.task-share-guide {
-  min-width: 0;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.task-share-panel { padding: var(--space-6); }
-.task-share-guide { padding: var(--space-5); }
-
-.task-share-task-context {
-  min-width: 0;
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.task-share-task-context > span {
-  color: var(--color-text-subtle);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.task-share-task-context h2,
-.task-share-guide h2 {
-  margin: var(--space-1) 0 0;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
-  overflow-wrap: anywhere;
-}
-
-.task-share-task-context h2 { font-size: 1.35rem; }
-.task-share-guide h2 { font-size: 1rem; }
-
-.task-share-task-context p {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  overflow-wrap: anywhere;
-}
-
-.task-share-form { display: grid; gap: var(--space-5); }
-
-.task-share-form .form-group { gap: var(--space-2); }
-
-.task-share-form .form-group label,
-.task-share-permissions legend {
-  color: var(--color-text);
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-
-.task-share-form .form-group input {
-  min-height: var(--control-height);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface);
-  font: inherit;
-  font-size: 1rem;
-}
-
-.task-share-form .form-group small,
-.task-share-permission small {
-  color: var(--color-text-subtle);
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-
-.task-share-permissions {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.task-share-permissions legend { margin-bottom: var(--space-2); }
-
-.task-share-permission {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  cursor: pointer;
-}
-
-.task-share-permission.is-selected {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
-  background: var(--color-primary-soft);
-}
-
-.task-share-permission input { margin-top: 3px; accent-color: var(--color-primary); }
-.task-share-permission > span { min-width: 0; display: grid; gap: 2px; }
-.task-share-permission strong { color: var(--color-text); font-size: 0.875rem; }
-
-.task-share-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.task-share-page :is(.primary-button, .secondary-button),
 .admin-dashboard-page :is(.primary-button, .secondary-button),
 .not-found-page .primary-button {
   min-height: var(--control-height);
@@ -217,7 +49,6 @@
   box-shadow: none;
 }
 
-.task-share-page .primary-button,
 .invitation-detail-page .primary-button {
   border: 1px solid var(--color-primary);
   color: #fff;
@@ -229,81 +60,17 @@
     box-shadow var(--transition-fast);
 }
 
-.task-share-page .primary-button:hover:not(:disabled),
 .invitation-detail-page .primary-button:hover:not(:disabled) {
   background: var(--color-primary-hover);
   box-shadow: 0 8px 20px rgba(25, 24, 36, 0.18);
   transform: translateY(-1px);
 }
 
-.task-share-page .primary-button:disabled,
 .invitation-detail-page .primary-button:disabled {
   opacity: 0.5;
   box-shadow: none;
   transform: none;
   cursor: not-allowed;
-}
-
-.task-share-notice,
-.task-share-state {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-
-.task-share-state {
-  min-height: 7rem;
-  display: grid;
-  place-items: center;
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-  background: var(--color-surface-muted);
-  text-align: center;
-}
-
-.task-share-state strong { color: var(--color-text); }
-
-.task-share-notice--success {
-  border-color: color-mix(in srgb, var(--color-success) 30%, var(--color-border));
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 7%, var(--color-surface));
-}
-
-.task-share-notice--error,
-.task-share-state--error {
-  border-color: color-mix(in srgb, var(--color-danger) 30%, var(--color-border));
-  color: var(--color-danger);
-  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface));
-}
-
-.task-share-guide ul {
-  display: grid;
-  gap: var(--space-3);
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.task-share-guide li {
-  position: relative;
-  padding-left: var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-
-.task-share-guide li::before {
-  content: "";
-  position: absolute;
-  top: 0.52em;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-primary);
 }
 
 /* Invitation status emphasis */
@@ -596,7 +363,6 @@
   user-select: none;
 }
 
-.task-share-page :is(a, button, input):focus-visible,
 .admin-dashboard-page :is(button, a):focus-visible,
 .not-found-page a:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--color-focus) 65%, transparent);
@@ -604,12 +370,10 @@
 }
 
 @media (max-width: 64rem) {
-  .task-share-layout { grid-template-columns: minmax(0, 1fr); }
   .admin-dashboard-page .admin-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 48rem) {
-  .task-share-header,
   .admin-dashboard-page .admin-topbar { align-items: stretch; flex-direction: column; }
   .admin-dashboard-page .admin-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-task-table__header { display: none; }
@@ -634,14 +398,9 @@
 }
 
 @media (max-width: 36rem) {
-  .task-share-page,
   .admin-dashboard-page { padding: var(--space-4) var(--space-3) var(--space-10); }
-  .task-share-panel,
-  .task-share-guide { padding: var(--space-4); }
-  .task-share-actions,
   .admin-dashboard-page .admin-topbar-actions,
   .admin-dashboard-page .admin-error-box { align-items: stretch; flex-direction: column; }
-  .task-share-actions > *,
   .admin-dashboard-page .admin-topbar-actions > *,
   .admin-dashboard-page .admin-error-box > button { width: 100%; min-height: var(--touch-target); }
   .admin-dashboard-page .admin-metrics-grid { grid-template-columns: minmax(0, 1fr); }
@@ -654,16 +413,12 @@
 }
 
 @media (max-width: 23.5rem) {
-  .task-share-page,
   .admin-dashboard-page { padding-inline: 10px; }
-  .task-share-header { align-items: stretch; }
-  .task-share-context-label { width: fit-content; }
   .admin-task-row { grid-template-columns: minmax(0, 1fr); }
   .admin-task-row__identity { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-share-page *,
   .admin-dashboard-page *,
   .not-found-page * {
     scroll-behavior: auto;
