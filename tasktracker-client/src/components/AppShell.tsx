@@ -233,7 +233,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <Link className="app-shell__brand" to={user?.role === "Admin" ? "/admin-dashboard" : "/dashboard"}
         aria-label="TaskTracker">
         <span className="app-shell__brand-mark" aria-hidden="true">T</span>
-        <span>TaskTracker</span>
+        <span className="app-shell__brand-copy"><strong>TaskTracker</strong><small>Workspace</small></span>
+        <svg className="app-shell__brand-chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
       </Link>
 
       {user?.role === "User" && <Link className="app-shell__create" to="/tasks/create-task" aria-label="Create task">
@@ -241,6 +242,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </Link>}
 
       <nav className="app-shell__primary-nav" aria-label="Primary navigation">
+        <span className="app-shell__nav-label">General</span>
         {user?.role === "User" && <>
           <ShellNavLink to="/dashboard" icon="work" label="My Work" end active={myWorkActive} />
           <ShellNavLink to="/workspaces" icon="workspace" label="Workspaces" active={workspacesActive} />

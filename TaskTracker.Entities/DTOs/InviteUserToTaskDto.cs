@@ -12,5 +12,6 @@ namespace TaskTracker.Entities.DTOs
         public string Username { get; set; }
         public TaskPermission Permission { get; set; } 
         public DateTime? SharedAt { get; set; }
+        public string? Message { get; set; }
     }
 }

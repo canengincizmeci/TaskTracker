@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Core.Entities.Concrete;
+using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Entities.DTOs;
 
 namespace TaskTracker.DataAccess.Abstract
@@ -19,6 +20,7 @@ namespace TaskTracker.DataAccess.Abstract
         Task<int> GetLatestPlanningRevisionNumberAsync(int taskId);
         Task<List<TaskPlanningRevision>> GetPlanningRevisionsAsync(int taskId);
         Task<TaskSubmission?> GetLatestSubmissionAsync(int taskId);
+        Task<int?> GetSubmissionForLatestTransitionAsync(int taskId, TaskActivityType transition);
         Task<List<TaskSubmissionDto>> GetSubmissionHistoryAsync(int taskId);
         Task<List<AwaitingReviewTaskDto>> GetAwaitingReviewAsync(int ownerId);
         Task<WorkDashboardSummaryDto> GetWorkDashboardSummaryAsync(int userId, DateOnly todayUtc, DateTime nowUtc);

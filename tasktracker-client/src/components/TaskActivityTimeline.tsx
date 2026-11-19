@@ -12,16 +12,18 @@ function activityText(activity: TaskActivity): string {
     case "InvitationCancelled": return `${actor} cancelled the invitation for ${target}`;
     case "UserAssigned": return `${actor} assigned ${target}`;
     case "UserUnassigned": return `${actor} unassigned ${target}`;
+    case "ResponsibilityReset": return `${actor} reset progress to Not started after responsibility changed`;
     case "WorkStarted": return `${actor} started work`;
-    case "SubmissionCreated": return `${actor} submitted revision ${activity.revisionNumber ?? ""} for review`.trim();
-    case "ChangesRequested": return `${actor} requested changes to revision ${activity.revisionNumber ?? ""}`.trim();
-    case "SubmissionApproved": return `${actor} approved revision ${activity.revisionNumber ?? ""}`.trim();
+    case "SubmissionCreated": return `${actor} submitted ${activity.revisionNumber ? `revision ${activity.revisionNumber}` : "work"} for review`;
+    case "ChangesRequested": return `${actor} requested changes${activity.revisionNumber ? ` to revision ${activity.revisionNumber}` : ""}`;
+    case "SubmissionApproved": return `${actor} approved ${activity.revisionNumber ? `revision ${activity.revisionNumber}` : "the submission"}`;
     case "TaskCompleted": return `${actor} completed the task`;
     case "TaskCancelled": return `${actor} cancelled the task`;
     case "TaskReopened": return `${actor} reopened the task`;
-    case "ParticipantRemoved": return `${actor} removed ${target}`;
-    case "ParticipantPermissionChanged": return `${actor} changed ${target}'s permission`;
-    default: return `${actor}: ${activity.activityType}`;
+    case "ParticipantRemoved": return `${actor} removed task access for ${target}`;
+    case "ParticipantPermissionChanged": return `${actor} changed task access for ${target}`;
+    case "TaskDeleted": return `${actor} deleted the task`;
+    default: return `${actor} · Task activity`;
   }
 }
 
@@ -30,14 +32,14 @@ export default function TaskActivityTimeline({ activities, loading, error }: {
   loading: boolean;
   error: string;
 }) {
-  return <section className="task-history-section" aria-label="Activity history">
-    <h3>Activity</h3>
-    <p>Latest 100 events, oldest first.</p>
+  return <section className="tw-activity" aria-labelledby="task-activity-title">
+    <h2 id="task-activity-title">Activity</h2>
+    {activities.length >= 100 && <p>Showing the latest 100 events.</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
     {loading && <p>Loading activity...</p>}
     {!loading && !error && activities.length === 0 && <p>No recorded activity yet.</p>}
-    <ol className="activity-timeline">
-      {activities.map((activity) => <li className="timeline-item" key={activity.id}>
+    <ol>
+      {activities.slice().reverse().map((activity) => <li key={activity.id}>
         <span>{activityText(activity)}</span>
         <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString()}</time>
       </li>)}

@@ -34,6 +34,7 @@ namespace TaskTracker.Entities.DTOs
         public bool CanStart { get; set; }
         public bool CanSubmit { get; set; }
         public bool CanReview { get; set; }
+        public int? WorkflowSubmissionId { get; set; }
         public string? CurrentUserPermission { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateOnly? DueDate { get; set; }

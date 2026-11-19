@@ -28,6 +28,7 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskActivity> TaskActivities { get; set; }
         public DbSet<TaskPlanningRevision> TaskPlanningRevisions { get; set; }
         public DbSet<TaskMessage> TaskMessages { get; set; }
+        public DbSet<TaskAttachment> TaskAttachments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<PasswordResetRequest> PasswordResetRequests { get; set; }
         public DbSet<Workspace> Workspaces { get; set; }
@@ -62,6 +63,11 @@ namespace TaskTracker.Core.DataAccess
                     entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workflow history is immutable. Add a new revision or decision instead.");
 
+                if (entry.Entity is TaskAttachment immutableAttachment &&
+                    immutableAttachment.Kind is TaskAttachmentKind.Message or TaskAttachmentKind.Submission &&
+                    entry.State is EntityState.Modified or EntityState.Deleted)
+                    throw new InvalidOperationException("Discussion and submission attachments are immutable workflow evidence.");
+
                 if (entry.Entity is WorkspaceActivity && entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workspace activity history is immutable.");
 
@@ -92,6 +98,16 @@ namespace TaskTracker.Core.DataAccess
                 if (entry.Entity is TaskMessage message &&
                     (string.IsNullOrWhiteSpace(message.Content) || message.Content.Length > TaskMessage.MaxContentLength))
                     throw new ValidationException("A message requires 1–4000 characters of nonblank content.");
+
+                if (entry.Entity is TaskAttachment attachment &&
+                    (!Enum.IsDefined(attachment.Kind) || attachment.SizeBytes <= 0 ||
+                     string.IsNullOrWhiteSpace(attachment.OriginalFileName) || attachment.OriginalFileName.Length > 255 ||
+                     string.IsNullOrWhiteSpace(attachment.StorageKey) || attachment.StorageKey.Length > 100 ||
+                     string.IsNullOrWhiteSpace(attachment.ContentType) || attachment.ContentType.Length > 100 ||
+                     attachment.Kind == TaskAttachmentKind.Task && (attachment.TaskMessageId.HasValue || attachment.TaskSubmissionId.HasValue) ||
+                     attachment.Kind == TaskAttachmentKind.Message && (!attachment.TaskMessageId.HasValue || attachment.TaskSubmissionId.HasValue) ||
+                     attachment.Kind == TaskAttachmentKind.Submission && (attachment.TaskMessageId.HasValue || !attachment.TaskSubmissionId.HasValue)))
+                    throw new ValidationException("An attachment requires valid metadata and exactly one matching context.");
 
                 if (entry.Entity is TaskSubmission submission &&
                     (submission.RevisionNumber <= 0 || string.IsNullOrWhiteSpace(submission.Content) ||

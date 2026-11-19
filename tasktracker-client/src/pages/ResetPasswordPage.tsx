@@ -3,6 +3,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { resetPassword } from "../api/authService";
+import AuthLayout from "../components/AuthLayout";
 import { useAuth } from "../context/AuthContext";
 
 function getResetToken(navigationState: unknown): string | null {
@@ -44,24 +45,14 @@ function ResetPasswordPage() {
   }, [hasSensitiveNavigationState, location.pathname, navigate]);
 
   if (!resetToken) {
-    return (
-      <main className="page auth-page">
-        <section className="auth-card">
-          <p className="eyebrow">PASSWORD RECOVERY</p>
-          <h1>Recovery session unavailable</h1>
-          <p className="auth-text">
-            This password recovery session is invalid or has expired. Start
-            again to request a new verification code.
-          </p>
-          <Link className="primary-button" to="/forgot-password" replace>
-            Start again
-          </Link>
-          <p className="auth-bottom-text">
-            <Link to="/login">Back to login</Link>
-          </p>
-        </section>
-      </main>
-    );
+    return <AuthLayout eyebrow="Password recovery" title="Recovery session unavailable"
+      description="This recovery session is invalid or expired. Start again to request a new verification code."
+      footer={<p><Link to="/login">Back to sign in</Link></p>}>
+      <div className="public-auth-status">
+        <span className="public-auth-status__icon" aria-hidden="true">!</span>
+        <Link className="primary-button" to="/forgot-password" replace>Start again</Link>
+      </div>
+    </AuthLayout>;
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -113,16 +104,10 @@ function ResetPasswordPage() {
     }
   };
 
-  return (
-    <main className="page auth-page">
-      <section className="auth-card">
-        <p className="eyebrow">PASSWORD RECOVERY</p>
-        <h1>Create a new password</h1>
-        <p className="auth-text">
-          Enter and confirm the new password for your account.
-        </p>
-
-        <form onSubmit={handleSubmit} className="auth-form">
+  return <AuthLayout eyebrow="Password recovery · Step 3 of 3" title="Create a new password"
+    description="Choose a new password for your account and confirm it below."
+    footer={<p>Need a new code? <Link to="/forgot-password">Start again</Link> · <Link to="/login">Back to sign in</Link></p>}>
+        <form onSubmit={handleSubmit} className="auth-form" aria-busy={loading}>
           <div className="form-group">
             <label htmlFor="new-password">New password</label>
             <input
@@ -133,8 +118,11 @@ function ResetPasswordPage() {
               autoComplete="new-password"
               minLength={12}
               maxLength={128}
+              disabled={loading}
+              aria-describedby="new-password-hint"
               required
             />
+            <p className="public-auth-field-hint" id="new-password-hint">Use 12–128 characters.</p>
           </div>
 
           <div className="form-group">
@@ -147,25 +135,18 @@ function ResetPasswordPage() {
               autoComplete="new-password"
               minLength={12}
               maxLength={128}
+              disabled={loading}
               required
             />
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message" role="alert">{error}</p>}
 
           <button className="primary-button" type="submit" disabled={loading}>
             {loading ? "Resetting password..." : "Reset password"}
           </button>
         </form>
-
-        <p className="auth-bottom-text">
-          Need a new code? <Link to="/forgot-password">Start again</Link>
-          {" · "}
-          <Link to="/login">Back to login</Link>
-        </p>
-      </section>
-    </main>
-  );
+  </AuthLayout>;
 }
 
 export default ResetPasswordPage;

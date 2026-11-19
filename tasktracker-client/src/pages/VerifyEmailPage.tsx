@@ -1,224 +1,103 @@
-// import { useState } from "react";
-// import { useNavigate } from "react-router-dom";
-// import { verifyEmail } from "../api/authService";
-
-// function VerifyEmailPage() {
-//   const navigate = useNavigate();
-
-//   const [email, setEmail] = useState("");
-//   const [code, setCode] = useState("");
-
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState("");
-//   const [successMessage, setSuccessMessage] = useState("");
-
-//   const handleVerifyEmail = async (e: React.FormEvent<HTMLFormElement>) => {
-//     e.preventDefault();
-
-//     try {
-//       setLoading(true);
-//       setError("");
-//       setSuccessMessage("");
-
-//       await verifyEmail({
-//         email,
-//         code,
-//       });
-
-//       setSuccessMessage("Email verified successfully. You can now sign in.");
-
-//       setTimeout(() => {
-//         navigate("/login");
-//       }, 1200);
-//     } catch (error) {
-//       //console.log(error);
-//       setError("Email verification failed.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <main className="page auth-page">
-//       <section className="auth-card">
-//         <p className="eyebrow">EMAIL VERIFICATION</p>
-//         <h1>Verify Email</h1>
-//         <p className="auth-text">
-//           Enter the verification code sent to your email address.
-//         </p>
-
-//         <form onSubmit={handleVerifyEmail} className="auth-form">
-//           <div className="form-group">
-//             <label>Email</label>
-//             <input
-//               value={email}
-//               onChange={(e) => setEmail(e.target.value)}
-//               placeholder="your@email.com"
-//               type="email"
-//               required
-//             />
-//           </div>
-
-//           <div className="form-group">
-//             <label>Verification code</label>
-//             <input
-//               value={code}
-//               onChange={(e) => setCode(e.target.value)}
-//               placeholder="Enter code"
-//               required
-//             />
-//           </div>
-
-//           {error && <p className="error-message">{error}</p>}
-//           {successMessage && <p className="success-message">{successMessage}</p>}
-
-//           <button className="primary-button" type="submit" disabled={loading}>
-//             {loading ? "Verifying..." : "Verify Email"}
-//           </button>
-//         </form>
-//       </section>
-//     </main>
-//   );
-// }
-
-// export default VerifyEmailPage;
-
-
-import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { resendVerification, verifyEmail } from "../api/authService";
-
-const resendMessage =
-  "If the account exists and still requires verification, a new code has been sent.";
+import { errorMessage } from "../api/errorMessage";
+import AuthLayout from "../components/AuthLayout";
+import { getSafeLoginRedirect } from "../utils/loginRedirect";
 
 function VerifyEmailPage() {
   const location = useLocation();
   const navigate = useNavigate();
-
-  const [email, setEmail] = useState(() => {
-    const state = location.state as { email?: unknown } | null;
-    return typeof state?.email === "string" ? state.email : "";
-  });
+  const state = location.state as { email?: unknown; redirect?: unknown; deliveryFailed?: unknown; verificationRequired?: unknown } | null;
+  const redirect = getSafeLoginRedirect(typeof state?.redirect === "string" ? state.redirect : null);
+  const loginPath = redirect ? `/login?${new URLSearchParams({ redirect })}` : "/login";
+  const [email, setEmail] = useState(typeof state?.email === "string" ? state.email : "");
   const [code, setCode] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
+  const submitting = useRef(false);
   const [successMessage, setSuccessMessage] = useState(() => {
-    const state = location.state as { deliveryFailed?: unknown } | null;
     return state?.deliveryFailed === true
       ? "Your account was created, but email delivery failed. You can resend the verification code below."
-      : "";
+      : state?.verificationRequired === true ? "Verify your email before signing in." : "";
   });
 
-  const handleResend = async () => {
-    const canonicalEmail = email.trim().toLowerCase();
-    if (!canonicalEmail) {
-      setError("Email is required.");
-      return;
-    }
+  const handleCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setCode(event.target.value.replace(/[^0-9]/g, "").slice(0, 6));
+  };
 
+  const handleResend = async () => {
+    if (submitting.current || !emailInput.current?.reportValidity()) return;
+    submitting.current = true;
     try {
       setResendLoading(true);
       setError("");
-      await resendVerification({ email: canonicalEmail });
-      setSuccessMessage(resendMessage);
-    } catch {
-      setError("Verification code could not be resent. Please try again.");
+      setSuccessMessage("");
+      const response = await resendVerification({ email: email.trim() });
+      setSuccessMessage(response.message);
+    } catch (reason) {
+      setError(errorMessage(reason, "Verification code could not be resent. Please try again."));
     } finally {
+      submitting.current = false;
       setResendLoading(false);
     }
   };
 
-  const handleVerifyEmail = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
+  const handleVerifyEmail = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitting.current) return;
+    if (!/^[0-9]{6}$/.test(code)) {
+      setError("Enter the six-digit verification code.");
+      return;
+    }
+    submitting.current = true;
     try {
       setLoading(true);
       setError("");
       setSuccessMessage("");
-
-      const canonicalEmail = email.trim().toLowerCase();
-
-      await verifyEmail({
-        email: canonicalEmail,
-        code,
-      });
-
-      setSuccessMessage("Email verified successfully. You can now sign in.");
-
-      setTimeout(() => {
-        navigate("/login", { state: { email: canonicalEmail } });
-      }, 1200);
-    } catch {
-      setError("Email verification failed.");
+      const submittedEmail = email.trim();
+      await verifyEmail({ email: submittedEmail, code });
+      navigate(loginPath, { replace: true, state: { email: submittedEmail, verified: true } });
+    } catch (reason) {
+      setError(errorMessage(reason, "Could not verify your email. Check your connection and try again."));
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
 
-  return (
-    <main className="page auth-page">
-      <section className="auth-card">
-        <p className="eyebrow">EMAIL VERIFICATION</p>
-
-        <h1>Verify Email</h1>
-
-        <p className="auth-text">
-          We sent a verification code to your email address. Enter the code
-          below to activate your account.
-        </p>
-
-        <form onSubmit={handleVerifyEmail} className="auth-form">
-          <div className="form-group">
-            <label htmlFor="verify-email">Email</label>
-            <input
-              id="verify-email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              type="email"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="verification-code">Verification code</label>
-            <input
-              id="verification-code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="6-digit code"
-              maxLength={6}
-              required
-            />
-          </div>
-
-          {error && <p className="error-message" role="alert">{error}</p>}
-
-          {successMessage && (
-            <p className="success-message" role="status">{successMessage}</p>
-          )}
-
-          <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? "Verifying..." : "Verify Email"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={loading || resendLoading}
-          >
-            {resendLoading ? "Resending..." : "Resend code"}
-          </button>
-        </form>
-
-        <p className="auth-bottom-text">
-          After verification you will be redirected to the login page.
-        </p>
-      </section>
-    </main>
-  );
+  const busy = loading || resendLoading;
+  const emailInput = useRef<HTMLInputElement>(null);
+  return <AuthLayout eyebrow="Email verification" title="Check your inbox"
+    description="Enter the six-digit verification code sent to your email to activate your account."
+    footer={<p>Already verified? <Link to={loginPath} state={{ email: email.trim() }}>Return to sign in</Link></p>}>
+    <form onSubmit={handleVerifyEmail} className="auth-form" aria-busy={busy}>
+      <div className="form-group">
+        <label htmlFor="verify-email">Email</label>
+        <input id="verify-email" ref={emailInput} value={email} onChange={(event) => setEmail(event.target.value)}
+          placeholder="you@example.com" type="email" autoComplete="email" disabled={busy} required />
+      </div>
+      <div className="form-group">
+        <label htmlFor="verification-code">Verification code</label>
+        <input id="verification-code" value={code} onChange={handleCodeChange}
+          placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code"
+          pattern="[0-9]{6}" maxLength={6} disabled={busy}
+          aria-describedby="verification-code-hint" required />
+        <p className="public-auth-field-hint" id="verification-code-hint">Use the most recent six-digit code you received.</p>
+      </div>
+      {error && <p className="error-message" role="alert">{error}</p>}
+      {successMessage && <p className="success-message" role="status">{successMessage}</p>}
+      <div className="public-auth-inline-actions">
+        <button className="primary-button" type="submit" disabled={busy}>
+          {loading ? "Verifying..." : "Verify email"}
+        </button>
+        <button className="secondary-button" type="button" onClick={handleResend} disabled={busy}>
+          {resendLoading ? "Resending..." : "Resend code"}
+        </button>
+      </div>
+    </form>
+  </AuthLayout>;
 }
 
 export default VerifyEmailPage;

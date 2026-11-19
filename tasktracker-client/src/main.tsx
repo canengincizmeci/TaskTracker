@@ -7,8 +7,12 @@ import "./index.css";
 import "./styles/shell.css";
 import "./styles/dashboard.css";
 import "./styles/task-detail.css";
+import "./styles/task-creation.css";
 import "./styles/inbox.css";
 import "./styles/account.css";
+import "./styles/auth.css";
+import "./styles/home.css";
+import "./styles/phase-seven.css";
 import App from "./App.tsx";
 
 import { AuthProvider } from "./context/AuthContext";

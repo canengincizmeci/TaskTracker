@@ -23,13 +23,20 @@ namespace TaskTracker.API.Services
         public Task TaskChangedAsync(int taskId) =>
             _hub.Clients.Group(TaskCollaborationHub.TaskGroup(taskId)).SendAsync("TaskChanged", taskId);
 
+        public Task AttachmentsChangedAsync(int taskId) =>
+            _hub.Clients.Group(TaskCollaborationHub.TaskGroup(taskId)).SendAsync("TaskAttachmentsChanged");
+
+        public Task WorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds) =>
+            _hub.Clients.Groups(taskIds.Select(TaskCollaborationHub.TaskGroup).ToArray())
+                .SendAsync("WorkspaceRosterChanged", workspaceId);
+
         public async Task AccessRevokedAsync(int taskId, int userId)
         {
             foreach (var connectionId in TaskCollaborationHub.ConnectionsFor(taskId, userId))
             {
-                await _hub.Clients.Client(connectionId).SendAsync("TaskAccessRevoked", taskId);
                 await _hub.Groups.RemoveFromGroupAsync(connectionId, TaskCollaborationHub.TaskGroup(taskId));
                 TaskCollaborationHub.Forget(taskId, userId, connectionId);
+                await _hub.Clients.Client(connectionId).SendAsync("TaskAccessRevoked", taskId);
             }
         }
     }

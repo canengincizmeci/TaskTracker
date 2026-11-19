@@ -209,7 +209,9 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         await AddActivityAsync(invitation.WorkspaceId,
             accept ? WorkspaceActivityType.InvitationAccepted : WorkspaceActivityType.InvitationRejected,
             currentUserService.UserId);
-        return await SaveAsync(successMessage, invitation.WorkspaceId);
+        var saved = await SaveAsync(successMessage, invitation.WorkspaceId);
+        if (accept && saved.Success) await RefreshWorkspaceTaskRostersAsync(invitation.WorkspaceId);
+        return saved;
     }
 
     public async Task<IResult> CancelInvitationAsync(int workspaceId, int invitationId, WorkspaceVersionDto dto)
@@ -260,7 +262,7 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         var saved = await SaveAsync(WorkspaceMessages.MemberRemoved, workspaceId);
         if (!saved.Success) return saved;
 
-        await RevokeWorkspaceTaskAccessAsync(workspaceId, userId);
+        await RefreshWorkspaceTaskRostersAsync(workspaceId, userId);
         return saved;
     }
 
@@ -330,7 +332,7 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         }
     }
 
-    private async Task RevokeWorkspaceTaskAccessAsync(int workspaceId, int userId)
+    private async Task RefreshWorkspaceTaskRostersAsync(int workspaceId, int? removedUserId = null)
     {
         List<int> taskIds;
         try
@@ -340,24 +342,24 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "Could not load active task groups after removing user {UserId} from workspace {WorkspaceId}",
-                userId, workspaceId);
+                "Could not load active task groups after a membership change in workspace {WorkspaceId}", workspaceId);
             return;
         }
 
-        foreach (var taskId in taskIds)
+        if (removedUserId.HasValue)
         {
-            try
+            foreach (var taskId in taskIds)
             {
-                await collaborationService.RevokeAccessAsync(taskId, userId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "Could not revoke task collaboration access for user {UserId}, task {TaskId}, workspace {WorkspaceId}",
-                    userId, taskId, workspaceId);
+                try { await collaborationService.RevokeAccessAsync(taskId, removedUserId.Value); }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "Could not revoke task collaboration access for user {UserId}, task {TaskId}, workspace {WorkspaceId}",
+                        removedUserId.Value, taskId, workspaceId);
+                }
             }
         }
+        await collaborationService.PublishWorkspaceRosterChangedAsync(workspaceId, taskIds);
     }
 
     private static IDataResult<T> DataFailure<T>(IResult result) => result is IConflictResult

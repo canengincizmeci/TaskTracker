@@ -17,3 +17,4 @@ dist/
 
 
 artifacts/
+/TaskTracker.API/App_Data/task-files/

@@ -10,4 +10,7 @@ public class OutgoingTaskInvitationDto
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool CanCancel { get; set; }
+    public DateTime? RespondedAt { get; set; }
+    public string? Message { get; set; }
+    public string? ResponseMessage { get; set; }
 }

@@ -15,7 +15,7 @@ async function getTaskById(id: number): Promise<Task> {
 }
 
 async function createTask(data: CreateTaskRequest): Promise<string> {
-  const response = await axiosClient.post("/TaskRequest/add-task", data);
+  const response = await axiosClient.post("/TaskRequest/add-task", { ...data, utcOffsetMinutes: -new Date().getTimezoneOffset() });
   return response.data;
 }
 
@@ -36,7 +36,7 @@ async function getAssignedTasks(): Promise<Task[]> {
 
 
 async function updateTask(data: UpdateTaskRequest): Promise<string> {
-  const response = await axiosClient.post("/TaskRequest/update-task", data);
+  const response = await axiosClient.post("/TaskRequest/update-task", { ...data, utcOffsetMinutes: -new Date().getTimezoneOffset() });
   return response.data;
 }
 

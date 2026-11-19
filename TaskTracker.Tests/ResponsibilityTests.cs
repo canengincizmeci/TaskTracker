@@ -39,6 +39,8 @@ public class ResponsibilityTests
             throw new NotSupportedException();
         public Task PublishActivityAsync(TaskActivity activity) => Task.CompletedTask;
         public Task PublishTaskChangedAsync(int taskId) => Task.CompletedTask;
+        public Task PublishAttachmentsChangedAsync(int taskId) => Task.CompletedTask;
+        public Task PublishWorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds) => Task.CompletedTask;
         public Task RevokeAccessAsync(int taskId, int userId)
         {
             Revocations.Add((taskId, userId));

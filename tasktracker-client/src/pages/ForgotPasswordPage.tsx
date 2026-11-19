@@ -3,6 +3,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { forgotPassword } from "../api/authService";
+import AuthLayout from "../components/AuthLayout";
 
 function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -43,17 +44,10 @@ function ForgotPasswordPage() {
     }
   };
 
-  return (
-    <main className="page auth-page">
-      <section className="auth-card">
-        <p className="eyebrow">PASSWORD RECOVERY</p>
-        <h1>Forgot password?</h1>
-        <p className="auth-text">
-          Enter your email address. If an eligible account exists, password
-          recovery instructions will be sent.
-        </p>
-
-        <form onSubmit={handleSubmit} className="auth-form">
+  return <AuthLayout eyebrow="Password recovery" title="Recover your account"
+    description="Enter your email. If an eligible account exists, password recovery instructions will be sent."
+    footer={<p>Remember your password? <Link to="/login">Back to sign in</Link></p>}>
+        <form onSubmit={handleSubmit} className="auth-form" aria-busy={loading}>
           <div className="form-group">
             <label htmlFor="forgot-password-email">Email</label>
             <input
@@ -63,23 +57,18 @@ function ForgotPasswordPage() {
               placeholder="your@email.com"
               type="email"
               autoComplete="email"
+              disabled={loading}
               required
             />
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message" role="alert">{error}</p>}
 
           <button className="primary-button" type="submit" disabled={loading}>
             {loading ? "Sending instructions..." : "Continue"}
           </button>
         </form>
-
-        <p className="auth-bottom-text">
-          Remember your password? <Link to="/login">Back to login</Link>
-        </p>
-      </section>
-    </main>
-  );
+  </AuthLayout>;
 }
 
 export default ForgotPasswordPage;

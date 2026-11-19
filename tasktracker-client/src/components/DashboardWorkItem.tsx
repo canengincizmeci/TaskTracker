@@ -49,34 +49,31 @@ export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) 
   ].filter((relationship): relationship is string => relationship !== null);
 
   return <article className={`dashboard-work-item dashboard-work-item--${due.state}`}>
-    <div className="dashboard-work-item__content">
-      <div className="dashboard-work-item__heading">
-        <div>
-          <h3><Link to={detailPath}>{task.title}</Link></h3>
-          <div className="dashboard-work-item__signals">
-            <span className={`dashboard-work-badge dashboard-work-badge--status dashboard-work-badge--${task.status.toLowerCase()}`}>
-              {taskStatusLabel(task.status)}
-            </span>
-            <span className={`dashboard-work-item__priority dashboard-work-item__priority--${task.priority.toLowerCase()}`}>
-              {task.priority} priority
-            </span>
-          </div>
-        </div>
-        <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
+    <span className={`dashboard-work-item__signal dashboard-work-item__signal--${task.status.toLowerCase()}`}
+      aria-hidden="true" />
+    <div className="dashboard-work-item__body">
+      <div className="dashboard-work-item__title-row">
+        <h3><Link to={detailPath}>{task.title}</Link></h3>
+        <span className={`dashboard-work-item__priority dashboard-work-item__priority--${task.priority.toLowerCase()}`}>
+          <span aria-hidden="true" />{task.priority}
+        </span>
       </div>
-
-      <p className="dashboard-work-item__description">{task.description}</p>
-
-      <div className="dashboard-work-item__meta">
-        {relationships.length > 0 && <span>{relationships.join(" · ")}</span>}
-        <span>Owner: <strong>{task.ownerUserName}</strong></span>
-        <span>Assignee: <strong>{task.assigneeUserName ?? "Unassigned"}</strong></span>
-        <span>Category: <strong>{task.category}</strong></span>
+      {task.description && <p>{task.description}</p>}
+      <div className="dashboard-work-item__context">
+        <span className="dashboard-work-item__category">{task.category}</span>
+        <span>{relationships.join(" · ") || "Available"}</span>
+        <span>{task.assigneeUserName ?? task.ownerUserName}</span>
       </div>
     </div>
-
-    <Link className="primary-button dashboard-work-item__action" to={detailPath}>
-      {actionLabels[task.nextAction]}
+    <div className="dashboard-work-item__state">
+      <span className={`dashboard-work-badge dashboard-work-badge--${task.status.toLowerCase()}`}>
+        {taskStatusLabel(task.status)}
+      </span>
+      <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
+    </div>
+    <Link className="dashboard-work-item__action" to={detailPath}
+      aria-label={`${actionLabels[task.nextAction]}: ${task.title}`}>
+      <span>{actionLabels[task.nextAction]}</span><span aria-hidden="true">→</span>
     </Link>
   </article>;
 }

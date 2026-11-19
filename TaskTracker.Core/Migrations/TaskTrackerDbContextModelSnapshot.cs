@@ -299,6 +299,75 @@ namespace TaskTracker.Core.Migrations
                     b.ToTable("TaskActivities", (string)null);
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("TaskMessageId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TaskSubmissionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UploaderUserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("TaskMessageId");
+
+                    b.HasIndex("TaskSubmissionId");
+
+                    b.HasIndex("UploaderUserId");
+
+                    b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.ToTable("TaskAttachments");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMessage", b =>
                 {
                     b.Property<int>("Id")
@@ -538,11 +607,19 @@ namespace TaskTracker.Core.Migrations
                     b.Property<int>("InvitedUserId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<int>("Permission")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("RespondedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResponseMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -1019,6 +1096,39 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("TargetUser");
 
                     b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskAttachment", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskMessage", "TaskMessage")
+                        .WithMany()
+                        .HasForeignKey("TaskMessageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskSubmission", "TaskSubmission")
+                        .WithMany()
+                        .HasForeignKey("TaskSubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "UploaderUser")
+                        .WithMany()
+                        .HasForeignKey("UploaderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TaskMessage");
+
+                    b.Navigation("TaskRequest");
+
+                    b.Navigation("TaskSubmission");
+
+                    b.Navigation("UploaderUser");
                 });
 
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMessage", b =>

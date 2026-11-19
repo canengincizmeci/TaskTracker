@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using TaskTracker.Entities.DTOs;
+using TaskTracker.Core.Entities.Concrete;
 
 namespace TaskTracker.Bussiness.ValidationRules.FluentValidation
 {
@@ -16,7 +17,8 @@ namespace TaskTracker.Bussiness.ValidationRules.FluentValidation
 
             RuleFor(x => x.Description).NotEmpty().MinimumLength(5).MaximumLength(1000);
 
-            RuleFor(x => x.Category).NotEmpty();
+            RuleFor(x => x.Category).NotEmpty().MaximumLength(TaskRequest.MaxCategoryLength);
+            RuleFor(x => x.UtcOffsetMinutes).InclusiveBetween(TaskCalendar.MinOffsetMinutes, TaskCalendar.MaxOffsetMinutes);
 
             RuleFor(x => x.Priority).IsInEnum();
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { verifyPasswordResetCode } from "../api/authService";
+import AuthLayout from "../components/AuthLayout";
 
 type PasswordResetLocationState = {
   email?: unknown;
@@ -21,20 +22,14 @@ function VerifyPasswordResetPage() {
       : null;
 
   if (!email) {
-    return (
-      <main className="page auth-page">
-        <section className="auth-card">
-          <p className="eyebrow">PASSWORD RECOVERY</p>
-          <h1>Recovery session expired</h1>
-          <p className="auth-text">
-            Start password recovery again to request a new verification code.
-          </p>
-          <Link className="primary-button" to="/forgot-password" replace>
-            Start again
-          </Link>
-        </section>
-      </main>
-    );
+    return <AuthLayout eyebrow="Password recovery" title="Recovery session expired"
+      description="Start password recovery again to request a new verification code."
+      footer={<p><Link to="/login">Back to sign in</Link></p>}>
+      <div className="public-auth-status">
+        <span className="public-auth-status__icon" aria-hidden="true">!</span>
+        <Link className="primary-button" to="/forgot-password" replace>Start again</Link>
+      </div>
+    </AuthLayout>;
   }
 
   const handleCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,16 +69,10 @@ function VerifyPasswordResetPage() {
     }
   };
 
-  return (
-    <main className="page auth-page">
-      <section className="auth-card">
-        <p className="eyebrow">PASSWORD RECOVERY</p>
-        <h1>Enter verification code</h1>
-        <p className="auth-text">
-          Enter the latest six-digit code sent to your email address.
-        </p>
-
-        <form onSubmit={handleSubmit} className="auth-form">
+  return <AuthLayout eyebrow="Password recovery · Step 2 of 3" title="Enter verification code"
+    description="Enter the latest six-digit code sent to your email address."
+    footer={<p>Need a new code? <Link to="/forgot-password">Start again</Link> · <Link to="/login">Back to sign in</Link></p>}>
+        <form onSubmit={handleSubmit} className="auth-form" aria-busy={loading}>
           <div className="form-group">
             <label htmlFor="password-reset-code">Verification code</label>
             <input
@@ -96,25 +85,20 @@ function VerifyPasswordResetPage() {
               autoComplete="one-time-code"
               maxLength={6}
               pattern="[0-9]{6}"
+              disabled={loading}
+              aria-describedby="password-reset-code-hint"
               required
             />
+            <p className="public-auth-field-hint" id="password-reset-code-hint">Use the most recent code you received.</p>
           </div>
 
-          {error && <p className="error-message">{error}</p>}
+          {error && <p className="error-message" role="alert">{error}</p>}
 
           <button className="primary-button" type="submit" disabled={loading}>
             {loading ? "Verifying..." : "Verify code"}
           </button>
         </form>
-
-        <p className="auth-bottom-text">
-          Need a new code? <Link to="/forgot-password">Start again</Link>
-          {" · "}
-          <Link to="/login">Back to login</Link>
-        </p>
-      </section>
-    </main>
-  );
+  </AuthLayout>;
 }
 
 export default VerifyPasswordResetPage;

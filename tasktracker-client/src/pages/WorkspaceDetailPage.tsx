@@ -485,7 +485,8 @@ export default function WorkspaceDetailPage() {
                 <p className="eyebrow">Workspace</p>
                 <div className="workspace-detail-title"><h1>{workspace.name}</h1></div>
                 <div className="workspace-detail-meta" aria-label="Workspace details">
-                  <span className="workspace-role">{workspace.currentUserRole}</span>
+                  <span className={`workspace-role workspace-role--${workspace.currentUserRole.toLowerCase()}`}>
+                    {workspace.currentUserRole}</span>
                   <span>{workspace.memberCount} {workspace.memberCount === 1 ? "member" : "members"}</span>
                   <span>Created {formatDate(workspace.createdAt)}</span>
                 </div>
@@ -535,7 +536,7 @@ export default function WorkspaceDetailPage() {
                         <h3>{member.userName}</h3><p>Joined {formatDate(member.joinedAt)}</p>
                       </div>
                       <div className="workspace-member__controls">
-                        <span className="workspace-role">{member.role}</span>
+                        <span className={`workspace-role workspace-role--${member.role.toLowerCase()}`}>{member.role}</span>
                         {(canChangeRole || canRemove) && (
                           <div className="workspace-row-actions">
                             {canChangeRole && <button className="workspace-text-button" disabled={memberBusy}

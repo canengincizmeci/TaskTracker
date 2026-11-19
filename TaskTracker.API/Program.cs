@@ -62,6 +62,9 @@ builder.Services.AddCors(options =>
 });
  
 builder.Services.AddScoped<TaskRequestValidator>();
+builder.Services.Configure<TaskFileOptions>(builder.Configuration.GetSection("TaskFiles"));
+builder.Services.AddSingleton<ITaskFileStore, PrivateTaskFileStore>();
+builder.Services.AddSingleton<ITaskFileScanner, NoOpTaskFileScanner>();
 var tokenOptions = builder.Configuration.GetSection("TokenOptions");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -110,6 +113,7 @@ builder.Services.AddDbContext<TaskTrackerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
 builder.Services.AddSignalR();
+builder.Services.AddAuthRateLimits();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -149,6 +153,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

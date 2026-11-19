@@ -27,6 +27,7 @@ export interface Task {
   canStart?: boolean;
   canSubmit?: boolean;
   canReview?: boolean;
+  workflowSubmissionId?: number | null;
   currentUserPermission?: string | null;
   visibility?: string;
 }

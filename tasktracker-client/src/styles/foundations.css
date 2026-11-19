@@ -1,21 +1,52 @@
 :root {
-  --color-page: #f4f6f8;
+  color-scheme: light;
+
+  /* Shadcn Admin-compatible neutral semantic palette. */
+  --color-page: #eef0f2;
+  --color-page-deep: #e6e9ec;
   --color-surface: #ffffff;
   --color-surface-elevated: #ffffff;
-  --color-surface-muted: #eef1f5;
-  --color-text: #172033;
-  --color-text-muted: #596579;
-  --color-text-subtle: #7b8798;
-  --color-border: #dfe4eb;
-  --color-border-strong: #c7ced9;
-  --color-primary: #2457d6;
-  --color-primary-hover: #1d46ad;
-  --color-primary-soft: #edf3ff;
-  --color-success: #14804a;
-  --color-warning: #a15c00;
-  --color-danger: #c52a35;
-  --color-info: #1769aa;
-  --color-focus: #6b9cff;
+  --color-surface-muted: #f1f2f4;
+  --color-surface-strong: #dfe2e6;
+  --color-text: #111318;
+  --color-text-muted: #5f6670;
+  --color-text-subtle: #858c96;
+  --color-border: #cfd4da;
+  --color-border-strong: #b9c0c8;
+  --color-primary: #18181b;
+  --color-primary-hover: #27272a;
+  --color-primary-strong: #09090b;
+  --color-primary-soft: #f4f4f5;
+  --color-success: #15803d;
+  --color-warning: #a16207;
+  --color-danger: #dc2626;
+  --color-info: #2563eb;
+  --color-focus: #18181b;
+
+  /* Compatibility aliases keep established screens on the same palette. */
+  --bg: var(--color-page);
+  --surface: var(--color-surface);
+  --surface-soft: var(--color-surface-muted);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
+  --border: var(--color-border);
+  --brand: var(--color-primary);
+  --brand-soft: var(--color-primary-soft);
+  --green: var(--color-success);
+  --green-soft: #f0fdf4;
+  --orange: var(--color-warning);
+  --orange-soft: #fffbeb;
+  --red: var(--color-danger);
+  --red-soft: #fef2f2;
+
+  --font-sans: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-editorial: var(--font-sans);
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-page-title: 30px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -26,26 +57,50 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
+  --space-16: 64px;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 16px 32px -8px rgba(0, 0, 0, 0.18);
+  --shadow: var(--shadow-md);
 
-  --control-height: 42px;
+  --control-height: 40px;
   --touch-target: 44px;
   --page-gutter: clamp(16px, 3vw, 40px);
   --content-width: 1180px;
-  --content-width-wide: 1360px;
-  --shell-sidebar-width: 248px;
+  --content-width-wide: 1380px;
+  --shell-sidebar-width: 256px;
   --shell-topbar-height: 64px;
+  --transition-fast: 140ms ease;
+}
+
+html {
+  min-width: 320px;
+  background: var(--color-page);
+  accent-color: var(--color-primary);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-text);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #e4e4e7;
+  color: var(--color-text);
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-focus) 65%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-focus) 55%, transparent);
   outline-offset: 2px;
 }
 
@@ -54,5 +109,8 @@
   *::before,
   *::after {
     scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

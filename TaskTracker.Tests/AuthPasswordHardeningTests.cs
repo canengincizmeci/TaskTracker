@@ -648,6 +648,83 @@ public class AuthPasswordHardeningTests
     }
 
     [Fact]
+    public async Task UnverifiedLoginOffersRecoveryOnlyWithCorrectCredentials()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var user = await MakeLegacyUser(context);
+        user.IsVerified = false;
+        await context.SaveChangesAsync();
+        var manager = Manager(context);
+
+        var wrong = await manager.LoginAsync(new UserForLoginDto { Email = user.Email, Password = "incorrect" });
+        var unknown = await manager.LoginAsync(new UserForLoginDto { Email = "unknown@example.test", Password = LegacyPassword });
+        var correct = await manager.LoginAsync(new UserForLoginDto { Email = user.Email, Password = LegacyPassword });
+
+        Assert.Equal(Messages.PasswordError, wrong.Message);
+        Assert.Equal(wrong.Message, unknown.Message);
+        Assert.Equal(Messages.EmailNotVerified, correct.Message);
+        Assert.False(correct.Success);
+        Assert.Empty(await context.RefreshTokens.ToListAsync());
+        Assert.Equal(PasswordHashVersion.LegacyHmacSha512, user.PasswordHashVersion);
+    }
+
+    [Fact]
+    public async Task MissingSmtpPortDoesNotPreventConstructingTheAuthEmailService()
+    {
+        var mail = new EmailManager(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => mail.SendVerificationCodeAsync("user1@example.test", "123456"));
+    }
+
+    [Fact]
+    public async Task VerificationLocksAfterFiveWrongCodesUntilResend()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        context.OperationClaims.Add(new OperationClaim { Id = 2, Name = "User" });
+        var verification = new EmailVerification { UserId = 1, Code = "123456" };
+        context.EmailVerifications.Add(verification);
+        await context.SaveChangesAsync();
+        var email = new Email();
+        var manager = Manager(context, emailService: email);
+
+        for (var attempt = 0; attempt < 5; attempt++)
+            Assert.False((await manager.VerifyEmailAsync(new() { Email = "user1@example.test", Code = "654321" })).Success);
+        Assert.Equal(5, verification.FailedAttemptCount);
+        Assert.NotNull(verification.LockedUntil);
+        Assert.False((await manager.VerifyEmailAsync(new() { Email = "user1@example.test", Code = "123456" })).Success);
+        Assert.False((await context.Users.FindAsync(1))!.IsVerified);
+        Assert.True((await manager.ResendVerificationAsync(new() { Email = "user1@example.test" })).Success);
+        Assert.True((await manager.VerifyEmailAsync(new()
+            { Email = "user1@example.test", Code = Assert.Single(email.VerificationAttempts).Code })).Success);
+        Assert.Equal(0, verification.FailedAttemptCount);
+    }
+
+    [Fact]
+    public async Task ExpiredInterruptedVerificationDeliveryCanBeResent()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        var verification = new EmailVerification
+        {
+            UserId = 1, Code = "987654", CreatedAt = DateTime.UtcNow.AddMinutes(-11),
+            DeliveryToken = Guid.NewGuid(), DeliveryClaimed = true
+        };
+        context.EmailVerifications.Add(verification);
+        await context.SaveChangesAsync();
+        var email = new Email();
+        var manager = Manager(context, emailService: email);
+
+        var result = await manager.ResendVerificationAsync(new ResendVerificationDto { Email = "user1@example.test" });
+
+        Assert.True(result.Success);
+        Assert.Equal(verification.Code, Assert.Single(email.VerificationAttempts).Code);
+        Assert.NotEqual("987654", verification.Code);
+        Assert.False(verification.DeliveryClaimed);
+        Assert.Null(verification.DeliveryToken);
+    }
+
+    [Fact]
     public async Task WrongLegacyPasswordDoesNotMutateCredential()
     {
         using var database = new TestDatabase();

@@ -60,6 +60,44 @@ public class InvitationTests
     }
 
     [Fact]
+    public async Task Legacy_manage_can_be_accepted_but_does_not_grant_owner_controls()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        await Seed(context, permission: TaskPermission.Manage);
+        Assert.True((await Manager(context, 2).AcceptTaskInvitationAsync(1)).Success);
+        var task = await context.TaskRequests.SingleAsync();
+        var dal = new EfTaskRequestDal(context);
+        Assert.True(await dal.CanEditAsync(task.Id, 2));
+        Assert.False(await dal.CanManageAsync(task.Id, 2));
+        Assert.False((await Manager(context, 2).InviteUserToTask(new()
+            { TaskRequestId = task.Id, Username = "user3", Permission = TaskPermission.Edit })).Success);
+        Assert.False((await Manager(context, 2).UpdateParticipantPermissionAsync(task.Id, 2, new()
+            { Permission = TaskPermission.Edit, Version = task.Version })).Success);
+        Assert.False((await Manager(context, 2).RemoveParticipantAsync(task.Id, 2, task.Version)).Success);
+        Assert.Equal(TaskPermission.Manage, (await context.TaskShares.SingleAsync()).Permission);
+    }
+
+    [Fact]
+    public async Task New_manage_grants_are_rejected_and_view_or_edit_updates_remain_available()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        await Seed(context, permission: TaskPermission.View);
+        Assert.True((await Manager(context, 2).AcceptTaskInvitationAsync(1)).Success);
+        var task = await context.TaskRequests.SingleAsync();
+        var owner = Manager(context, 1);
+        Assert.False((await owner.InviteUserToTask(new()
+            { TaskRequestId = task.Id, Username = "user3", Permission = TaskPermission.Manage })).Success);
+        Assert.False((await owner.UpdateParticipantPermissionAsync(task.Id, 2, new()
+            { Permission = TaskPermission.Manage, Version = task.Version })).Success);
+        Assert.False(await new EfTaskRequestDal(context).CanEditAsync(task.Id, 2));
+        Assert.True(await TaskCollaborationTestServices.Create(context).CanAccessAsync(task.Id, 2));
+        Assert.True((await owner.UpdateParticipantPermissionAsync(task.Id, 2, new()
+            { Permission = TaskPermission.Edit, Version = task.Version })).Success);
+        Assert.True(await new EfTaskRequestDal(context).CanEditAsync(task.Id, 2));
+        Assert.Equal(TaskPermission.Edit, (await context.TaskShares.SingleAsync()).Permission);
+    }
+
+    [Fact]
     public async Task Expired_invitation_is_not_actionable_and_does_not_block_reinvitation()
     {
         using var db = new TestDatabase(); using var context = db.CreateContext();
@@ -69,10 +107,32 @@ public class InvitationTests
         Assert.Equal("Expired", (await recipient.GetInvitationAsync(1)).Data.Status);
         Assert.False((await recipient.AcceptTaskInvitationAsync(1)).Success);
         Assert.False((await recipient.RejectTaskInvitationAsync(1)).Success);
+        Assert.False((await Manager(context, 1).CancelInvitationAsync(1, 0)).Success);
         Assert.True((await Manager(context, 1).InviteUserToTask(new() { TaskRequestId = 1, Username = "  UsEr2  ", Permission = TaskPermission.Edit })).Success);
         Assert.Single((await recipient.GetMyPendingInvitationsAsync()).Data);
         Assert.Equal(TaskShareInvitationStatus.Pending, (await context.TaskShareInvitations.FindAsync(1))!.Status);
         Assert.Null((await context.TaskShareInvitations.FindAsync(1))!.RespondedAt);
+    }
+
+    [Fact]
+    public async Task Outgoing_history_only_expires_unanswered_invitations()
+    {
+        using var db = new TestDatabase();
+        using var context = db.CreateContext();
+        await Seed(context, expired: true);
+        var invitation = await context.TaskShareInvitations.SingleAsync();
+        var owner = Manager(context, 1);
+        Assert.Equal("Expired", Assert.Single((await owner.GetOutgoingInvitationsAsync(1)).Data).Status);
+        foreach (var decision in new[] { TaskShareInvitationStatus.Accepted, TaskShareInvitationStatus.Rejected,
+                     TaskShareInvitationStatus.Cancelled })
+        {
+            invitation.Status = decision;
+            invitation.RespondedAt = invitation.ExpiresAt!.Value.AddMinutes(-1);
+            await context.SaveChangesAsync();
+            var item = Assert.Single((await owner.GetOutgoingInvitationsAsync(1)).Data);
+            Assert.Equal(decision.ToString(), item.Status);
+            Assert.False(item.CanCancel);
+        }
     }
 
     [Fact]
@@ -103,6 +163,42 @@ public class InvitationTests
         Assert.Equal(2, Assert.Single((await recipient.GetParticipantsAsync(1)).Data).UserId);
         Assert.Equal("Edit", Assert.Single((await Manager(fresh, 1).GetParticipantsAsync(1)).Data).Permission);
         Assert.Equal(TaskActivityType.InvitationAccepted, (await fresh.TaskActivities.SingleAsync()).ActivityType);
+    }
+
+    [Fact]
+    public async Task Invitation_note_and_private_recipient_reply_are_trimmed_persisted_and_visible_to_sender()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        context.TaskRequests.Add(TestDatabase.Task()); await context.SaveChangesAsync();
+        Assert.True((await Manager(context, 1).InviteUserToTask(new()
+        { TaskRequestId = 1, Username = "user2", Permission = TaskPermission.View, Message = "  Please review this.  " })).Success);
+        var recipient = Manager(context, 2);
+        var detail = (await recipient.GetInvitationAsync(1)).Data;
+        Assert.Equal("Please review this.", detail.Message);
+        Assert.True((await recipient.RespondToInvitationAsync(1, true, "  I can review tomorrow.  ")).Success);
+        using var fresh = db.CreateContext();
+        var invitation = await fresh.TaskShareInvitations.SingleAsync();
+        Assert.Equal("I can review tomorrow.", invitation.ResponseMessage);
+        var outgoing = Assert.Single((await Manager(fresh, 1).GetOutgoingInvitationsAsync(1)).Data);
+        Assert.Equal("Accepted", outgoing.Status);
+        Assert.Equal("Please review this.", outgoing.Message);
+        Assert.Equal("I can review tomorrow.", outgoing.ResponseMessage);
+        Assert.False((await Manager(fresh, 3).GetInvitationAsync(1)).Success);
+    }
+
+    [Fact]
+    public async Task Invitation_and_response_messages_enforce_server_length_limits()
+    {
+        using var db = new TestDatabase(); using var context = db.CreateContext();
+        context.TaskRequests.Add(TestDatabase.Task()); await context.SaveChangesAsync();
+        Assert.False((await Manager(context, 1).InviteUserToTask(new()
+        { TaskRequestId = 1, Username = "user2", Permission = TaskPermission.View, Message = new string('x', 1001) })).Success);
+        context.TaskShareInvitations.Add(new TaskShareInvitation { Id = 1, TaskRequestId = 1,
+            InvitedByUserId = 1, InvitedUserId = 2, Permission = TaskPermission.View,
+            ExpiresAt = DateTime.UtcNow.AddDays(1) });
+        await context.SaveChangesAsync();
+        Assert.False((await Manager(context, 2).RespondToInvitationAsync(1, true, new string('x', 1001))).Success);
+        Assert.Equal(TaskShareInvitationStatus.Pending, (await context.TaskShareInvitations.FindAsync(1))!.Status);
     }
 
     [Fact]

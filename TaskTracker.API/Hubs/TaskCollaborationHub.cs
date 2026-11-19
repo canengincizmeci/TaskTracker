@@ -8,7 +8,7 @@ namespace TaskTracker.API.Hubs
     [Authorize]
     public class TaskCollaborationHub : Hub
     {
-        private static readonly ConcurrentDictionary<(int TaskId, int UserId), ConcurrentDictionary<string, byte>> Memberships = new();
+        private static readonly ConcurrentDictionary<(int TaskId, int UserId, string ConnectionId), byte> Memberships = new();
         private readonly ITaskCollaborationService _collaboration;
 
         public TaskCollaborationHub(ITaskCollaborationService collaboration)
@@ -23,8 +23,14 @@ namespace TaskTracker.API.Hubs
             if (!int.TryParse(Context.UserIdentifier, out var userId) ||
                 !await _collaboration.CanAccessAsync(taskId, userId))
                 throw new HubException("You do not have access to this task workspace.");
-            await Groups.AddToGroupAsync(Context.ConnectionId, TaskGroup(taskId));
-            Memberships.GetOrAdd((taskId, userId), _ => new()).TryAdd(Context.ConnectionId, 0);
+            var connectionId = Context.ConnectionId;
+            await Groups.AddToGroupAsync(connectionId, TaskGroup(taskId));
+            Memberships.TryAdd((taskId, userId, connectionId), 0);
+            if (!await _collaboration.CanAccessAsync(taskId, userId))
+            {
+                await LeaveTask(taskId);
+                throw new HubException("You do not have access to this task workspace.");
+            }
         }
 
         public async Task LeaveTask(int taskId)
@@ -35,22 +41,16 @@ namespace TaskTracker.API.Hubs
         }
 
         internal static IReadOnlyCollection<string> ConnectionsFor(int taskId, int userId) =>
-            Memberships.TryGetValue((taskId, userId), out var connections) ? connections.Keys.ToArray() : [];
+            Memberships.Keys.Where(entry => entry.TaskId == taskId && entry.UserId == userId)
+                .Select(entry => entry.ConnectionId).ToArray();
 
-        internal static void Forget(int taskId, int userId, string connectionId)
-        {
-            if (!Memberships.TryGetValue((taskId, userId), out var connections)) return;
-            connections.TryRemove(connectionId, out _);
-            if (connections.IsEmpty) Memberships.TryRemove((taskId, userId), out _);
-        }
+        internal static void Forget(int taskId, int userId, string connectionId) =>
+            Memberships.TryRemove((taskId, userId, connectionId), out _);
 
         public override Task OnDisconnectedAsync(Exception? exception)
         {
-            foreach (var entry in Memberships)
-            {
-                entry.Value.TryRemove(Context.ConnectionId, out _);
-                if (entry.Value.IsEmpty) Memberships.TryRemove(entry.Key, out _);
-            }
+            foreach (var entry in Memberships.Keys.Where(entry => entry.ConnectionId == Context.ConnectionId))
+                Memberships.TryRemove(entry, out _);
             return base.OnDisconnectedAsync(exception);
         }
     }

@@ -10,14 +10,10 @@ import { useAuth } from "../context/AuthContext";
 import { permissionText } from "../types/taskPermission";
 import type { TaskInvitation } from "../types/taskInvitation";
 import InboxLocalNav from "../components/InboxLocalNav";
+import { invitationStatus, useInvitationDeadline } from "../hooks/useInvitationDeadline";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
-function invitationStatus(invitation: TaskInvitation) {
-  return invitation.status.toLowerCase() === "pending" && invitation.expiresAt &&
-    new Date(invitation.expiresAt).getTime() <= Date.now() ? "Expired" : invitation.status;
 }
 
 function isActionableInvitation(invitation: TaskInvitation) {
@@ -25,15 +21,18 @@ function isActionableInvitation(invitation: TaskInvitation) {
     (invitation.canAccept || invitation.canReject);
 }
 
-function TaskInvitationsPage() {
+function Invitations({ canUseInvitationActions }: { canUseInvitationActions: boolean }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [invitations, setInvitations] = useState<TaskInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [reload, setReload] = useState(0);
+  const mounted = useRef(false);
+  useInvitationDeadline(invitations, () => setReload(n => n + 1));
 
   useEffect(() => {
     let cancelled = false;
+    mounted.current = true;
     getMyPendingInvitations().then((data) => {
       if (!cancelled) setInvitations(data);
     }).catch((error: unknown) => {
@@ -41,32 +40,38 @@ function TaskInvitationsPage() {
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; mounted.current = false; };
+  }, [reload]);
 
   const activeRequests = useRef(new Set<number>());
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
 
   const respond = async (id: number, accept: boolean) => {
     if (activeRequests.current.has(id)) return;
+    const invite = invitations.find(item => item.id === id);
+    if (!invite || !canUseInvitationActions || !isActionableInvitation(invite) || !(accept ? invite.canAccept : invite.canReject)) {
+      setReload(n => n + 1); return;
+    }
     activeRequests.current.add(id);
     setBusyIds(new Set(activeRequests.current));
     setErrorMessage("");
     try {
       await (accept ? acceptTaskInvitation(id) : rejectTaskInvitation(id));
-      const acceptedTask = invitations.find((item) => item.id === id)?.taskRequestId;
+      if (!mounted.current) return;
       setInvitations((current) => current.filter((item) => item.id !== id));
-      if (accept && acceptedTask) navigate(`/tasks/task-detail/${acceptedTask}`);
+      if (accept) navigate(`/tasks/task-detail/${invite.taskRequestId}`);
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error, "Could not respond to invitation."));
+      if (mounted.current) {
+        setErrorMessage(getErrorMessage(error, "Could not confirm your response. Check the invitation details."));
+        setReload(n => n + 1);
+      }
     } finally {
       activeRequests.current.delete(id);
-      setBusyIds(new Set(activeRequests.current));
+      if (mounted.current) setBusyIds(new Set(activeRequests.current));
     }
   };
 
   const pendingInvitations = invitations.filter(isActionableInvitation);
-  const canUseInvitationActions = user?.role === "User";
 
   return (
     <main className="page public-page inbox-page">
@@ -79,10 +84,13 @@ function TaskInvitationsPage() {
 
         <InboxLocalNav />
 
-        {errorMessage && <p role="alert" className="inbox-alert">{errorMessage}</p>}
+        {errorMessage && <div role="alert" className="inbox-alert">{errorMessage}{" "}
+          <button type="button" className="tw-inline-action" onClick={() => {
+            setErrorMessage(""); setLoading(true); setReload(n => n + 1);
+          }}>Reload invitations</button></div>}
         {loading ? <div className="inbox-state" role="status">Loading invitations...</div> :
-          errorMessage ? null : invitations.length === 0 ? (
-            <div className="inbox-state"><strong>No pending invitations</strong>
+          invitations.length === 0 ? (
+            !errorMessage && <div className="inbox-state"><strong>No pending invitations</strong>
               <span>When someone shares a task with you, it will appear here.</span></div>
           ) : (
             <section className="inbox-section" aria-labelledby="task-invitations-pending">
@@ -109,16 +117,17 @@ function TaskInvitationsPage() {
                             <span>{permissionText(invitation.permission)} access</span>
                             <time dateTime={invitation.createdAt}>{formatDate(invitation.createdAt)}</time>
                           </div>
+                          {invitation.message && <p className="invitation-note-preview">{invitation.message}</p>}
                         </div>
                         {canUseInvitationActions && <div className="inbox-row__actions">
-                          {actionable && invitation.canAccept && <button className="primary-button" disabled={busy} type="button"
+                          {actionable && !invitation.message && invitation.canAccept && <button className="primary-button" disabled={busy} type="button"
                             aria-label={`Accept invitation to ${invitation.taskTitle}`}
                             onClick={() => respond(invitation.id, true)}>Accept</button>}
-                          {actionable && invitation.canReject && <button className="secondary-button" disabled={busy} type="button"
+                          {actionable && !invitation.message && invitation.canReject && <button className="secondary-button" disabled={busy} type="button"
                             aria-label={`Reject invitation to ${invitation.taskTitle}`}
                             onClick={() => respond(invitation.id, false)}>Reject</button>}
-                          <Link className="secondary-button" to={`/tasks/invitations/${invitation.id}`}
-                            aria-label={`View invitation details for ${invitation.taskTitle}`}>View details</Link>
+                          <Link className={invitation.message ? "primary-button" : "secondary-button"} to={`/tasks/invitations/${invitation.id}`}
+                            aria-label={`${actionable ? "Review and reply to" : "View"} invitation for ${invitation.taskTitle}`}>{actionable ? "Review & reply" : "View details"}</Link>
                         </div>}
                       </li>;
                     })}
@@ -130,4 +139,7 @@ function TaskInvitationsPage() {
   );
 }
 
-export default TaskInvitationsPage;
+export default function TaskInvitationsPage() {
+  const { token, user } = useAuth();
+  return <Invitations key={token} canUseInvitationActions={user?.role === "User"} />;
+}

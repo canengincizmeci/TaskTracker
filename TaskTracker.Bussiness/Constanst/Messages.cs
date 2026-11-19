@@ -59,7 +59,7 @@ namespace TaskTracker.Bussiness.Constanst
         public static string PasswordCredentialChangedConcurrently = "Password changed in another request. Please try again.";
         public static string IdentityConflict = "An account with that email or username already exists.";
         public static string VerificationEmailDeliveryFailed = "Your account was created, but the verification email could not be sent. Use resend verification to try again.";
-        public static string VerificationResendGeneric = "If the account exists and still requires verification, a new code has been sent.";
+        public static string VerificationResendGeneric = "If this account needs verification, check your inbox and spam folder for a code. If nothing arrives, wait a moment and try again.";
 
 
     }
