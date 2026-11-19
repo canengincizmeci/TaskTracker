@@ -1,25 +1,26 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { resendVerification, verifyEmail } from "../api/authService";
+import { errorMessage } from "../api/errorMessage";
 import AuthLayout from "../components/AuthLayout";
-
-const resendMessage = "If the account exists and still requires verification, a new code has been sent.";
+import { getSafeLoginRedirect } from "../utils/loginRedirect";
 
 function VerifyEmailPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [email, setEmail] = useState(() => {
-    const state = location.state as { email?: unknown } | null;
-    return typeof state?.email === "string" ? state.email : "";
-  });
+  const state = location.state as { email?: unknown; redirect?: unknown; deliveryFailed?: unknown; verificationRequired?: unknown } | null;
+  const redirect = getSafeLoginRedirect(typeof state?.redirect === "string" ? state.redirect : null);
+  const loginPath = redirect ? `/login?${new URLSearchParams({ redirect })}` : "/login";
+  const [email, setEmail] = useState(typeof state?.email === "string" ? state.email : "");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
+  const submitting = useRef(false);
   const [successMessage, setSuccessMessage] = useState(() => {
-    const state = location.state as { deliveryFailed?: unknown } | null;
     return state?.deliveryFailed === true
-      ? "Your account was created, but email delivery failed. You can resend the verification code below." : "";
+      ? "Your account was created, but email delivery failed. You can resend the verification code below."
+      : state?.verificationRequired === true ? "Verify your email before signing in." : "";
   });
 
   const handleCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,52 +28,54 @@ function VerifyEmailPage() {
   };
 
   const handleResend = async () => {
-    const canonicalEmail = email.trim().toLowerCase();
-    if (!canonicalEmail) {
-      setError("Email is required.");
-      return;
-    }
+    if (submitting.current || !emailInput.current?.reportValidity()) return;
+    submitting.current = true;
     try {
       setResendLoading(true);
       setError("");
-      await resendVerification({ email: canonicalEmail });
-      setSuccessMessage(resendMessage);
-    } catch {
-      setError("Verification code could not be resent. Please try again.");
+      setSuccessMessage("");
+      const response = await resendVerification({ email: email.trim() });
+      setSuccessMessage(response.message);
+    } catch (reason) {
+      setError(errorMessage(reason, "Verification code could not be resent. Please try again."));
     } finally {
+      submitting.current = false;
       setResendLoading(false);
     }
   };
 
   const handleVerifyEmail = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting.current) return;
     if (!/^[0-9]{6}$/.test(code)) {
       setError("Enter the six-digit verification code.");
       return;
     }
+    submitting.current = true;
     try {
       setLoading(true);
       setError("");
       setSuccessMessage("");
-      const canonicalEmail = email.trim().toLowerCase();
-      await verifyEmail({ email: canonicalEmail, code });
-      setSuccessMessage("Email verified successfully. You can now sign in.");
-      setTimeout(() => navigate("/login", { state: { email: canonicalEmail } }), 1200);
-    } catch {
-      setError("Email verification failed.");
+      const submittedEmail = email.trim();
+      await verifyEmail({ email: submittedEmail, code });
+      navigate(loginPath, { replace: true, state: { email: submittedEmail, verified: true } });
+    } catch (reason) {
+      setError(errorMessage(reason, "Could not verify your email. Check your connection and try again."));
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
 
   const busy = loading || resendLoading;
+  const emailInput = useRef<HTMLInputElement>(null);
   return <AuthLayout eyebrow="Email verification" title="Check your inbox"
     description="Enter the six-digit verification code sent to your email to activate your account."
-    footer={<p>Already verified? <Link to="/login">Return to sign in</Link></p>}>
+    footer={<p>Already verified? <Link to={loginPath} state={{ email: email.trim() }}>Return to sign in</Link></p>}>
     <form onSubmit={handleVerifyEmail} className="auth-form" aria-busy={busy}>
       <div className="form-group">
         <label htmlFor="verify-email">Email</label>
-        <input id="verify-email" value={email} onChange={(event) => setEmail(event.target.value)}
+        <input id="verify-email" ref={emailInput} value={email} onChange={(event) => setEmail(event.target.value)}
           placeholder="you@example.com" type="email" autoComplete="email" disabled={busy} required />
       </div>
       <div className="form-group">

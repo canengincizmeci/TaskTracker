@@ -103,6 +103,11 @@ async function login(data: LoginRequest): Promise<LoginResponse> {
   return response.data;
 }
 
+export async function getProfile(signal: AbortSignal): Promise<{ username: string }> {
+  const response = await axiosClient.get("/Auth/profile", { signal });
+  return response.data;
+}
+
 async function register(data: RegisterRequest): Promise<RegisterResponse> {
   const response = await axiosClient.post("/Auth/register", data);
   return response.data;

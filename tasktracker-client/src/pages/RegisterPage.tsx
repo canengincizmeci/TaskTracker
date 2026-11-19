@@ -1,7 +1,7 @@
-import { useState } from "react";
-import axios from "axios";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register } from "../api/authService";
+import { errorMessage } from "../api/errorMessage";
 import AuthLayout from "../components/AuthLayout";
 
 function RegisterPage() {
@@ -13,41 +13,34 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const submitting = useRef(false);
 
   const handleRegister = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting.current) return;
     if (password.length < 12 || password.length > 128) {
       setError("Password must be between 12 and 128 characters.");
       return;
     }
+    submitting.current = true;
     try {
       setLoading(true);
       setError("");
-      setSuccessMessage("");
-      const canonicalEmail = email.trim().toLowerCase();
+      const submittedEmail = email.trim();
       const response = await register({
         firstName,
         lastName,
-        email: canonicalEmail,
+        email: submittedEmail,
         userName: userName.trim(),
         password,
       });
-      if (response.code === "verification_delivery_failed") {
-        navigate("/verify-email", { state: { email: canonicalEmail, deliveryFailed: true } });
-        return;
-      }
-      setSuccessMessage("Registration successful. Please verify your email.");
-      setTimeout(() => navigate("/verify-email", { state: { email: canonicalEmail } }), 1200);
+      navigate("/verify-email", { replace: true, state: {
+        email: submittedEmail, deliveryFailed: response.code === "verification_delivery_failed",
+      } });
     } catch (requestError: unknown) {
-      const responseData = axios.isAxiosError<{ code?: string; message?: string }>(requestError)
-        ? requestError.response?.data : undefined;
-      if (responseData?.code === "verification_delivery_failed") {
-        navigate("/verify-email", { state: { email: email.trim().toLowerCase(), deliveryFailed: true } });
-        return;
-      }
-      setError(responseData?.message ?? "Registration failed.");
+      setError(errorMessage(requestError, "Could not confirm registration. Check your inbox before trying again."));
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -87,7 +80,6 @@ function RegisterPage() {
         <p className="public-auth-field-hint" id="register-password-hint">Use 12–128 characters.</p>
       </div>
       {error && <p className="error-message" role="alert">{error}</p>}
-      {successMessage && <p className="success-message" role="status">{successMessage}</p>}
       <button className="primary-button" type="submit" disabled={loading}>
         {loading ? "Creating account..." : "Create account"}
       </button>

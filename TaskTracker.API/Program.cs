@@ -110,6 +110,7 @@ builder.Services.AddDbContext<TaskTrackerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
 builder.Services.AddSignalR();
+builder.Services.AddAuthRateLimits();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -149,6 +150,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

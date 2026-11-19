@@ -15,8 +15,8 @@ function decodeJwt(token: string): JwtPayload | null {
       return null;
     }
 
-    const decodedPayload = atob(payload);
-    return JSON.parse(decodedPayload);
+    const bytes = Uint8Array.from(atob(payload.replace(/-/g, "+").replace(/_/g, "/")), char => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return null;
   }

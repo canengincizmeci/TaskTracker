@@ -70,33 +70,17 @@ namespace TaskTracker.Bussiness.Concrete
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
 
             var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
-            var user = await userRepo.GetAsync(u => u.Email == normalizedEmail && u.IsVerified == true);
-            if (user == null)
-                return new ErrorDataResult<LoginResponseDto>(Messages.UserNotFound);
-
-            if (!user.IsVerified)
-                return new ErrorDataResult<LoginResponseDto>(Messages.EmailNotVerified);
-
-            if (!user.Status)
-                return new ErrorDataResult<LoginResponseDto>(Messages.UserPassive);
+            var user = await userRepo.GetAsync(u => u.Email == normalizedEmail);
+            if (user is null || !user.Status)
+                return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
 
             var verificationOutcome = _passwordHashService.Verify(user, dto.Password);
             if (verificationOutcome == PasswordVerificationOutcome.Failed)
                 return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
 
-
+            if (!user.IsVerified)
+                return new ErrorDataResult<LoginResponseDto>(Messages.EmailNotVerified);
             var claims = await GetUserClaimsAsync(user.Id);
-            Console.WriteLine("=== BEFORE TOKEN CREATE ===");
-            Console.WriteLine($"DTO Email: {dto.Email}");
-            Console.WriteLine($"User Id: {user.Id}");
-            Console.WriteLine($"User Email: {user.Email}");
-            Console.WriteLine($"User Name: {user.FirstName} {user.LastName}");
-
-            foreach (var claim in claims)
-            {
-                Console.WriteLine($"Role Claim: {claim.Name}");
-            }
-            Console.WriteLine("===========================");
 
             var accessToken = _tokenHelper.CreateToken(user, claims);
             var refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
@@ -249,19 +233,30 @@ namespace TaskTracker.Bussiness.Concrete
             if (user is null)
                 return new ErrorResult(Messages.UserNotFound);
 
-            var verification = await verificationRepo.GetAsync(v =>
-                v.UserId == user.Id &&
-                v.Code == dto.Code &&
-                !v.IsVerified);
+            var verification = (await verificationRepo.GetAllAsync(v => v.UserId == user.Id && !v.IsVerified))
+                .OrderByDescending(v => v.CreatedAt).ThenByDescending(v => v.Id).FirstOrDefault();
 
             if (verification is null)
                 return new ErrorResult(Messages.CodeNotFound);
 
-            if (verification.CreatedAt.AddMinutes(10) < DateTime.UtcNow)
+            var now = DateTime.UtcNow;
+            var expiresAt = verification.CreatedAt.Add(VerificationLifetime);
+            if (expiresAt <= now)
                 return new ErrorResult(Messages.CodeExpired);
 
-            if (verification.DeliveryClaimed)
+            if (verification.DeliveryClaimed || verification.FailedAttemptCount >= MaxVerificationAttempts ||
+                verification.LockedUntil > now)
                 return new ErrorResult(Messages.CodeNotFound);
+
+            if (verification.Code != dto.Code)
+            {
+                verification.FailedAttemptCount++;
+                if (verification.FailedAttemptCount >= MaxVerificationAttempts) verification.LockedUntil = expiresAt;
+                verification.Version = checked(verification.Version + 1);
+                try { await _unitOfWork.SaveChangesAsync(); }
+                catch (DbUpdateConcurrencyException) { return new ErrorResult(Messages.CodeNotFound); }
+                return new ErrorResult(Messages.CodeNotFound);
+            }
 
             verification.IsVerified = true;
             verification.DeliveryToken = null;
@@ -301,12 +296,13 @@ namespace TaskTracker.Bussiness.Concrete
                 .ThenByDescending(v => v.Id)
                 .FirstOrDefault();
 
-            if (currentVerification?.DeliveryClaimed == true)
+            var now = DateTime.UtcNow;
+            if (currentVerification?.DeliveryClaimed == true &&
+                currentVerification.CreatedAt.Add(VerificationLifetime) > now)
                 return genericResult;
 
             var code = GenerateFreshVerificationCode(currentVerification?.Code);
             var deliveryToken = Guid.NewGuid();
-            var now = DateTime.UtcNow;
 
             foreach (var staleVerification in activeVerifications.Where(v => v != currentVerification))
             {
@@ -818,6 +814,9 @@ namespace TaskTracker.Bussiness.Concrete
 
             return outcome;
         }
+
+        private const int MaxVerificationAttempts = 5;
+        private static readonly TimeSpan VerificationLifetime = TimeSpan.FromMinutes(10);
 
         private enum VerificationDeliveryOutcome
         {

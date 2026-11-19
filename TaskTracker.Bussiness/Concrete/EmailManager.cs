@@ -11,7 +11,7 @@ namespace TaskTracker.Bussiness.Concrete
     public class EmailManager : IEmailService
     {
         private readonly string _smtpHost;
-        private readonly int _smtpPort;
+        private readonly int? _smtpPort;
         private readonly string _smtpUser;
         private readonly string _smtpPass;
         private readonly string _fromEmail;
@@ -19,7 +19,7 @@ namespace TaskTracker.Bussiness.Concrete
         {
 
             _smtpHost = configuration["Smtp:Host"]!;
-            _smtpPort = int.Parse(configuration["Smtp:Port"]!);
+            _smtpPort = int.TryParse(configuration["Smtp:Port"], out var port) && port is > 0 and <= 65535 ? port : null;
             _smtpUser = configuration["Smtp:User"]!;
             _smtpPass = configuration["Smtp:Pass"]!;
             _fromEmail = configuration["Smtp:FromEmail"]!;
@@ -27,13 +27,9 @@ namespace TaskTracker.Bussiness.Concrete
 
         public async Task SendTaskShareInvitationEmailAsync(string email, string taskTitle, string inviterUsername, string invitationUrl)
         {
-            using var client = new SmtpClient(_smtpHost, _smtpPort)
-            {
-                Credentials = new NetworkCredential(_smtpUser, _smtpPass),
-                EnableSsl = true
-            };
+            using var client = CreateClient();
 
-            var message = new MailMessage(_fromEmail, email)
+            using var message = new MailMessage(_fromEmail, email)
             {
                 Subject = "TaskTracker - New Task Invitation",
                 Body = $@"
@@ -60,13 +56,9 @@ namespace TaskTracker.Bussiness.Concrete
 
         public async Task SendVerificationCodeAsync(string email, string code)
         {
-            using var client = new SmtpClient(_smtpHost, _smtpPort)
-            {
-                Credentials = new NetworkCredential(_smtpUser, _smtpPass),
-                EnableSsl = true
-            };
+            using var client = CreateClient();
 
-            var message = new MailMessage(_fromEmail, email)
+            using var message = new MailMessage(_fromEmail, email)
             {
                 Subject = "Your verification code",
                 Body = $"Your verification code is: {code}",
@@ -78,13 +70,9 @@ namespace TaskTracker.Bussiness.Concrete
 
         public async Task SendPasswordResetCodeAsync(string email, string code)
         {
-            using var client = new SmtpClient(_smtpHost, _smtpPort)
-            {
-                Credentials = new NetworkCredential(_smtpUser, _smtpPass),
-                EnableSsl = true
-            };
+            using var client = CreateClient();
 
-            var message = new MailMessage(_fromEmail, email)
+            using var message = new MailMessage(_fromEmail, email)
             {
                 Subject = "TaskTracker - Password reset code",
                 Body = $@"Your password reset code is: {code}
@@ -96,6 +84,18 @@ If you did not request a password reset, you can ignore this email.",
             };
 
             await client.SendMailAsync(message);
+        }
+
+        private SmtpClient CreateClient()
+        {
+            if (_smtpPort is not int port || string.IsNullOrWhiteSpace(_smtpHost) || string.IsNullOrWhiteSpace(_fromEmail))
+                throw new InvalidOperationException("SMTP host, port and sender must be configured to send mail.");
+
+            return new SmtpClient(_smtpHost, port)
+            {
+                Credentials = new NetworkCredential(_smtpUser, _smtpPass),
+                EnableSsl = true
+            };
         }
     }
 }
