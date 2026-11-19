@@ -56,6 +56,14 @@ namespace TaskTracker.API.Controllers
 
             return Ok(result.Message);
         }
+
+        [Authorize(Roles = "User")]
+        [HttpPost("invitations/{invitationId:int}/respond")]
+        public async Task<IActionResult> RespondToInvitation(int invitationId, RespondToTaskInvitationDto dto)
+        {
+            var result = await _taskShareService.RespondToInvitationAsync(invitationId, dto.Accept, dto.ResponseMessage);
+            return ToActionResult(result);
+        }
         [Authorize(Roles = "User,Admin")]
         [HttpGet("get-user-invitations")]
         public async Task<IActionResult> GetMyPendingInvitationsAsync()

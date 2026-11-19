@@ -7,6 +7,7 @@ namespace TaskTracker.Core.Entities.Concrete
 {
     public class TaskShareInvitation:IEntity
     {
+        public const int MaxMessageLength = 1000;
         public int Id { get; set; }
         public int TaskRequestId { get; set; }
         public int InvitedUserId { get; set; }
@@ -16,6 +17,8 @@ namespace TaskTracker.Core.Entities.Concrete
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? RespondedAt { get; set; }
         public DateTime? ExpiresAt { get; set; }
+        public string? Message { get; set; }
+        public string? ResponseMessage { get; set; }
         public TaskRequest TaskRequest { get; set; } = null!;
         public User InvitedUser { get; set; } = null!;
         public User InvitedByUser { get; set; } = null!;

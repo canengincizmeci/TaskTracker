@@ -32,11 +32,16 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
     private static string? PermissionName(TaskPermission permission) =>
         Enum.IsDefined(permission) ? permission.ToString() : null;
 
-    public Task<IResult> AcceptTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, true);
-    public Task<IResult> RejectTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, false);
+    public Task<IResult> AcceptTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, true, null);
+    public Task<IResult> RejectTaskInvitationAsync(int invitationId) => RespondAsync(invitationId, false, null);
+    public Task<IResult> RespondToInvitationAsync(int invitationId, bool accept, string? responseMessage) =>
+        RespondAsync(invitationId, accept, responseMessage);
 
-    private async Task<IResult> RespondAsync(int invitationId, bool accept)
+    private async Task<IResult> RespondAsync(int invitationId, bool accept, string? responseMessage)
     {
+        responseMessage = responseMessage?.Trim();
+        if (responseMessage?.Length > TaskShareInvitation.MaxMessageLength)
+            return new ErrorResult($"A response may contain at most {TaskShareInvitation.MaxMessageLength} characters.");
         var invitation = await unitOfWork.GetRepository<TaskShareInvitation>().GetByIdAsync(invitationId);
         if (invitation is null) return new ErrorResult(Messages.InvitationNotFound);
         if (invitation.InvitedUserId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
@@ -66,6 +71,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         }
         invitation.Status = target;
         invitation.RespondedAt = now;
+        invitation.ResponseMessage = string.IsNullOrWhiteSpace(responseMessage) ? null : responseMessage;
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
             accept ? TaskActivityType.InvitationAccepted : TaskActivityType.InvitationRejected,
             invitation: invitation);
@@ -137,6 +143,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             Id = invitation.Id, TaskRequestId = invitation.TaskRequestId,
             TaskTitle = invitation.TaskRequest.Title, InviterUserName = invitation.InvitedByUser.UserName,
             Permission = permission, CreatedAt = invitation.CreatedAt, ExpiresAt = invitation.ExpiresAt,
+            RespondedAt = invitation.RespondedAt, Message = invitation.Message,
+            ResponseMessage = invitation.ResponseMessage,
             Status = expired ? "Expired" : invitation.Status.ToString(),
             CanAccept = available && permission is not null, CanReject = pending && !expired,
             UnavailableReason = !pending ? Messages.InvitationAlreadyResponded : expired ? Messages.InvitationExpired :
@@ -194,12 +202,16 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
 
     public async Task<IResult> InviteUserToTask(InviteUserToTaskDto dto)
     {
+        dto.Message = dto.Message?.Trim();
+        if (dto.Message?.Length > TaskShareInvitation.MaxMessageLength)
+            return new ErrorResult($"An invitation message may contain at most {TaskShareInvitation.MaxMessageLength} characters.");
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(dto.TaskRequestId);
         if (task is null) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
         if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (!CanJoin(task)) return new ErrorResult(TaskUnavailable);
-        if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
+        if (dto.Permission is not (TaskPermission.View or TaskPermission.Edit))
+            return new ErrorResult("Choose View or Edit access.");
         if (string.IsNullOrWhiteSpace(dto.Username)) return new ErrorResult("Username is required.");
         var users = unitOfWork.GetRepository<User>();
         var normalizedUserName = identityNormalizer.NormalizeUserName(dto.Username);
@@ -219,7 +231,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         {
             TaskRequestId = task.Id, InvitedUserId = user.Id, InvitedByUserId = inviter.Id,
             Permission = dto.Permission, Status = TaskShareInvitationStatus.Pending,
-            CreatedAt = now, ExpiresAt = now.AddDays(7)
+            CreatedAt = now, ExpiresAt = now.AddDays(7),
+            Message = string.IsNullOrWhiteSpace(dto.Message) ? null : dto.Message
         };
         await invitations.AddAsync(invitation);
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
@@ -227,6 +240,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var result = await SaveInvitationChange(task, Messages.TaskShareInvitationSent);
         if (!result.Success) return result;
         await collaborationService.PublishActivityAsync(activity);
+        await collaborationService.PublishTaskChangedAsync(task.Id);
         // Delivery is best effort after commit; it cannot turn a persisted invitation into a failed request.
         try
         {
@@ -256,15 +270,17 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task is null || !task.Activity) return new ErrorDataResult<List<OutgoingTaskInvitationDto>>(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorDataResult<List<OutgoingTaskInvitationDto>>(Messages.AuthorizationDenied);
         var invitations = await unitOfWork.GetRepository<TaskShareInvitation>().GetAllAsync(x =>
-            x.TaskRequestId == taskId && x.Status == TaskShareInvitationStatus.Pending,
+            x.TaskRequestId == taskId,
             q => q.Include(x => x.InvitedUser));
         var now = DateTime.UtcNow;
-        return new SuccessDataResult<List<OutgoingTaskInvitationDto>>(invitations.OrderByDescending(x => x.CreatedAt)
+        return new SuccessDataResult<List<OutgoingTaskInvitationDto>>(invitations.OrderByDescending(x => x.CreatedAt).Take(100)
             .Select(x => new OutgoingTaskInvitationDto
             {
                 Id = x.Id, TaskRequestId = x.TaskRequestId, InvitedUserName = x.InvitedUser.UserName,
-                Permission = PermissionName(x.Permission), Status = IsExpired(x, now) ? "Expired" : x.Status.ToString(),
+                Permission = PermissionName(x.Permission),
+                Status = x.Status == TaskShareInvitationStatus.Pending && IsExpired(x, now) ? "Expired" : x.Status.ToString(),
                 CreatedAt = x.CreatedAt, ExpiresAt = x.ExpiresAt,
+                RespondedAt = x.RespondedAt, Message = x.Message, ResponseMessage = x.ResponseMessage,
                 CanCancel = !IsExpired(x, now) && x.Status == TaskShareInvitationStatus.Pending
             }).ToList());
     }
@@ -281,8 +297,10 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         await taskShareDal.ReloadInvitationAsync(invitation);
         if (invitation.Status != TaskShareInvitationStatus.Pending)
             return new ErrorResult("Only a pending invitation can be cancelled.");
+        var now = DateTime.UtcNow;
+        if (IsExpired(invitation, now)) return new ErrorResult(Messages.InvitationExpired);
         invitation.Status = TaskShareInvitationStatus.Cancelled;
-        invitation.RespondedAt = DateTime.UtcNow;
+        invitation.RespondedAt = now;
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
             TaskActivityType.InvitationCancelled, invitation.InvitedUserId, invitation);
         var result = await SaveInvitationChange(task, "Invitation cancelled.");
@@ -302,7 +320,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (userId == task.OwnerId) return new ErrorResult("The owner is not a removable participant.");
         if (task.Version != dto.Version) return new ConflictResult(ConcurrentChange);
-        if (!Enum.IsDefined(dto.Permission)) return new ErrorResult(Messages.InvalidTaskPermission);
+        if (dto.Permission is not (TaskPermission.View or TaskPermission.Edit))
+            return new ErrorResult("Choose View or Edit access.");
         var share = await taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == userId);
         if (share is null) return new ErrorResult("Participant not found.");
         if (share.Permission == dto.Permission) return new SuccessResult("Permission is already set.");
@@ -369,12 +388,12 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             TaskActivityType.ParticipantRemoved, userId, createdAt: activityTime);
         var result = await SaveInvitationChange(task, "Participant removed.");
         if (!result.Success) return result;
+        try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
+        catch (Exception ex) { logger.LogWarning(ex, "Could not revoke live workspace access for task {TaskId}", task.Id); }
         if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
         if (resetActivity is not null) await collaborationService.PublishActivityAsync(resetActivity);
         await collaborationService.PublishActivityAsync(activity);
         await collaborationService.PublishTaskChangedAsync(task.Id);
-        try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
-        catch (Exception ex) { logger.LogWarning(ex, "Could not revoke live workspace access for task {TaskId}", task.Id); }
         await TryTaskNotification(userId, "Removed from task", $"You no longer have access to '{task.Title}'.",
             task.Id, "/tasks/shared-tasks");
         return result;

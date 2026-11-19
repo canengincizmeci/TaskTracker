@@ -19,5 +19,8 @@ namespace TaskTracker.Entities.DTOs
         public string? UnavailableReason { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? ExpiresAt { get; set; }
+        public DateTime? RespondedAt { get; set; }
+        public string? Message { get; set; }
+        public string? ResponseMessage { get; set; }
     }
 }

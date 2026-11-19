@@ -28,6 +28,8 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.Property(x => x.RespondedAt).IsRequired(false);
 
             builder.Property(x => x.ExpiresAt).IsRequired(false);
+            builder.Property(x => x.Message).HasMaxLength(TaskShareInvitation.MaxMessageLength).IsRequired(false);
+            builder.Property(x => x.ResponseMessage).HasMaxLength(TaskShareInvitation.MaxMessageLength).IsRequired(false);
 
             builder.HasOne(x => x.TaskRequest).WithMany().HasForeignKey(x => x.TaskRequestId).OnDelete(DeleteBehavior.Restrict);
 
