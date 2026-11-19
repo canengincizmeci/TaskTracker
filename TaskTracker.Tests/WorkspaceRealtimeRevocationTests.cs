@@ -44,6 +44,9 @@ public class WorkspaceRealtimeRevocationTests
         Assert.Equal(
             [(first.Id, 2), (second.Id, 2)],
             collaboration.Revocations.OrderBy(x => x.TaskId).ToList());
+        var roster = Assert.Single(collaboration.RosterChanges);
+        Assert.Equal(workspaceId, roster.WorkspaceId);
+        Assert.Equal(new[] { first.Id, second.Id }, roster.TaskIds.Order().ToArray());
     }
 
     [Fact]
@@ -70,6 +73,7 @@ public class WorkspaceRealtimeRevocationTests
             Assert.False(result.Success);
             Assert.IsAssignableFrom<IConflictResult>(result);
             Assert.Empty(collaboration.Revocations);
+            Assert.Empty(collaboration.RosterChanges);
         }
 
         await using var verify = database.CreateContext();
@@ -150,6 +154,7 @@ public class WorkspaceRealtimeRevocationTests
     {
         private readonly HashSet<int> failingTaskIds = failingTaskIds?.ToHashSet() ?? [];
         public List<(int TaskId, int UserId)> Revocations { get; } = [];
+        public List<(int WorkspaceId, IReadOnlyList<int> TaskIds)> RosterChanges { get; } = [];
 
         public Task<bool> CanAccessAsync(int taskId, int userId) => throw new NotSupportedException();
         public Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId) =>
@@ -160,6 +165,12 @@ public class WorkspaceRealtimeRevocationTests
             throw new NotSupportedException();
         public Task PublishActivityAsync(TaskActivity activity) => throw new NotSupportedException();
         public Task PublishTaskChangedAsync(int taskId) => throw new NotSupportedException();
+        public Task PublishAttachmentsChangedAsync(int taskId) => throw new NotSupportedException();
+        public Task PublishWorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds)
+        {
+            RosterChanges.Add((workspaceId, taskIds));
+            return Task.CompletedTask;
+        }
 
         public Task RevokeAccessAsync(int taskId, int userId)
         {

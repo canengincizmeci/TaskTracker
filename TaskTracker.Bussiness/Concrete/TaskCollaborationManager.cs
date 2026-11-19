@@ -98,6 +98,19 @@ public class TaskCollaborationManager : ITaskCollaborationService
 
     public Task RevokeAccessAsync(int taskId, int userId) => _realtime.AccessRevokedAsync(taskId, userId);
 
+    public async Task PublishAttachmentsChangedAsync(int taskId)
+    {
+        try { await _realtime.AttachmentsChangedAsync(taskId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Realtime attachment refresh failed for task {TaskId}", taskId); }
+    }
+
+    public async Task PublishWorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds)
+    {
+        if (taskIds.Count == 0) return;
+        try { await _realtime.WorkspaceRosterChangedAsync(workspaceId, taskIds); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Realtime roster refresh failed for workspace {WorkspaceId}", workspaceId); }
+    }
+
     private static TaskActivityDto MapActivity(TaskActivity activity) => new()
     {
         Id = activity.Id, ActivityType = activity.ActivityType.ToString(), ActorUserId = activity.ActorUserId,

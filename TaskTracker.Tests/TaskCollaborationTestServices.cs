@@ -18,6 +18,8 @@ internal static class TaskCollaborationTestServices
         public Task ActivityCreatedAsync(int taskId, TaskActivityDto activity) => Deliver();
         public Task MessageCreatedAsync(int taskId, TaskMessageDto message) => Deliver();
         public Task TaskChangedAsync(int taskId) => Deliver();
+        public Task AttachmentsChangedAsync(int taskId) => Deliver();
+        public Task WorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds) => Deliver();
         public Task AccessRevokedAsync(int taskId, int userId) => Deliver();
         private Task Deliver() => fail ? Task.FromException(new IOException("Delivery unavailable")) : Task.CompletedTask;
     }

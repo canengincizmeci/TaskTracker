@@ -12,5 +12,7 @@ public interface ITaskCollaborationService
     Task<IDataResult<TaskMessageDto>> SendMessageAsync(int taskId, int userId, string? content);
     Task PublishActivityAsync(TaskActivity activity);
     Task PublishTaskChangedAsync(int taskId);
+    Task PublishAttachmentsChangedAsync(int taskId);
+    Task PublishWorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds);
     Task RevokeAccessAsync(int taskId, int userId);
 }
