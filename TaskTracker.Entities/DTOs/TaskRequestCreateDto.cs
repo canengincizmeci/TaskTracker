@@ -15,5 +15,6 @@ namespace TaskTracker.Entities.DTOs
         public TaskPriority Priority { get; set; }
         public TaskStatus Status { get; set; }
         public DateOnly? DueDate { get; set; }
+        public int UtcOffsetMinutes { get; set; }
     }
 }

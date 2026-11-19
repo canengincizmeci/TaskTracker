@@ -17,6 +17,7 @@ namespace TaskTracker.Entities.DTOs
         public long Version { get; set; }
         public bool Activity { get; set; }
         public DateOnly? DueDate { get; set; }
+        public int UtcOffsetMinutes { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

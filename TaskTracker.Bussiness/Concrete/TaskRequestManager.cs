@@ -173,7 +173,7 @@ public class TaskRequestManager : ITaskRequestService
         if (!await _taskRequestDal.CanEditAsync(task.Id, currentUserId))
             return new ErrorResult(Messages.AuthorizationDenied);
         if (dto.DueDate.HasValue && dto.DueDate != task.DueDate &&
-            dto.DueDate.Value < DateOnly.FromDateTime(DateTime.UtcNow))
+            dto.DueDate.Value < TaskCalendar.LocalDay(DateTime.UtcNow, dto.UtcOffsetMinutes))
             return new ErrorResult("Due date must be today or later when changed.");
         if (task.Title == dto.Title && task.Description == dto.Description && task.Category == dto.Category &&
             task.Priority == dto.Priority && task.DueDate == dto.DueDate) return new SuccessResult(Messages.DataUpdated);
