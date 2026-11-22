@@ -25,10 +25,13 @@ function When({ value }: { value: string }) {
 export function SubTaskRevision({ item, files, download }: {
   item: SubTaskSubmission; files: TaskAttachment[]; download: (file: TaskAttachment) => Promise<void>;
 }) {
+  const revisionFiles = files.filter(file => file.subTaskSubmissionId === item.id);
   return <div className="wf-revision-body">
     <p className="st-muted">{item.submittedByUserName || "Assignee"} · <When value={item.createdAt} /></p>
-    <p className="wf-summary">{item.content}</p>
-    <AttachmentChips files={files.filter(file => file.subTaskSubmissionId === item.id)} download={download} />
+    {item.content && <p className="wf-summary">{item.content}</p>}
+    <AttachmentChips files={revisionFiles} download={download} />
+    {(item.deliveryFileCount ?? 0) > revisionFiles.length &&
+      <p className="st-muted">Loading delivery files…</p>}
     {item.review && <div className={`wf-verdict${item.review.decision === "Approved" ? " wf-verdict--approved" : ""}`}>
       <strong>{item.review.decision === "Approved" ? "Approved" : "Changes requested"}</strong>
       <span>{item.review.reviewerUserName || "Reviewer"} · <When value={item.review.createdAt} /></span>

@@ -43,6 +43,7 @@ export type SubTaskSubmission = {
   submittedByUserId: number;
   submittedByUserName: string | null;
   content: string;
+  deliveryFileCount?: number;
   createdAt: string;
   review: {
     id: number;

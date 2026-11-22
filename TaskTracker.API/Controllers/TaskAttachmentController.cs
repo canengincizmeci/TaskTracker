@@ -19,11 +19,12 @@ namespace TaskTracker.API.Controllers;
 public sealed partial class TaskAttachmentController(
     TaskTrackerDbContext db, ICurrentUserService currentUser, ITaskCollaborationService collaboration,
     ITaskFileStore store, ITaskFileScanner scanner, IOptions<TaskFileOptions> options, ISubTaskDal subTasks,
-    ILogger<TaskAttachmentController>? logger = null) : ControllerBase
+    ILogger<TaskAttachmentController>? logger = null, INotificationService? notifications = null) : ControllerBase
 {
     private bool ScannerConfigured => scanner is not NoOpTaskFileScanner &&
         (scanner is not ClamAvTaskFileScanner clamAv || clamAv.IsConfigured);
-    private bool SubTaskUploadsEnabled => options.Value.EnableSubTaskSubmissionUploads && ScannerConfigured;
+    private bool SubTaskUploadsEnabled => options.Value.EnableSubTaskSubmissionUploads &&
+        ScannerConfigured && SubTaskAttachmentLimit > 0 && SubTaskFileLimit > 0;
     private static readonly Dictionary<string, (string Mime, Func<byte[], bool> Signature)> Allowed =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -82,7 +83,12 @@ public sealed partial class TaskAttachmentController(
             await CanUploadSubTaskFileAsync(taskId, subTaskId, submissionId, userId, ct) ? submissionId : null;
         await transaction.CommitAsync(ct);
         return Ok(new SubTaskFilesDto(item.Version, SubTaskUploadsEnabled, uploadSubmissionId,
-            files.Select(x => Map(x, userId, ownerId: 0)).ToList()));
+            files.Select(x => Map(x, userId, ownerId: 0)).ToList())
+        {
+            MaxFiles = SubTaskAttachmentLimit,
+            MaxFileSizeBytes = Math.Max(0, SubTaskFileLimit),
+            MaxTotalBytes = SubTaskTotalLimit
+        });
     }
 
     [HttpPost("/api/TaskRequest/{taskId:int}/subtasks/{subTaskId:int}/submissions/{submissionId:int}/files")]
@@ -294,7 +300,7 @@ public sealed partial class TaskAttachmentController(
 
     private Task<bool> CanUploadSubTaskFileAsync(int taskId, int subTaskId, int submissionId, int userId, CancellationToken ct) =>
         db.SubTaskSubmissions.AnyAsync(x => x.Id == submissionId && x.TaskRequestId == taskId && x.SubTaskId == subTaskId &&
-            x.SubmittedByUserId == userId && x.SubTask.Activity && x.SubTask.Status == TaskStatus.InReview &&
+            x.SubmittedByUserId == userId && x.ClientRequestId == null && x.SubTask.Activity && x.SubTask.Status == TaskStatus.InReview &&
             x.SubTask.AssigneeUserId == userId && x.SubTask.TaskRequest.OwnerId != userId &&
             (x.SubTask.TaskRequest.Status == TaskStatus.Pending || x.SubTask.TaskRequest.Status == TaskStatus.InProgress) &&
             (x.SubTask.TaskRequest.WorkspaceId != null ? x.SubTask.TaskRequest.Workspace!.Members.Any(m => m.IsActive && m.UserId == userId)

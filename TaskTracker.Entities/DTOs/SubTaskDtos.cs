@@ -57,6 +57,7 @@ public sealed record SubTaskSubmissionDto(int Id, int RevisionNumber, int Submit
     DateTime CreatedAt, SubTaskReviewDto? Review)
 {
     public string? SubmittedByUserName { get; init; }
+    public int DeliveryFileCount { get; init; }
 }
 
 public sealed record SubTaskReviewDto(int Id, int ReviewerUserId, TaskReviewDecision Decision, string? Feedback,

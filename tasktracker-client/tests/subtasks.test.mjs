@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, afterEach, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { act, createElement as h, useCallback, useState } from "react";
@@ -7,6 +8,9 @@ import { HubConnectionBuilder } from "@microsoft/signalr";
 import { createServer } from "vite";
 
 const originalHubBuild = HubConnectionBuilder.prototype.build;
+const objectUrls = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+const revokedUrls = [];
+let nextPreviewUrl = 0;
 const apiBase = process.env.VITE_API_BASE_URL;
 const hubs = [];
 let vite, client, dom, createRoot, MemoryRouter, useLocation, TaskWorkspace, TaskCollaborationPanel, AuthContext, DashboardPage, root;
@@ -37,7 +41,8 @@ function mockApi({ children = [], revisions = {}, activity = {}, files = {}, ext
   const requests = [];
   client.defaults.adapter = async config => {
     const body = typeof config.data === "string" ? JSON.parse(config.data) : config.data;
-    const request = { method: config.method, url: config.url, body, params: config.params, signal: config.signal };
+    const request = { method: config.method, url: config.url, body, params: config.params, signal: config.signal,
+      onUploadProgress: config.onUploadProgress };
     requests.push(request);
     if (config.method !== "get") return { data: await mutate?.(request) };
     if (config.url === collection) {
@@ -71,6 +76,8 @@ before(async () => {
     globals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
     Object.defineProperty(globalThis, key, { configurable: true, value });
   }
+  URL.createObjectURL = () => `blob:subtask-preview-${++nextPreviewUrl}`;
+  URL.revokeObjectURL = value => revokedUrls.push(value);
   // Model the native dialog lifecycle and Escape's cancel event in the Node DOM.
   const dialog = dom.window.HTMLDialogElement.prototype;
   dialog.showModal = function () {
@@ -115,10 +122,13 @@ afterEach(async () => {
   root = undefined;
   document.body.replaceChildren();
   hubs.length = 0;
+  revokedUrls.length = 0;
 });
 
 after(async () => {
   await vite?.close();
+  URL.createObjectURL = objectUrls.create;
+  URL.revokeObjectURL = objectUrls.revoke;
   if (apiBase === undefined) delete process.env.VITE_API_BASE_URL;
   else process.env.VITE_API_BASE_URL = apiBase;
   HubConnectionBuilder.prototype.build = originalHubBuild;
@@ -293,18 +303,21 @@ test("delegated submission retains its draft across selection and a 409, then se
   await until(() => assert.equal(detail()?.querySelector("h3").textContent, "Other subtask"));
   await click(button("Check citations"));
   await until(() => assert.equal(field("Subtask work summary")?.value, "Draft linked to this subtask"));
-  await click(button("Submit subtask for review"));
-  await until(() => assert.equal(button("Submit subtask for review")?.disabled, false));
+  await click(button("Submit for review"));
+  await until(() => assert.equal(button("Submit for review")?.disabled, false));
   assert.match(detail().textContent, /The subtask changed.*Check the latest state/);
   assert.equal(writes(requests).length, 2);
   assert.equal(field("Subtask work summary").value, "Draft linked to this subtask");
-  await click(button("Submit subtask for review"));
+  await click(button("Submit for review"));
   await until(() => assert.match(detail().textContent, /Waiting for review/));
-  assert.doesNotMatch(detail().textContent, /Unsent subtask draft|Attach delivery file/);
-  assert.deepEqual(writes(requests).map(({ url, body }) => [url, body]), [
+  assert.doesNotMatch(detail().textContent, /Unsent subtask draft|Attach delivery file|Choose subtask delivery file|Upload delivery file/);
+  assert.deepEqual(writes(requests).map(({ url, body }) => [
+    url,
+    body instanceof FormData ? { version: body.get("version"), content: body.get("content") } : body,
+  ]), [
     [resource + "/start", { version: 3 }],
-    [resource + "/submissions", { version: 4, content: "Draft linked to this subtask" }],
-    [resource + "/submissions", { version: 5, content: "Draft linked to this subtask" }],
+    [resource + "/submissions/delivery", { version: "4", content: "Draft linked to this subtask" }],
+    [resource + "/submissions/delivery", { version: "5", content: "Draft linked to this subtask" }],
   ]);
 });
 
@@ -470,41 +483,95 @@ test("a missing or temporarily unavailable subtask list preserves parent access 
   assert.doesNotMatch(text(), /Check citations/);
 });
 
-test("an authorized assignee sees the active delivery, files, revisions, and inline reviews without owner forms", async () => {
-  const revision = { id: 201, revisionNumber: 2, content: "Updated references", submittedByUserId: 4,
-    submittedByUserName: "Editor", createdAt: "2026-11-19T10:00:00Z", review: null };
-  const children = [item({ status: "InReview", currentSubmissionId: revision.id, assigneeUserId: 4, capabilities: {} })];
-  const history = [revision];
-  const files = { [id]: { version: 3, uploadsEnabled: true, uploadSubmissionId: revision.id, files: [
+test("an authorized assignee selects multiple files with image previews before submitting, sees progress, and views revision files without post-submission upload forms", async () => {
+  const oldRevision = { id: 200, revisionNumber: 1, content: "Initial references", deliveryFileCount: 1, submittedByUserId: 4,
+    submittedByUserName: "Editor", createdAt: "2026-11-18T10:00:00Z",
+    review: { decision: "ChangesRequested", feedback: "Attach updated screenshot and notes", reviewerUserName: "Owner", createdAt: "2026-11-18T12:00:00Z" } };
+  const children = [item({ status: "InProgress", version: 3, currentSubmissionId: null, assigneeUserId: 4, capabilities: { canSubmit: true } })];
+  const history = [oldRevision];
+  const files = { [id]: { version: 3, uploadsEnabled: true, uploadSubmissionId: null, maxFiles: 4, maxFileSizeBytes: 20 * 1024 * 1024, maxTotalBytes: 40 * 1024 * 1024, files: [
     { id: 7, subTaskSubmissionId: 200, fileName: "old-revision.txt", sizeBytes: 10, canDelete: false },
   ] } };
-  const requests = mockApi({ children, revisions: { [id]: history }, files, mutate: ({ body }) => {
-    assert.equal(body.get("file").name, "current-revision.txt");
-    const next = { id: 8, subTaskSubmissionId: 201, fileName: "current-revision.txt", sizeBytes: 10, canDelete: false };
-    children[0] = { ...children[0], version: 4 };
-    files[id] = { ...files[id], version: 4, files: [...files[id].files, next] };
+  let finishDelivery;
+  const requests = mockApi({ children, revisions: { [id]: history }, files, mutate: async ({ body, onUploadProgress }) => {
+    onUploadProgress?.({ loaded: 5, total: 10 });
+    await new Promise(resolve => { finishDelivery = resolve; });
+    const uploadedFiles = body.getAll("files");
+    assert.deepEqual(uploadedFiles.map(file => file.name), ["diagram.png", "current-revision.txt"]);
+    const newRevision = { id: 201, revisionNumber: 2, content: body.get("content") ?? "", deliveryFileCount: 2,
+      submittedByUserId: 4, submittedByUserName: "Editor", createdAt: "2026-11-19T10:00:00Z", review: null };
+    history.unshift(newRevision);
+    const savedAttachments = [
+      { id: 8, subTaskSubmissionId: 201, fileName: "diagram.png", contentType: "image/png", sizeBytes: 16, canDelete: false },
+      { id: 9, subTaskSubmissionId: 201, fileName: "current-revision.txt", contentType: "text/plain", sizeBytes: 10, canDelete: false },
+    ];
+    children[0] = { ...children[0], status: "InReview", version: 4, currentSubmissionId: 201, capabilities: {} };
+    files[id] = { ...files[id], version: 4, files: [...files[id].files, ...savedAttachments] };
+    return children[0];
   } });
+
   await workspace({ isOwner: false, canManageResponsibility: false }, route + "?subtask=" + id, 4);
+  await until(() => assert.ok(field("Subtask work summary")));
+
+  const input = detail().querySelector('input[type="file"]');
+  assert.ok(input?.multiple, "Subtask submission composer supports selecting multiple files before submission");
+  const styles = document.createElement("style");
+  styles.textContent = ["task-collaboration", "task-workflow", "subtasks"].map(name =>
+    readFileSync(new URL(`../src/styles/${name}.css`, import.meta.url), "utf8")).join("\n");
+  detail().append(styles);
+  const attachmentLabel = input.labels[0];
+  const attachmentStyle = dom.window.getComputedStyle(attachmentLabel);
+  assert.equal(attachmentLabel.textContent, "Attach files");
+  assert.equal(attachmentStyle.display, "inline-flex");
+  assert.equal(attachmentStyle.alignItems, "center");
+  assert.equal(dom.window.getComputedStyle(field("Subtask work summary").labels[0]).display, "grid");
+  Object.defineProperty(input, "files", { configurable: true, value: [
+    new File(["discard"], "remove-me.txt"),
+    new File(["png-bytes"], "diagram.png", { type: "image/png" }),
+    new File(["Evidence"], "current-revision.txt"),
+  ] });
+  await act(async () => input.dispatchEvent(new dom.window.Event("change", { bubbles: true })));
+
+  const selectedList = detail().querySelector('[aria-label="Selected attachments"]');
+  assert.ok(selectedList, "Displays selected files list before submitting");
+  assert.match(selectedList.textContent, /remove-me\.txt.*diagram\.png.*current-revision\.txt/);
+  assert.ok(selectedList.querySelector("img.tc-selected-preview"), "Renders image preview for selected image file");
+
+  const removeButton = detail().querySelector('[aria-label="Remove remove-me.txt"]');
+  removeButton.focus();
+  await click(removeButton);
+  assert.doesNotMatch(selectedList.textContent, /remove-me\.txt/);
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Remove diagram.png");
+
+  await fill(field("Subtask work summary"), "Updated references with attachments");
+  await click(button("Submit for review"));
+  await until(() => assert.equal(detail().querySelector('.tc-upload-progress progress')?.value, 50));
+  assert.match(detail().textContent, /Uploading attachments… 50%/);
+
+  await act(async () => finishDelivery());
   const delivery = () => detail()?.querySelector('[aria-label="Latest subtask submission"]');
   await until(() => assert.match(delivery()?.textContent ?? "", /Awaiting review · Revision 2/));
-  assert.ok(!button("Approve subtask"));
-  assert.doesNotMatch(delivery().textContent, /old-revision.txt/);
-  const input = delivery().querySelector('input[type="file"]');
-  Object.defineProperty(input, "files", { configurable: true, value: [new File(["Evidence"], "current-revision.txt")] });
-  await act(async () => input.dispatchEvent(new dom.window.Event("change", { bubbles: true })));
-  await click(button("Upload delivery file"));
-  await act(async () => hubs[0].handlers.get("TaskChanged")(taskId));
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 100)); });
-  await until(() => assert.match(delivery().textContent, /current-revision.txt/));
-  assert.equal(reads(requests, resource + "/submission-files").length, 2, "initial load + one refresh after upload and SignalR echo");
-  assert.ok(reads(requests, resource + "/submission-files").every(request => !request.signal?.aborted));
-  assert.deepEqual(writes(requests).map(({ url, params }) => [url, params]), [
-    [resource + "/submissions/201/files", { version: 3 }],
-  ]);
-  history[0] = { ...revision, review: { decision: "ChangesRequested", feedback: "Add a source",
-    reviewerUserName: "Owner", createdAt: revision.createdAt } };
+  assert.match(delivery().textContent, /diagram\.png.*current-revision\.txt/);
+  assert.doesNotMatch(delivery().textContent, /old-revision\.txt/);
+  assert.ok(!button("Upload delivery file"), "Post-submission upload button is removed");
+  assert.doesNotMatch(detail().textContent, /Choose subtask delivery file|Upload delivery file/);
+  assert.ok(!delivery().querySelector('input[type="file"]'), "No file picker in post-submission InReview section");
+
+  // Submission history displays each revision's own attached files directly alongside that revision
+  const historyEntries = [...detail().querySelectorAll(".wf-history-entry")];
+  assert.equal(historyEntries.length, 2);
+  assert.match(historyEntries[0].textContent, /Revision 2.*diagram\.png.*current-revision\.txt/);
+  assert.doesNotMatch(historyEntries[0].textContent, /old-revision\.txt/);
+  assert.match(historyEntries[1].textContent, /Revision 1.*old-revision\.txt/);
+  assert.doesNotMatch(historyEntries[1].textContent, /current-revision\.txt/);
+
+  assert.equal(writes(requests).length, 1);
+  assert.equal(writes(requests)[0].url, resource + "/submissions/delivery");
+
+  history[0] = { ...history[0], review: { decision: "ChangesRequested", feedback: "Add a source",
+    reviewerUserName: "Owner", createdAt: history[0].createdAt } };
   children[0] = { ...children[0], status: "InProgress", version: 5, currentSubmissionId: null };
-  files[id] = { ...files[id], version: 5, uploadSubmissionId: null };
+  files[id] = { ...files[id], version: 5 };
   await act(async () => hubs[0].handlers.get("TaskChanged")(taskId));
   await until(() => assert.match(delivery().textContent, /Changes requested · Revision 2.*Add a source/));
   history[0] = { ...history[0], review: { ...history[0].review, decision: "Approved", feedback: "Verified" } };
@@ -512,6 +579,59 @@ test("an authorized assignee sees the active delivery, files, revisions, and inl
   files[id] = { ...files[id], version: 6 };
   await act(async () => hubs[0].handlers.get("TaskChanged")(taskId));
   await until(() => assert.match(delivery().textContent, /Approved revision 2.*Verified/));
+});
+
+test("subtask submission supports file-only deliveries, preserves draft on scanner error, and reuses clientRequestId on network retry", async () => {
+  const children = [item({ status: "InProgress", version: 3, assigneeUserId: 4, capabilities: { canSubmit: true } })];
+  const history = [];
+  const files = { [id]: { version: 3, uploadsEnabled: true, uploadSubmissionId: null, maxFiles: 3, maxFileSizeBytes: 20 * 1024 * 1024, maxTotalBytes: 40 * 1024 * 1024, files: [] } };
+  let attempt = 0;
+  const requests = mockApi({ children, revisions: { [id]: history }, files, mutate: ({ body }) => {
+    attempt++;
+    if (attempt === 1) {
+      throw { isAxiosError: true, response: { status: 503, data: { code: "file_scan_unavailable", message: "File scanning is unavailable. Try again later." } } };
+    }
+    if (attempt === 2) {
+      throw { isAxiosError: true, response: { status: 500, data: {} } };
+    }
+    const revision = { id: 301, revisionNumber: 1, content: "", deliveryFileCount: 1,
+      submittedByUserId: 4, submittedByUserName: "Editor", createdAt: "2026-11-22T10:00:00Z", review: null };
+    history.unshift(revision);
+    files[id] = { ...files[id], version: 4, files: [
+      { id: 19, subTaskSubmissionId: 301, fileName: body.getAll("files")[0].name, contentType: "text/plain", sizeBytes: 8, canDelete: false },
+    ] };
+    children[0] = { ...children[0], status: "InReview", version: 4, currentSubmissionId: 301, capabilities: {} };
+    return children[0];
+  } });
+
+  await workspace({ isOwner: false, canManageResponsibility: false }, route + "?subtask=" + id, 4);
+  await until(() => assert.ok(field("Subtask work summary")));
+  assert.equal(button("Submit for review").disabled, true, "Cannot submit when both message and files are empty");
+
+  const input = detail().querySelector('input[type="file"]');
+  Object.defineProperty(input, "files", { configurable: true, value: [new File(["fileonly"], "only-file.txt")] });
+  await act(async () => input.dispatchEvent(new dom.window.Event("change", { bubbles: true })));
+  assert.equal(button("Submit for review").disabled, false, "File-only submission is enabled without message text");
+
+  // 1. Scanner 503 error surfaces message and preserves selected file without marking InReview.
+  await click(button("Submit for review"));
+  await until(() => assert.match(detail().textContent, /File scanning is unavailable/));
+  assert.ok(detail().querySelector('[aria-label="Remove only-file.txt"]'), "Selected file is preserved after scanner error");
+
+  // 2. Network/500 failure preserves selected file and retains clientRequestId for idempotent retry.
+  await click(button("Submit for review"));
+  await until(() => assert.match(detail().textContent, /Delivery could not be confirmed/));
+  assert.ok(detail().querySelector('[aria-label="Remove only-file.txt"]'));
+
+  // 3. Retrying reuses the exact same clientRequestId from attempt 2 and completes the file-only delivery.
+  await click(button("Submit for review"));
+  await until(() => assert.match(detail().textContent, /Awaiting review · Revision 1/));
+  assert.match(detail().textContent, /only-file\.txt/);
+
+  const deliveries = writes(requests);
+  assert.equal(deliveries.length, 3);
+  assert.equal(deliveries[1].body.get("clientRequestId"), deliveries[2].body.get("clientRequestId"));
+  assert.equal(deliveries[2].body.get("content"), null);
 });
 
 test("request changes with a SignalR echo and duplicate TaskChanged events avoid duplicate detail fetches while rapid switching aborts stale detail loads", async () => {

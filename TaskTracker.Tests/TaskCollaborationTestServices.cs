@@ -78,4 +78,7 @@ internal static class TaskCollaborationTestServices
         ITaskCollaborationService? collaboration = null) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId), collaboration ?? Create(context),
             NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer(), new EfSubTaskDal(context));
+
+    public static TaskMlDatasetManager MlDatasets(TaskTrackerDbContext context) =>
+        new(new EfTaskMlDatasetDal(context), new EfWorkspaceDal(context));
 }

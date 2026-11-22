@@ -1,19 +1,31 @@
-import { useId, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { isAxiosError } from "axios";
+import { errorMessage } from "../api/errorMessage";
 import { assignSubTask, deleteSubTask, downloadSubTaskFile, reviewSubTask, submitSubTask, subTaskAction,
-  updateSubTask, uploadSubTaskFile } from "../api/subTaskService";
+  updateSubTask } from "../api/subTaskService";
 import { subTaskMutationError, subTaskResponseStatus, useSubTaskDetails } from "../hooks/useSubTasks";
 import type { SubTask, SubTaskFields } from "../types/subTask";
 import type { Task } from "../types/task";
 import type { TaskAttachment } from "../types/taskAttachment";
+import type { DiscussionAttachmentSettings } from "../types/taskCollaboration";
 import { taskStatusLabel } from "../utils/taskDisplay";
 import { SubTaskAssigneeDialog, SubTaskConfirmation, SubTaskFieldsDialog, type SubTaskDialogState } from "./SubTaskDialogs";
 import SubTaskHistory, { SubTaskRevision } from "./SubTaskHistory";
-import { FilePicker } from "./TaskFileControls";
+import { DiscussionFilePicker, type SelectedDiscussionFile } from "./TaskFileControls";
 
 const dialogCapability = {
   edit: "canEdit", assign: "canAssign", delete: "canDelete", cancel: "canCancel", approve: "canReview",
 } as const;
 type Dialog = keyof typeof dialogCapability;
+
+function newDeliveryId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const id = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
 
 export function SubTaskMetadata({ item }: { item: SubTask }) {
   return <div className="st-meta">
@@ -26,20 +38,23 @@ export function SubTaskMetadata({ item }: { item: SubTask }) {
 }
 
 export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRevision, parentLocked, active, disabled: parentBusy,
-  draft, setDraft, feedbackFor, saveFeedback, reload, refreshParent, onClose, onDeleted }: {
+  draft, setDraft, selectedFiles, setSelectedFiles, feedbackFor, saveFeedback, reload, refreshParent, onClose, onDeleted }: {
   task: Task; id: number; panelId: string; refreshKey: string; rosterRevision: number; parentLocked: boolean; disabled: boolean;
   active: boolean; draft: string; setDraft: (value: string) => void;
+  selectedFiles: SelectedDiscussionFile[]; setSelectedFiles: (value: SelectedDiscussionFile[]) => void;
   feedbackFor: (submissionId: number) => string; saveFeedback: (submissionId: number, value: string) => void;
   reload: () => void; refreshParent: () => Promise<unknown>;
   onClose: () => void; onDeleted: () => void;
 }) {
   const details = useSubTaskDetails(task.id, id, refreshKey, reload);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number>();
+  const [retryId, setRetryId] = useState<string>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [dialog, setDialog] = useState<{ mode: Dialog; item: SubTask; invalidated?: boolean }>();
-  const [fileDraft, setFileDraft] = useState<{ submissionId: number; file: File }>();
   const doing = useRef(false);
+  const sending = useRef<AbortController | null>(null);
   const focused = useRef(false);
   const opener = useRef<HTMLElement>(null);
   const article = useRef<HTMLElement>(null);
@@ -54,8 +69,16 @@ export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRev
   const message = current ? feedbackFor(current.id) : "";
   const files = details.data?.files;
   const evidenceCurrent = files?.version === item?.version;
-  const file = fileDraft && fileDraft.submissionId === current?.id ? fileDraft.file : null;
   const download = (attachment: TaskAttachment) => item ? downloadSubTaskFile(item, attachment) : Promise.resolve();
+  const uploadSettings: DiscussionAttachmentSettings = {
+    uploadsEnabled: Boolean(files?.uploadsEnabled),
+    maxFiles: files?.maxFiles ?? 5,
+    maxFileSizeBytes: files?.maxFileSizeBytes ?? 20 * 1024 * 1024,
+    maxTotalBytes: files?.maxTotalBytes ?? 40 * 1024 * 1024,
+  };
+  const canSubmitDelivery = Boolean(capabilities?.canSubmit) &&
+    Boolean(draft.trim() || selectedFiles.length > 0) &&
+    (selectedFiles.length === 0 || uploadSettings.uploadsEnabled || Boolean(retryId));
 
   useLayoutEffect(() => {
     if (active && item && !focused.current) {
@@ -63,6 +86,8 @@ export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRev
       focused.current = true;
     }
   }, [active, item]);
+
+  useEffect(() => () => sending.current?.abort(), []);
 
   function openDialog(mode: Dialog, event: MouseEvent<HTMLButtonElement>) {
     if (!item || disabled || !capabilities?.[dialogCapability[mode]]) return;
@@ -91,6 +116,60 @@ export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRev
       }
     } finally {
       doing.current = false; setBusy(false);
+    }
+  }
+
+  async function submitDelivery(event: FormEvent) {
+    event.preventDefault();
+    if (disabled || doing.current || !item || !canSubmitDelivery) return;
+    const deliveryId = retryId ?? newDeliveryId();
+    const request = new AbortController();
+    sending.current = request;
+    doing.current = true;
+    setBusy(true); setProgress(undefined); setError(""); setNotice("");
+    try {
+      await submitSubTask(item, deliveryId, draft.trim(), selectedFiles.map(entry => entry.file), request.signal, percent => {
+        if (!request.signal.aborted) setProgress(percent);
+      });
+      if (request.signal.aborted) return;
+      const hadFiles = selectedFiles.length > 0;
+      setDraft("");
+      setSelectedFiles([]);
+      setRetryId(undefined);
+      setNotice(hadFiles ? "Subtask delivery and attachments submitted." : "Subtask work submitted.");
+      reload();
+      if (article.current?.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
+    } catch (failure) {
+      if (request.signal.aborted) return;
+      const response = isAxiosError<{ code?: string; message?: string }>(failure) ? failure.response : undefined;
+      const status = response?.status;
+      const code = response?.data?.code;
+      const knownUnavailable = code === "subtask_upload_unavailable" || code === "file_scan_unavailable";
+      if (!response || (status != null && status >= 500 && !knownUnavailable)) {
+        setRetryId(deliveryId);
+        setError("Delivery could not be confirmed. Submit for review again to recover it without submitting twice.");
+        reload();
+        details.reload();
+        void refreshParent().catch(() => undefined);
+      } else if (status === 413) {
+        setError(errorMessage(failure, "The attachments exceed the upload size limit."));
+      } else if (status === 400 || status === 503) {
+        setError(errorMessage(failure, "Could not submit the subtask delivery."));
+      } else {
+        setRetryId(undefined);
+        setError(code === "delivery_conflict"
+          ? errorMessage(failure, "This delivery identifier was already used for a different submission.")
+          : subTaskMutationError(failure));
+        if (status === 409 || status === 403 || status === 404) {
+          reload();
+          details.reload();
+          void refreshParent().catch(() => undefined);
+        }
+      }
+    } finally {
+      if (sending.current === request) sending.current = null;
+      doing.current = false;
+      if (!request.signal.aborted) { setBusy(false); setProgress(undefined); }
     }
   }
 
@@ -137,17 +216,32 @@ export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRev
         {capabilities.canDelete && <button type="button" className="tw-control" disabled={disabled}
           onClick={event => openDialog("delete", event)}>Delete subtask</button>}
       </div>}
-      {capabilities?.canSubmit && <form className="wf-form st-delivery" onSubmit={event => {
-        event.preventDefault();
-        if (draft.trim()) void perform(() => submitSubTask(item, draft.trim()), "Subtask work submitted.", () => setDraft(""));
-      }}>
-        <label>Subtask work summary<textarea rows={4} maxLength={10000} disabled={disabled} required
-          value={draft} onChange={event => setDraft(event.target.value)} /></label>
-        <div className="st-actions"><button type="submit" className="tw-control tw-control--primary"
-          disabled={disabled || !draft.trim()}>Submit subtask for review</button></div>
+      {capabilities?.canSubmit && <form className="wf-form st-delivery" onSubmit={submitDelivery}>
+        <label>Subtask work summary<textarea rows={4} maxLength={10000} disabled={disabled}
+          placeholder="Describe what you completed or attach delivery files…"
+          value={draft} onChange={event => { setDraft(event.target.value); setRetryId(undefined); setError(""); setNotice(""); }} /></label>
+        <div className="tc-composer-tools">
+          <div className="tc-discussion-picker">
+            {(uploadSettings.uploadsEnabled || selectedFiles.length > 0) && <DiscussionFilePicker
+              files={selectedFiles}
+              settings={uploadSettings}
+              disabled={disabled}
+              onChange={next => { setSelectedFiles(next); setRetryId(undefined); setError(""); setNotice(""); }} />}
+            {files && !uploadSettings.uploadsEnabled && <p className="st-muted">Subtask delivery file uploads are unavailable.</p>}
+          </div>
+          <div className="st-actions"><button type="submit" className="tw-control tw-control--primary"
+            disabled={disabled || !canSubmitDelivery}>{busy ? "Submitting…" : "Submit for review"}</button></div>
+        </div>
+        {busy && selectedFiles.length > 0 && <div className="tc-upload-progress">
+          <progress value={progress} max={100} aria-label="Attachment upload progress" />
+          <span role="status">{progress === 100 ? "Checking files and saving submission…" :
+            progress == null ? "Uploading attachments…" : `Uploading attachments… ${progress}%`}</span>
+        </div>}
       </form>}
-      {draft && !capabilities?.canSubmit && <details className="st-draft">
-        <summary>Unsent subtask draft</summary><p className="st-description">{draft}</p>
+      {(draft || selectedFiles.length > 0) && !capabilities?.canSubmit && <details className="st-draft">
+        <summary>Unsent subtask draft</summary>
+        {draft && <p className="st-description">{draft}</p>}
+        {selectedFiles.length > 0 && <p className="st-muted">{selectedFiles.map(entry => entry.file.name).join(", ")}</p>}
       </details>}
       {capabilities?.canReview && !current && !details.loading && <p className="tw-notice" role="status">
         The current revision could not be confirmed.
@@ -156,17 +250,6 @@ export default function SubTaskDetail({ task, id, panelId, refreshKey, rosterRev
         <h4>{current ? capabilities?.canReview ? "Review revision" : "Awaiting review · Revision" :
           visibleRevision.review?.decision === "Approved" ? "Approved revision" : "Changes requested · Revision"} {visibleRevision.revisionNumber}</h4>
         <SubTaskRevision item={visibleRevision} files={files?.files ?? []} download={download} />
-        {current && !files?.uploadsEnabled && <p className="st-muted">Subtask delivery file uploads are unavailable.</p>}
-        {!parentLocked && current && files?.uploadSubmissionId === current.id && <form className="wf-form" onSubmit={event => {
-          event.preventDefault();
-          if (file && evidenceCurrent) void perform(() => uploadSubTaskFile(item, current.id, file),
-            "Delivery file saved.", () => setFileDraft(undefined));
-        }}>
-          <FilePicker file={file} label="Choose subtask delivery file" disabled={disabled || !evidenceCurrent}
-            onChange={next => setFileDraft(next ? { submissionId: current.id, file: next } : undefined)} />
-          <div className="st-actions"><button type="submit" className="tw-control" disabled={disabled || !evidenceCurrent || !file}>
-            Upload delivery file</button></div>
-        </form>}
         {capabilities?.canReview && !evidenceCurrent && !details.loading && <p className="tw-notice" role="status">
           The delivery files changed. <button type="button" className="tw-inline-action" onClick={() => { reload(); details.reload(); }}>Reload revision</button></p>}
         {capabilities?.canReview && current && <form className="wf-form" onSubmit={event => {

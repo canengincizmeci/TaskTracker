@@ -7,6 +7,7 @@ import type { Task } from "../types/task";
 import { parentAllowsSubTaskChanges } from "../utils/subTaskWorkflow";
 import SubTaskDetail, { SubTaskMetadata } from "./SubTaskDetail";
 import { SubTaskFieldsDialog } from "./SubTaskDialogs";
+import type { SelectedDiscussionFile } from "./TaskFileControls";
 import "../styles/subtasks.css";
 
 export default function SubTasksSection({ task, list, active, disabled, rosterRevision, openCount, refreshParent }: {
@@ -28,6 +29,7 @@ export default function SubTasksSection({ task, list, active, disabled, rosterRe
   const [createError, setCreateError] = useState("");
   const [notice, setNotice] = useState("");
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [fileDrafts, setFileDrafts] = useState<Record<number, SelectedDiscussionFile[]>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const parentLocked = !parentAllowsSubTaskChanges(task.status);
   const canCreate = task.canManageResponsibility && !parentLocked;
@@ -119,6 +121,8 @@ export default function SubTasksSection({ task, list, active, disabled, rosterRe
       parentLocked={parentLocked} disabled={disabled || list.loading || Boolean(list.error)}
       reload={list.reload} refreshParent={refreshParent} draft={drafts[selectedId] ?? ""}
       setDraft={value => setDrafts(current => ({ ...current, [selectedId]: value }))}
+      selectedFiles={fileDrafts[selectedId] ?? []}
+      setSelectedFiles={value => setFileDrafts(current => ({ ...current, [selectedId]: value }))}
       feedbackFor={revision => feedback[`${selectedId}:${revision}`] ?? ""}
       saveFeedback={(revision, value) => setFeedback(current => ({ ...current, [`${selectedId}:${revision}`]: value }))}
       onClose={() => { restore.current = selectedId; select(null); }}

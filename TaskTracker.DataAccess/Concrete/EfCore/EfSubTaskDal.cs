@@ -126,7 +126,10 @@ public class EfSubTaskDal(TaskTrackerDbContext context) : ISubTaskDal
              submission.Content, submission.CreatedAt, review == null ? null :
                  new SubTaskReviewDto(review.Id, review.ReviewerUserId, review.Decision, review.Feedback, review.CreatedAt)
                  { ReviewerUserName = review.ReviewerUser.UserName })
-         { SubmittedByUserName = submission.SubmittedByUser.UserName })
+         {
+             SubmittedByUserName = submission.SubmittedByUser.UserName,
+             DeliveryFileCount = submission.DeliveryFileCount
+         })
         .ToListAsync(ct);
 
     public Task<List<SubTaskActivityDto>> GetActivitiesAsync(int taskId, int subTaskId, CancellationToken ct = default) => context.SubTaskActivities

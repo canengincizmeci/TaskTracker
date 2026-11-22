@@ -24,7 +24,8 @@ internal static class SubTaskCheckSql
             table.HasCheckConstraint("CK_SubTasks_Description", NonBlank(nameof(SubTask.Description)));
         });
         builder.Entity<SubTaskSubmission>().ToTable(table =>
-            table.HasCheckConstraint("CK_SubTaskSubmissions_Content", NonBlank(nameof(SubTaskSubmission.Content))));
+            table.HasCheckConstraint("CK_SubTaskSubmissions_Content",
+                $"({NonBlank(nameof(SubTaskSubmission.Content))} OR (\"Content\" = '' AND \"DeliveryFileCount\" > 0)) AND length(\"Content\") <= {SubTaskSubmission.MaxContentLength}"));
         builder.Entity<SubTaskSubmissionReview>().ToTable(table =>
             table.HasCheckConstraint("CK_SubTaskSubmissionReviews_Feedback",
                 "\"Decision\" <> 'ChangesRequested' OR (\"Feedback\" IS NOT NULL AND " +

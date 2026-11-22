@@ -59,6 +59,8 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
+        await _unitOfWork.GetRepository<TaskPlanningSnapshot>().AddAsync(
+            CreatePlanningSnapshot(task, dto.UtcOffsetMinutes, now));
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated,
             createdAt: now);
         await _unitOfWork.SaveChangesAsync();
@@ -94,6 +96,8 @@ public class TaskRequestManager : ITaskRequestService
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
+        await _unitOfWork.GetRepository<TaskPlanningSnapshot>().AddAsync(
+            CreatePlanningSnapshot(task, dto.UtcOffsetMinutes, now));
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskCreated,
             createdAt: now);
         TaskActivity? assignmentActivity = null;
@@ -197,7 +201,8 @@ public class TaskRequestManager : ITaskRequestService
         task.Priority = dto.Priority; task.DueDate = dto.DueDate;
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, revisionNumber, currentUserId, changedAt));
-        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated);
+        var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.TaskDetailsUpdated,
+            createdAt: changedAt);
         return await SaveTaskChange(task, activity, Messages.DataUpdated);
     }
 
@@ -380,16 +385,18 @@ public class TaskRequestManager : ITaskRequestService
         if (string.IsNullOrWhiteSpace(content) || content.Length > TaskSubmission.MaxContentLength)
             return new ErrorDataResult<TaskSubmissionDto>("Submission must contain 1–10000 characters of nonblank text.");
 
+        var submittedAt = DateTime.UtcNow;
         var submission = new TaskSubmission
         {
             TaskRequestId = task.Id, TaskRequest = task, SubmittedByUserId = currentUserId,
             SubmittedByUser = task.Assignee!, RevisionNumber = await _taskRequestDal.GetLatestRevisionNumberAsync(task.Id) + 1,
-            Content = content, CreatedAt = DateTime.UtcNow
+            Content = content, CreatedAt = submittedAt
         };
         await _unitOfWork.GetRepository<TaskSubmission>().AddAsync(submission);
         task.Status = TaskStatus.InReview;
         var activity = await _activityWriter.WriteAsync(task, currentUserId, TaskActivityType.SubmissionCreated,
-            fromStatus: TaskStatus.InProgress, toStatus: TaskStatus.InReview, submission: submission);
+            fromStatus: TaskStatus.InProgress, toStatus: TaskStatus.InReview, submission: submission,
+            createdAt: submittedAt);
         try { await _unitOfWork.SaveChangesAsync(); }
         catch (DbUpdateConcurrencyException) { return new ConflictDataResult<TaskSubmissionDto>(ConcurrentChange); }
         catch (DbUpdateException ex) when (IsUniqueConflict(ex))
@@ -446,10 +453,11 @@ public class TaskRequestManager : ITaskRequestService
             return new ConflictDataResult<TaskSubmissionReviewDto>(
                 "Resolve all active subtasks before completing the parent task.");
 
+        var reviewedAt = DateTime.UtcNow;
         var review = new TaskSubmissionReview
         {
             TaskSubmissionId = latest.Id, TaskSubmission = latest, ReviewerUserId = currentUserId,
-            ReviewerUser = task.Owner, Decision = dto.Decision, Feedback = feedback, CreatedAt = DateTime.UtcNow
+            ReviewerUser = task.Owner, Decision = dto.Decision, Feedback = feedback, CreatedAt = reviewedAt
         };
         await _unitOfWork.GetRepository<TaskSubmissionReview>().AddAsync(review);
         var from = task.Status;
@@ -457,7 +465,7 @@ public class TaskRequestManager : ITaskRequestService
         var type = approving
             ? TaskActivityType.SubmissionApproved : TaskActivityType.ChangesRequested;
         var activity = await _activityWriter.WriteAsync(task, currentUserId, type, fromStatus: from,
-            toStatus: task.Status, submission: latest, review: review);
+            toStatus: task.Status, submission: latest, review: review, createdAt: reviewedAt);
         try
         {
             await _unitOfWork.SaveChangesAsync();
@@ -634,6 +642,43 @@ public class TaskRequestManager : ITaskRequestService
         Priority = task.Priority,
         DueDate = task.DueDate
     };
+
+    private static TaskPlanningSnapshot CreatePlanningSnapshot(TaskRequest task, int utcOffsetMinutes,
+        DateTime createdAtUtc)
+    {
+        DateTime? originalDueAtUtc = task.DueDate.HasValue
+            ? TaskPlanningSnapshot.ComputeOriginalDueAtUtc(task.DueDate.Value, utcOffsetMinutes)
+            : null;
+        int? plannedCalendarDays = task.DueDate.HasValue
+            ? task.DueDate.Value.DayNumber - TaskCalendar.LocalDay(createdAtUtc, utcOffsetMinutes).DayNumber
+            : null;
+        long? plannedDurationSeconds = originalDueAtUtc.HasValue
+            ? (long)Math.Round((originalDueAtUtc.Value - createdAtUtc).TotalSeconds, MidpointRounding.AwayFromZero)
+            : null;
+        var assignmentState = !task.AssigneeUserId.HasValue
+            ? TaskInitialAssignmentState.Unassigned
+            : task.AssigneeUserId.Value == task.OwnerId
+                ? TaskInitialAssignmentState.SelfAssigned
+                : TaskInitialAssignmentState.Delegated;
+
+        return new TaskPlanningSnapshot
+        {
+            TaskRequest = task,
+            SchemaVersion = TaskPlanningSnapshot.CurrentSchemaVersion,
+            CreatedAtUtc = createdAtUtc,
+            InitialUtcOffsetMinutes = utcOffsetMinutes,
+            InitialPriority = task.Priority,
+            InitialDueDate = task.DueDate,
+            OriginalDueAtUtc = originalDueAtUtc,
+            InitialPlannedCalendarDays = plannedCalendarDays,
+            InitialPlannedDurationSeconds = plannedDurationSeconds,
+            InitialAssignmentState = assignmentState,
+            IsWorkspaceTask = task.WorkspaceId.HasValue,
+            InitialVisibility = task.Visibility,
+            InitialTitleLength = task.Title.Length,
+            InitialDescriptionLength = task.Description.Length
+        };
+    }
 
     private static bool IsUniqueConflict(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } ||
