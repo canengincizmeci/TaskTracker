@@ -108,6 +108,13 @@ namespace TaskTracker.API.Controllers
             return Ok(result);
         }
 
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout([FromBody] RefreshTokenDto dto)
+        {
+            await _authService.LogoutAsync(dto);
+            return NoContent();
+        }
+
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {

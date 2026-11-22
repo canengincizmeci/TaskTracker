@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.OpenApi;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -97,6 +98,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 }
 
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var db = context.HttpContext.RequestServices.GetRequiredService<TaskTrackerDbContext>();
+                if (!await SessionValidation.IsActiveAsync(db, context.Principal, context.HttpContext.RequestAborted))
+                    context.Fail("The session is no longer active.");
             }
         };
     });
@@ -110,7 +117,9 @@ builder.Services
 builder.Services.AddDbContext<TaskTrackerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
-builder.Services.AddSignalR();
+builder.Services.AddSingleton<SessionHubFilter>();
+builder.Services.AddHostedService(services => services.GetRequiredService<SessionHubFilter>());
+builder.Services.AddSignalR(options => options.AddFilter<SessionHubFilter>());
 builder.Services.AddAuthRateLimits();
 builder.Services.AddHealthChecks();
 
@@ -155,7 +164,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<NotificationHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<TaskCollaborationHub>("/hubs/task-workspace", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHealthChecks("/health");
 

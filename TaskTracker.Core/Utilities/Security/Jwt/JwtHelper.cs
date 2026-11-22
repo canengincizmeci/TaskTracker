@@ -2,6 +2,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
+using System.Globalization;
 using TaskTracker.Core.Extensions;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Security.Encryption;
@@ -21,7 +22,10 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             _accessTokenExpiration = DateTime.UtcNow.AddMinutes(_tokenOptions.AccessTokenExpiration);
         }
 
-        public AccessToken CreateToken(User user, List<OperationClaim> operationClaims)
+        public const string SessionIdClaim = "session_id";
+        public const string SessionVersionClaim = "session_version";
+
+        public AccessToken CreateToken(User user, List<OperationClaim> operationClaims, Guid sessionId)
         {
             var accessTokenExpiration =
                 DateTime.UtcNow.AddMinutes(_tokenOptions.AccessTokenExpiration);
@@ -34,7 +38,8 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
                 user,
                 signingCredentials,
                 operationClaims,
-                accessTokenExpiration
+                accessTokenExpiration,
+                sessionId
             );
 
             var token = new JwtSecurityTokenHandler().WriteToken(jwt);
@@ -51,7 +56,9 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             };
         }
 
-        public JwtSecurityToken CreateJwtSecurityToken(TokenOptions tokenOptions, User user, SigningCredentials signingCredentials, List<OperationClaim> operationClaims, DateTime accessTokenExpiration)
+        private JwtSecurityToken CreateJwtSecurityToken(TokenOptions tokenOptions, User user,
+            SigningCredentials signingCredentials, List<OperationClaim> operationClaims,
+            DateTime accessTokenExpiration, Guid sessionId)
         {
             var jwt = new JwtSecurityToken(
                 issuer: tokenOptions.Issuer,
@@ -60,28 +67,31 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
                 //notBefore: DateTime.Now,
                 expires: accessTokenExpiration,
                 notBefore: DateTime.UtcNow,
-                claims: SetClaims(user, operationClaims),
+                claims: SetClaims(user, operationClaims, sessionId),
                 signingCredentials: signingCredentials
             );
             return jwt;
         }
 
-        private IEnumerable<Claim> SetClaims(User user, List<OperationClaim> operationClaims)
+        private IEnumerable<Claim> SetClaims(User user, List<OperationClaim> operationClaims, Guid sessionId)
         {
             var claims = new List<Claim>();
             claims.AddNameIdentifier(user.Id.ToString());
             claims.AddEmail(user.Email);
             claims.AddName($"{user.FirstName} {user.LastName}");
             claims.AddRoles(operationClaims.Select(c => c.Name).ToArray());
+            claims.Add(new Claim(SessionIdClaim, sessionId.ToString("D")));
+            claims.Add(new Claim(SessionVersionClaim, user.SessionVersion.ToString(CultureInfo.InvariantCulture)));
 
             return claims;
         }
 
-        public RefreshToken CreateRefreshToken(int userId)
+        public RefreshToken CreateRefreshToken(int userId, Guid sessionId)
         {
             return new RefreshToken
             {
                 UserId = userId,
+                SessionId = sessionId,
                 Token = Guid.NewGuid().ToString(),
                 Expires = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenExpirationDays),
                 CreatedAt = DateTime.UtcNow,

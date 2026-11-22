@@ -49,21 +49,6 @@ namespace TaskTracker.Bussiness.Concrete
             _identityNormalizer = identityNormalizer;
         }
 
-        public async Task<IDataResult<AccessToken>> CreateAccessTokenAsync(User user)
-        {
-            var userOperationClaimRepo = _unitOfWork.GetRepository<UserOperationClaim>();
-
-            var userOperationClaims = await userOperationClaimRepo
-                .GetAllAsync(u => u.UserId == user.Id);
-
-            var claims = userOperationClaims
-                .Select(uoc => uoc.OperationClaim)
-                .ToList();
-
-            var accessToken = _tokenHelper.CreateToken(user, claims);
-            return new SuccessDataResult<AccessToken>(accessToken, Messages.AccessTokenCreated);
-        }
-
         public async Task<IDataResult<LoginResponseDto>> LoginAsync(UserForLoginDto dto)
         {
             var userRepo = _unitOfWork.GetRepository<User>();
@@ -80,10 +65,25 @@ namespace TaskTracker.Bussiness.Concrete
 
             if (!user.IsVerified)
                 return new ErrorDataResult<LoginResponseDto>(Messages.EmailNotVerified);
+
+            var verifiedHash = user.PasswordHash;
+            var verifiedSessionVersion = user.SessionVersion;
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(user.Id);
+            if (transaction is not null)
+            {
+                await userRepo.ReloadAsync(user);
+                if (!user.Status || user.SessionVersion != verifiedSessionVersion ||
+                    !user.PasswordHash.AsSpan().SequenceEqual(verifiedHash))
+                    return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
+                if (!user.IsVerified)
+                    return new ErrorDataResult<LoginResponseDto>(Messages.EmailNotVerified);
+            }
+
             var claims = await GetUserClaimsAsync(user.Id);
 
-            var accessToken = _tokenHelper.CreateToken(user, claims);
-            var refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
+            var sessionId = Guid.NewGuid();
+            var accessToken = _tokenHelper.CreateToken(user, claims, sessionId);
+            var refreshToken = _tokenHelper.CreateRefreshToken(user.Id, sessionId);
 
             if (verificationOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
                 ApplyNewPasswordHash(user, dto.Password);
@@ -100,14 +100,14 @@ namespace TaskTracker.Bussiness.Concrete
                 await userRepo.ReloadAsync(user);
 
                 var currentOutcome = _passwordHashService.Verify(user, dto.Password);
-                if (currentOutcome == PasswordVerificationOutcome.Failed)
+                if (currentOutcome == PasswordVerificationOutcome.Failed || !user.Status || !user.IsVerified)
                     return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
 
                 if (currentOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
                     ApplyNewPasswordHash(user, dto.Password);
 
-                accessToken = _tokenHelper.CreateToken(user, claims);
-                refreshToken = _tokenHelper.CreateRefreshToken(user.Id);
+                accessToken = _tokenHelper.CreateToken(user, claims, sessionId);
+                refreshToken = _tokenHelper.CreateRefreshToken(user.Id, sessionId);
                 await refreshTokenRepo.AddAsync(refreshToken);
 
                 try
@@ -119,6 +119,8 @@ namespace TaskTracker.Bussiness.Concrete
                     return new ErrorDataResult<LoginResponseDto>(Messages.PasswordCredentialChangedConcurrently);
                 }
             }
+
+            if (transaction is not null) await transaction.CommitAsync();
 
             return new SuccessDataResult<LoginResponseDto>(
                 new LoginResponseDto
@@ -353,39 +355,79 @@ namespace TaskTracker.Bussiness.Concrete
         }
         public async Task<IDataResult<TokenResponseDto>> RefreshTokenAsync(RefreshTokenDto dto)
         {
+            var invalid = new ErrorDataResult<TokenResponseDto>(Messages.RefreshTokenInvalid);
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
-            var userRepo = _unitOfWork.GetRepository<User>();
-
             var refreshToken = await refreshTokenRepo.GetAsync(rt =>
                 rt.Token == dto.RefreshToken &&
+                rt.SessionId != Guid.Empty &&
                 !rt.IsRevoked &&
                 rt.Expires > DateTime.UtcNow);
 
-            if (refreshToken == null)
-                return new ErrorDataResult<TokenResponseDto>(Messages.RefreshTokenInvalid);
+            if (refreshToken is null)
+                return invalid;
 
-            var user = await userRepo.GetByIdAsync(refreshToken.UserId);
-            if (user == null)
-                return new ErrorDataResult<TokenResponseDto>(Messages.UserNotFound);
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(refreshToken.UserId);
+            if (transaction is not null)
+                await refreshTokenRepo.ReloadAsync(refreshToken);
+            if (refreshToken.IsRevoked || refreshToken.Expires <= DateTime.UtcNow)
+                return invalid;
 
+            var user = await GetSessionUserAsync(refreshToken.UserId, reload: transaction is not null);
+            if (user is not { Status: true, IsVerified: true })
+                return invalid;
 
             refreshToken.IsRevoked = true;
             refreshTokenRepo.Update(refreshToken);
             var claims = await GetUserClaimsAsync(user.Id);
-
-            var accessToken = _tokenHelper.CreateToken(user, claims);
-            var newRefreshToken = _tokenHelper.CreateRefreshToken(user.Id);
+            var accessToken = _tokenHelper.CreateToken(user, claims, refreshToken.SessionId);
+            var newRefreshToken = _tokenHelper.CreateRefreshToken(user.Id, refreshToken.SessionId);
 
             await refreshTokenRepo.AddAsync(newRefreshToken);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+                if (transaction is not null) await transaction.CommitAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                _unitOfWork.DiscardTrackedChanges();
+                return invalid;
+            }
 
-            //return new SuccessDataResult<AccessToken>(accessToken, Messages.AccessTokenCreated);
             return new SuccessDataResult<TokenResponseDto>(new TokenResponseDto
             {
                 AccessToken = accessToken.Token,
                 AccessTokenExpiration = accessToken.Expiration,
                 RefreshToken = newRefreshToken.Token
             });
+        }
+
+        public async Task LogoutAsync(RefreshTokenDto dto)
+        {
+            var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
+            // A consumed token still identifies the session if rotation won the race with logout.
+            var token = await refreshTokenRepo.GetAsync(rt => rt.Token == dto.RefreshToken &&
+                rt.SessionId != Guid.Empty && rt.Expires > DateTime.UtcNow);
+            if (token is null)
+                return;
+
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(token.UserId);
+            var activeTokens = await refreshTokenRepo.GetAllAsync(rt =>
+                rt.UserId == token.UserId && rt.SessionId == token.SessionId && !rt.IsRevoked);
+            foreach (var activeToken in activeTokens)
+                activeToken.IsRevoked = true;
+
+            await _unitOfWork.SaveChangesAsync();
+            if (transaction is not null) await transaction.CommitAsync();
+        }
+
+        private async Task<User?> GetSessionUserAsync(int userId, bool reload)
+        {
+            var users = _unitOfWork.GetRepository<User>();
+            var user = await users.GetByIdAsync(userId);
+            if (user is not null && reload)
+                await users.ReloadAsync(user);
+            return user;
         }
 
         public async Task<IResult> ForgotPasswordAsync(ForgotPasswordDto dto)
@@ -550,34 +592,26 @@ namespace TaskTracker.Bussiness.Concrete
             if (string.IsNullOrWhiteSpace(dto.ResetToken))
                 return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
 
-            var now = DateTime.UtcNow;
             var resetTokenHash = PasswordResetTokenGenerator.HashToken(dto.ResetToken);
             var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
             var userRepo = _unitOfWork.GetRepository<User>();
-            var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
 
             var currentRequest = await passwordResetRepo.GetAsync(r =>
                 r.ResetTokenHash == resetTokenHash);
-
-            var isUsableRequest =
-                currentRequest is not null &&
-                currentRequest.VerifiedAt.HasValue &&
-                !currentRequest.UsedAt.HasValue &&
-                !currentRequest.InvalidatedAt.HasValue &&
-                currentRequest.ResetTokenHash is not null &&
-                currentRequest.ResetTokenExpiresAt.HasValue &&
-                currentRequest.ResetTokenExpiresAt.Value > now;
-
-            if (!isUsableRequest)
+            if (currentRequest is null)
                 return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
 
-            var validRequest = currentRequest!;
-            var user = await userRepo.GetAsync(u =>
-                u.Id == validRequest.UserId &&
-                u.Status &&
-                u.IsVerified);
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(currentRequest.UserId);
+            if (transaction is not null)
+                await passwordResetRepo.ReloadAsync(currentRequest);
+            var now = DateTime.UtcNow;
+            if (!currentRequest.VerifiedAt.HasValue || currentRequest.UsedAt.HasValue ||
+                currentRequest.InvalidatedAt.HasValue || currentRequest.ResetTokenHash != resetTokenHash ||
+                !currentRequest.ResetTokenExpiresAt.HasValue || currentRequest.ResetTokenExpiresAt.Value <= now)
+                return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
 
-            if (user is null)
+            var user = await GetSessionUserAsync(currentRequest.UserId, reload: transaction is not null);
+            if (user is not { Status: true, IsVerified: true })
                 return new ErrorResult(Messages.PasswordResetTokenInvalidOrExpired);
 
             if (string.IsNullOrEmpty(dto.NewPassword) ||
@@ -594,11 +628,11 @@ namespace TaskTracker.Bussiness.Concrete
                 return new ErrorResult(Messages.PasswordResetPasswordsDoNotMatch);
 
             ApplyNewPasswordHash(user, dto.NewPassword);
-            validRequest.UsedAt = now;
+            currentRequest.UsedAt = now;
 
             var otherResetRequests = await passwordResetRepo.GetAllAsync(r =>
                 r.UserId == user.Id &&
-                r.Id != validRequest.Id &&
+                r.Id != currentRequest.Id &&
                 r.UsedAt == null &&
                 r.InvalidatedAt == null);
 
@@ -608,21 +642,14 @@ namespace TaskTracker.Bussiness.Concrete
                 passwordResetRepo.Update(otherResetRequest);
             }
 
-            var activeRefreshTokens = await refreshTokenRepo.GetAllAsync(r =>
-                r.UserId == user.Id &&
-                !r.IsRevoked);
-
-            foreach (var refreshToken in activeRefreshTokens)
-            {
-                refreshToken.IsRevoked = true;
-                refreshTokenRepo.Update(refreshToken);
-            }
+            await RevokeUserSessionsAsync(user);
 
             userRepo.Update(user);
-            passwordResetRepo.Update(validRequest);
+            passwordResetRepo.Update(currentRequest);
             try
             {
                 await _unitOfWork.SaveChangesAsync();
+                if (transaction is not null) await transaction.CommitAsync();
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -651,15 +678,11 @@ namespace TaskTracker.Bussiness.Concrete
 
             var currentUserId = _currentUserService.UserId;
             var userRepo = _unitOfWork.GetRepository<User>();
-            var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
             var passwordResetRepo = _unitOfWork.GetRepository<PasswordResetRequest>();
 
-            var user = await userRepo.GetAsync(u =>
-                u.Id == currentUserId &&
-                u.Status &&
-                u.IsVerified);
-
-            if (user is null)
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(currentUserId);
+            var user = await GetSessionUserAsync(currentUserId, reload: transaction is not null);
+            if (user is not { Status: true, IsVerified: true })
                 return new ErrorResult(Messages.ChangePasswordUnavailable);
 
             if (_passwordHashService.Verify(user, dto.CurrentPassword) == PasswordVerificationOutcome.Failed)
@@ -674,15 +697,7 @@ namespace TaskTracker.Bussiness.Concrete
 
             ApplyNewPasswordHash(user, dto.NewPassword);
 
-            var activeRefreshTokens = await refreshTokenRepo.GetAllAsync(rt =>
-                rt.UserId == user.Id &&
-                !rt.IsRevoked);
-
-            foreach (var refreshToken in activeRefreshTokens)
-            {
-                refreshToken.IsRevoked = true;
-                refreshTokenRepo.Update(refreshToken);
-            }
+            await RevokeUserSessionsAsync(user);
 
             var now = DateTime.UtcNow;
             var activePasswordResetRequests = await passwordResetRepo.GetAllAsync(request =>
@@ -700,6 +715,7 @@ namespace TaskTracker.Bussiness.Concrete
             try
             {
                 await _unitOfWork.SaveChangesAsync();
+                if (transaction is not null) await transaction.CommitAsync();
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -708,6 +724,16 @@ namespace TaskTracker.Bussiness.Concrete
 
             return new SuccessResult(Messages.PasswordChangeSuccessful);
         }
+
+        private async Task RevokeUserSessionsAsync(User user)
+        {
+            user.SessionVersion = checked(user.SessionVersion + 1);
+            var activeTokens = await _unitOfWork.GetRepository<RefreshToken>()
+                .GetAllAsync(token => token.UserId == user.Id && !token.IsRevoked);
+            foreach (var token in activeTokens)
+                token.IsRevoked = true;
+        }
+
         private async Task<List<OperationClaim>> GetUserClaimsAsync(int userId)
         {
             var userOperationClaimRepo =
