@@ -343,11 +343,12 @@ public class PostgreSqlPasswordHardeningTests
 
     private sealed class Tokens : ITokenHelper
     {
-        public AccessToken CreateToken(User user, List<OperationClaim> operationClaims) => new();
+        public AccessToken CreateToken(User user, List<OperationClaim> operationClaims, Guid sessionId) => new();
 
-        public RefreshToken CreateRefreshToken(int userId) => new()
+        public RefreshToken CreateRefreshToken(int userId, Guid sessionId) => new()
         {
             UserId = userId,
+            SessionId = sessionId,
             Token = Guid.NewGuid().ToString("N"),
             Expires = DateTime.UtcNow.AddDays(7)
         };

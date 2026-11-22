@@ -65,8 +65,25 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
             await context.Database.EnsureCreatedAsync();
         else
             await context.Database.MigrateAsync(targetMigration);
-        context.Users.AddRange(User(1), User(2), User(3));
-        await context.SaveChangesAsync();
+        if (targetMigration is null)
+        {
+            context.Users.AddRange(User(1), User(2), User(3));
+            await context.SaveChangesAsync();
+        }
+        else
+        {
+            // The current EF user model can contain columns absent from an older target.
+            foreach (var id in new[] { 1, 2, 3 })
+            {
+                var user = User(id);
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Users" ("Id", "FirstName", "LastName", "UserName", "NormalizedUserName",
+                        "Email", "PasswordHash", "PasswordSalt", "Status", "IsVerified", "IsPhoneVerified")
+                    VALUES ({user.Id}, {user.FirstName}, {user.LastName}, {user.UserName}, {user.NormalizedUserName},
+                        {user.Email}, {user.PasswordHash}, {user.PasswordSalt}, TRUE, FALSE, FALSE)
+                    """);
+            }
+        }
         // Explicit seed IDs don't advance PostgreSQL's identity sequence.
         await context.Database.ExecuteSqlRawAsync("""
             SELECT setval(pg_get_serial_sequence('"Users"', 'Id'), MAX("Id")) FROM "Users"
