@@ -222,7 +222,11 @@ namespace TaskTracker.Core.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsRevoked")
+                        .IsConcurrencyToken()
                         .HasColumnType("boolean");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Token")
                         .IsRequired()
@@ -233,7 +237,11 @@ namespace TaskTracker.Core.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Token");
+
                     b.HasIndex("UserId");
+
+                    b.HasIndex("SessionId", "IsRevoked");
 
                     b.ToTable("RefreshTokens");
                 });
@@ -1148,6 +1156,10 @@ namespace TaskTracker.Core.Migrations
 
                     b.Property<DateTime?>("PhoneVerifiedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("SessionVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("Status")
                         .HasColumnType("boolean");

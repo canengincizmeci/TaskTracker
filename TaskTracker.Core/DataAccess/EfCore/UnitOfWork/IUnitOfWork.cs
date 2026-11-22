@@ -13,6 +13,7 @@ namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
         IEntityRepository<T> GetRepository<T>() where T : class, IEntity;
         Task<int> SaveChangesAsync();
         Task<IDbContextTransaction> BeginTransactionAsync();
+        Task<IDbContextTransaction?> BeginUserSessionWriteAsync(int userId);
         void DiscardTrackedChanges();
     }
 }

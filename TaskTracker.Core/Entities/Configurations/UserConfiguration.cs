@@ -34,6 +34,7 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.Property(u => u.PasswordSalt).IsRequired();
 
             builder.Property(u => u.PasswordHash).IsRequired().IsConcurrencyToken();
+            builder.Property(u => u.SessionVersion).IsConcurrencyToken();
 
             builder.Property(u => u.PasswordHashVersion)
                 .HasConversion<short>()

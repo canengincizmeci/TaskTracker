@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using TaskTracker.Core.DataAccess.EfCore.Repository;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
@@ -25,6 +26,26 @@ namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
         }
 
         public Task<IDbContextTransaction> BeginTransactionAsync() => _context.Database.BeginTransactionAsync();
+
+        public async Task<IDbContextTransaction?> BeginUserSessionWriteAsync(int userId)
+        {
+            if (!_context.Database.IsNpgsql())
+                return null;
+
+            var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+            try
+            {
+                // All session writers lock the same user before reading or changing session state.
+                await _context.Database.ExecuteSqlInterpolatedAsync(
+                    $"""SELECT "Id" FROM "Users" WHERE "Id" = {userId} FOR UPDATE""");
+                return transaction;
+            }
+            catch
+            {
+                await transaction.DisposeAsync();
+                throw;
+            }
+        }
 
         public void DiscardTrackedChanges() => _context.ChangeTracker.Clear();
 

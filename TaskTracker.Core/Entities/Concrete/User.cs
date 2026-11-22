@@ -17,6 +17,7 @@ namespace TaskTracker.Core.Entities.Concrete
         public byte[] PasswordSalt { get; set; }
         public byte[] PasswordHash { get; set; }
         public PasswordHashVersion PasswordHashVersion { get; set; } = PasswordHashVersion.LegacyHmacSha512;
+        public long SessionVersion { get; set; }
         public bool Status { get; set; }
         public bool IsVerified { get; set; } = false;
         public bool IsPhoneVerified { get; set; }
