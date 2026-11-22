@@ -15,6 +15,8 @@ public enum WorkTaskNextAction
 public class WorkTaskListItemDto
 {
     public int TaskId { get; set; }
+    public int? SubTaskId { get; set; }
+    public string? ParentTitle { get; set; }
     public long Version { get; set; }
     public string Title { get; set; } = null!;
     public string Description { get; set; } = null!;

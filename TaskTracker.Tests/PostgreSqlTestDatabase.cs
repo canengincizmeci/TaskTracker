@@ -40,11 +40,12 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
         this.databaseConnection = databaseConnection;
     }
 
-    public static Task<PostgreSqlTestDatabase> CreateAsync() => CreateAsync(useCurrentModel: false);
+    public static Task<PostgreSqlTestDatabase> CreateAsync(string? targetMigration = null) =>
+        CreateAsync(useCurrentModel: false, targetMigration);
 
     public static Task<PostgreSqlTestDatabase> CreateCurrentModelAsync() => CreateAsync(useCurrentModel: true);
 
-    private static async Task<PostgreSqlTestDatabase> CreateAsync(bool useCurrentModel)
+    private static async Task<PostgreSqlTestDatabase> CreateAsync(bool useCurrentModel, string? targetMigration = null)
     {
         var configured = Environment.GetEnvironmentVariable("TASKTRACKER_TEST_DATABASE")
             ?? throw new InvalidOperationException("TASKTRACKER_TEST_DATABASE is required.");
@@ -63,9 +64,13 @@ internal sealed class PostgreSqlTestDatabase : IAsyncDisposable
         if (useCurrentModel)
             await context.Database.EnsureCreatedAsync();
         else
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(targetMigration);
         context.Users.AddRange(User(1), User(2), User(3));
         await context.SaveChangesAsync();
+        // Explicit seed IDs don't advance PostgreSQL's identity sequence.
+        await context.Database.ExecuteSqlRawAsync("""
+            SELECT setval(pg_get_serial_sequence('"Users"', 'Id'), MAX("Id")) FROM "Users"
+            """);
         return instance;
     }
 

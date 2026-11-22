@@ -108,7 +108,7 @@ public class WorkspaceRealtimeRevocationTests
     private static WorkspaceManager Manager(TaskTrackerDbContext context,
         ITaskCollaborationService collaboration) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(1), collaboration,
-            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer(), new EfSubTaskDal(context));
 
     private static async Task<(int WorkspaceId, int OtherWorkspaceId)> SeedWorkspacesAsync(
         TaskTrackerDbContext context)
@@ -156,7 +156,8 @@ public class WorkspaceRealtimeRevocationTests
         public List<(int TaskId, int UserId)> Revocations { get; } = [];
         public List<(int WorkspaceId, IReadOnlyList<int> TaskIds)> RosterChanges { get; } = [];
 
-        public Task<bool> CanAccessAsync(int taskId, int userId) => throw new NotSupportedException();
+        public Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task PublishMessageAsync(int taskId, TaskMessageDto message) => throw new NotSupportedException();
         public Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId) =>
             throw new NotSupportedException();
         public Task<IDataResult<List<TaskMessageDto>>> GetMessagesAsync(int taskId, int userId) =>

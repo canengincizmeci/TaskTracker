@@ -11,6 +11,7 @@ using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
 using TaskTracker.Entities.DTOs;
+using TaskTracker.DataAccess.Concrete.EfCore;
 using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
 namespace TaskTracker.Tests;
@@ -27,7 +28,7 @@ public sealed class TaskAttachmentTests
         var store = new RecordingStore { BeforeSave = () => throw new InvalidOperationException("File must not be stored.") };
         var controller = new TaskAttachmentController(context, new CurrentUser(1),
             TaskCollaborationTestServices.Create(context), store, new NoOpTaskFileScanner(),
-            Options.Create(new TaskFileOptions { RequireCleanScan = true }));
+            Options.Create(new TaskFileOptions { RequireCleanScan = true }), new EfSubTaskDal(context));
         await using var data = new MemoryStream("Reference"u8.ToArray());
         var result = await controller.UploadTask(1, new FormFile(data, 0, data.Length, "file", "notes.txt"), CancellationToken.None);
         Assert.Equal(503, Assert.IsType<ObjectResult>(result).StatusCode);
@@ -75,7 +76,8 @@ public sealed class TaskAttachmentTests
         if (reviewWins) store.BeforeSave = async () => Assert.True((await Review(task.Version)).Success);
         await using var uploadContext = createContext();
         var controller = new TaskAttachmentController(uploadContext, new CurrentUser(2),
-            TaskCollaborationTestServices.Create(uploadContext), store, new NoOpTaskFileScanner(), Options.Create(new TaskFileOptions()));
+            TaskCollaborationTestServices.Create(uploadContext), store, new CleanScanner(),
+            Options.Create(new TaskFileOptions()), new EfSubTaskDal(uploadContext));
         await using var data = new MemoryStream("Review evidence"u8.ToArray());
         var upload = await controller.UploadSubmission(task.Id, revision.Id,
             new FormFile(data, 0, data.Length, "file", "evidence.txt"), CancellationToken.None);
@@ -98,6 +100,34 @@ public sealed class TaskAttachmentTests
         }
         Assert.Single(await verify.TaskSubmissionReviews.ToListAsync());
         Assert.Empty(await verify.TaskPlanningRevisions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Parent_attachment_routes_do_not_expose_subtask_submission_evidence()
+    {
+        using var database = new TestDatabase();
+        await using var context = database.CreateContext();
+        await SubTaskWorkflowTests.SeedPersonalAsync(context);
+        var service = TaskCollaborationTestServices.SubTasks(context);
+        var subTask = await SubTaskWorkflowTests.StartDelegatedAsync(service, 2, "Subtask evidence");
+        subTask = SubTaskWorkflowTests.Data(await service.SubmitAsync(1, subTask.Id,
+            new() { Version = subTask.Version, Content = "Evidence" }, 2));
+        var attachment = new TaskAttachment
+        {
+            TaskRequestId = 1, UploaderUserId = 2, Kind = TaskAttachmentKind.SubTaskSubmission,
+            SubTaskSubmissionId = subTask.CurrentSubmissionId, OriginalFileName = "private.txt",
+            StorageKey = new string('s', 32), ContentType = "text/plain", SizeBytes = 5
+        };
+        context.TaskAttachments.Add(attachment);
+        await context.SaveChangesAsync();
+        var controller = new TaskAttachmentController(context, new CurrentUser(1),
+            TaskCollaborationTestServices.Create(context), new RecordingStore(), new NoOpTaskFileScanner(),
+            Options.Create(new TaskFileOptions()), new EfSubTaskDal(context));
+        var list = Assert.IsType<OkObjectResult>(await controller.List(1));
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<TaskAttachmentDto>>(list.Value));
+        Assert.IsType<NotFoundResult>(await controller.Download(attachment.Id));
+        Assert.IsType<NotFoundResult>(await controller.Delete(attachment.Id));
+        Assert.Single(await context.TaskAttachments.ToListAsync());
     }
 
     [Fact]
@@ -130,6 +160,12 @@ public sealed class TaskAttachmentTests
     private sealed class CurrentUser(int userId) : ICurrentUserService
     {
         public int UserId => userId;
+    }
+
+    private sealed class CleanScanner : ITaskFileScanner
+    {
+        public Task<TaskFileScanVerdict> ScanAsync(Stream content, string fileName, CancellationToken cancellationToken) =>
+            Task.FromResult(TaskFileScanVerdict.Clean);
     }
 
     private sealed class RecordingStore : ITaskFileStore

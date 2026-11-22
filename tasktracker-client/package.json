@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test:workspace": "node --test tests/task-workspace.test.mjs",
+    "test:workspace": "node --test --test-timeout=15000 tests/task-workspace.test.mjs",
+    "test:subtasks": "node --test --test-timeout=15000 tests/subtasks.test.mjs",
+    "test:discussion": "node --test --test-timeout=15000 tests/task-discussion.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "jsdom": "^29.1.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10"

@@ -31,6 +31,8 @@ export type WorkTaskQuery = {
 
 export type WorkTaskListItem = {
   taskId: number;
+  subTaskId: number | null;
+  parentTitle: string | null;
   version: number;
   title: string;
   description: string;

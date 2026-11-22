@@ -24,8 +24,16 @@ export async function deleteTaskAttachment(file: TaskAttachment) {
   window.dispatchEvent(new CustomEvent(attachmentChangeEvent, { detail: file.taskRequestId }));
 }
 export async function downloadTaskAttachment(file: TaskAttachment) {
-  const response = await axiosClient.get(`/TaskAttachment/${file.id}/download`, { responseType: "blob" });
+  await downloadAttachment(`/TaskAttachment/${file.id}/download`, file.fileName);
+}
+
+export async function downloadAttachment(path: string, fileName: string) {
+  const response = await axiosClient.get(path, { responseType: "blob" });
   const url = URL.createObjectURL(response.data); const link = document.createElement("a");
-  link.href = url; link.download = file.fileName; document.body.append(link); link.click(); link.remove();
+  link.href = url; link.download = fileName; document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function getTaskAttachmentBlob(fileId: number, signal: AbortSignal) {
+  return (await axiosClient.get<Blob>(`/TaskAttachment/${fileId}/download`, { responseType: "blob", signal })).data;
 }

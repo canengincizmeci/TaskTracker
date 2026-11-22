@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
+using TaskTracker.Entities.DTOs;
 using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
 namespace TaskTracker.Tests;
@@ -51,7 +52,7 @@ public class PostgreSqlSubmissionConcurrencyTests
             { TaskRequestId = 1, SubmittedByUserId = 2, RevisionNumber = 1, Content = "Work" });
             await seed.SaveChangesAsync();
         }
-        var barrier = new SaveBarrierInterceptor("TaskSubmissionReviews");
+        var barrier = new SaveBarrierInterceptor("FOR NO KEY UPDATE");
         await using var approveContext = database.CreateContext(barrier);
         await using var changesContext = database.CreateContext(barrier);
 
@@ -82,7 +83,7 @@ public class PostgreSqlSubmissionConcurrencyTests
             { TaskRequestId = 1, SubmittedByUserId = 2, RevisionNumber = 1, Content = "Work" });
             await seed.SaveChangesAsync();
         }
-        var barrier = new SaveBarrierInterceptor("TaskActivities");
+        var barrier = new SaveBarrierInterceptor("FROM \"TaskRequests\" AS");
         await using var reviewContext = database.CreateContext(barrier);
         await using var cancelContext = database.CreateContext(barrier);
 
@@ -109,11 +110,12 @@ public class PostgreSqlSubmissionConcurrencyTests
     {
         await using var database = await PostgreSqlTestDatabase.CreateAsync();
         await SeedDelegated(database, TaskStatus.InProgress);
+        var isReassignment = operation == "reassign";
         var barrier = new SaveBarrierInterceptor("TaskActivities");
-        await using var submitContext = database.CreateContext(barrier);
-        await using var responsibilityContext = database.CreateContext(barrier);
-        var submit = TaskCollaborationTestServices.TaskRequests(submitContext).SubmitAsync(1,
-            new() { Version = 0, Content = "Concurrent work" }, 2);
+        var revocationGate = new PostgreSqlCommandGate("FROM \"SubTasks\" AS", pause: true);
+        var revisionRead = new PostgreSqlCommandGate("max(", pause: false);
+        await using var submitContext = database.CreateContext(isReassignment ? barrier : revisionRead);
+        await using var responsibilityContext = database.CreateContext(isReassignment ? barrier : revocationGate);
         Task<IResult> responsibility = operation switch
         {
             "reassign" => TaskCollaborationTestServices.TaskRequests(responsibilityContext).AssignTaskAsync(1,
@@ -123,6 +125,17 @@ public class PostgreSqlSubmissionConcurrencyTests
             _ => TaskCollaborationTestServices.TaskShares(responsibilityContext, 1)
                 .UpdateParticipantPermissionAsync(1, 2, new() { Version = 0, Permission = TaskPermission.View })
         };
+        Task<IDataResult<TaskSubmissionDto>> submit;
+        try
+        {
+            // Let submission read the active permission while revocation holds the parent lock
+            // and has yet to apply the permission change. The version check must reject the stale save.
+            if (!isReassignment) await revocationGate.Arrived;
+            submit = TaskCollaborationTestServices.TaskRequests(submitContext).SubmitAsync(1,
+                new() { Version = 0, Content = "Concurrent work" }, 2);
+            if (!isReassignment) await revisionRead.Arrived;
+        }
+        finally { revocationGate.Release(); }
         await Task.WhenAll(submit, responsibility);
 
         var results = new IResult[] { submit.Result, responsibility.Result };

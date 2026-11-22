@@ -5,6 +5,7 @@ import type {
   WorkTaskStatus,
 } from "../types/workDashboard";
 import { taskStatusLabel } from "../utils/taskDisplay";
+import { subTaskLink } from "../utils/subTaskWorkflow";
 
 const actionLabels: Record<WorkTaskNextAction, string> = {
   Start: "Start task",
@@ -41,7 +42,10 @@ function duePresentation(value: string | null, status: WorkTaskStatus) {
 
 export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) {
   const due = duePresentation(task.dueDate, task.status);
-  const detailPath = `/tasks/task-detail/${task.taskId}`;
+  const subtask = task.subTaskId != null;
+  const detailPath = task.subTaskId == null ? `/tasks/task-detail/${task.taskId}` : subTaskLink(task.taskId, task.subTaskId);
+  const action = subtask && task.nextAction === "Start" ? "Start subtask" :
+    subtask && task.nextAction === "View" ? "Open subtask" : actionLabels[task.nextAction];
   const relationships = [
     task.isOwned ? "Owned" : null,
     task.isAssigned ? "Assigned to you" : null,
@@ -60,7 +64,7 @@ export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) 
       </div>
       {task.description && <p>{task.description}</p>}
       <div className="dashboard-work-item__context">
-        <span className="dashboard-work-item__category">{task.category}</span>
+        <span className="dashboard-work-item__category">{subtask ? `Subtask of ${task.parentTitle}` : task.category}</span>
         <span>{relationships.join(" · ") || "Available"}</span>
         <span>{task.assigneeUserName ?? task.ownerUserName}</span>
       </div>
@@ -72,8 +76,8 @@ export default function DashboardWorkItem({ task }: { task: WorkTaskListItem }) 
       <span className={`dashboard-work-item__due dashboard-work-item__due--${due.state}`}>{due.label}</span>
     </div>
     <Link className="dashboard-work-item__action" to={detailPath}
-      aria-label={`${actionLabels[task.nextAction]}: ${task.title}`}>
-      <span>{actionLabels[task.nextAction]}</span><span aria-hidden="true">→</span>
+      aria-label={`${action}: ${task.title}`}>
+      <span>{action}</span><span aria-hidden="true">→</span>
     </Link>
   </article>;
 }

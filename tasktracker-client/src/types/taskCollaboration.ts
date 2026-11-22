@@ -19,4 +19,12 @@ export interface TaskMessage {
   senderUserName: string;
   content: string;
   createdAt: string;
+  deliveryFileCount?: number;
 }
+
+export type DiscussionAttachmentSettings = {
+  uploadsEnabled: boolean;
+  maxFiles: number;
+  maxFileSizeBytes: number;
+  maxTotalBytes: number;
+};

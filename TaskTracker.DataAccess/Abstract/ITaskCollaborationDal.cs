@@ -4,7 +4,7 @@ namespace TaskTracker.DataAccess.Abstract;
 
 public interface ITaskCollaborationDal
 {
-    Task<bool> CanAccessAsync(int taskId, int userId);
+    Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default);
     Task<List<TaskActivity>> GetActivitiesAsync(int taskId);
     Task<TaskActivity?> GetActivityAsync(int activityId);
     Task<List<TaskMessage>> GetMessagesAsync(int taskId);

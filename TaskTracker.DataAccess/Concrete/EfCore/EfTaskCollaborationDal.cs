@@ -15,12 +15,12 @@ public class EfTaskCollaborationDal : ITaskCollaborationDal
         _context = context;
     }
 
-    public Task<bool> CanAccessAsync(int taskId, int userId) => _context.TaskRequests.AnyAsync(x =>
+    public Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default) => _context.TaskRequests.AnyAsync(x =>
         x.Id == taskId && x.Activity &&
         (x.WorkspaceId == null && (x.OwnerId == userId || x.TaskShares.Any(s =>
              s.SharedWithUserId == userId && s.Permission >= TaskPermission.View &&
              s.Permission <= TaskPermission.Manage)) ||
-         x.WorkspaceId != null && x.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)));
+         x.WorkspaceId != null && x.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)), ct);
 
     public async Task<List<TaskActivity>> GetActivitiesAsync(int taskId)
     {

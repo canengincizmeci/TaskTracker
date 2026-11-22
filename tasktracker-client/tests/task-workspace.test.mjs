@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { localCalendarDate } from "../src/utils/localCalendarDate.ts";
 import { deliveryFileIds, matchingDeliveryFileIds, sameFiles, workflowSubmission } from "../src/utils/taskWorkflowState.ts";
@@ -48,8 +49,8 @@ const sessionStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "se
 
 before(async () => {
   Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: { getItem: () => null } });
-  vite = await createServer({ configFile: false, appType: "custom", optimizeDeps: { noDiscovery: true },
-    server: { middlewareMode: true, hmr: false, watch: null } });
+  vite = await createServer({ root: fileURLToPath(new URL("..", import.meta.url)), configFile: false, appType: "custom",
+    optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, hmr: false, ws: false, watch: null } });
   ({ default: client } = await vite.ssrLoadModule("/src/api/axiosClient.ts"));
   ({ createAttachmentCollection } = await vite.ssrLoadModule("/src/hooks/useTaskAttachments.ts"));
   ({ getWorkspaceView } = await vite.ssrLoadModule("/src/utils/taskWorkspaceViews.ts"));

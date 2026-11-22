@@ -226,3 +226,19 @@
 @media (prefers-reduced-motion: reduce) {
   .tc-action { transition: none; }
 }
+.tc-discussion-picker { min-width: 0; }
+.tc-selected-files {
+  list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px;
+}
+.tc-selected-files > li { max-width: 100%; }
+.tc-selected-files .tc-selected-preview { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; flex: none; }
+.tc-message-image { width: min(180px, 100%); margin: 0; }
+.tc-message-image > img { display: block; width: 100%; height: 110px; object-fit: contain; border-radius: 6px; }
+.tc-message-image > img[hidden] { display: none; }
+.tc-file-chip:has(.tc-message-image img:not([hidden])) { flex-direction: column; align-items: stretch; padding: 5px; }
+.tc-upload-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; color: var(--tw-muted); font-size: 13px; }
+.tc-upload-progress progress { width: min(12rem, 100%); accent-color: var(--tw-accent); }
+@media (max-width: 520px) {
+  .tc-discussion .tc-composer-tools { flex-direction: column; align-items: stretch; }
+  .tc-discussion .tc-composer-tools > button { align-self: flex-end; }
+}

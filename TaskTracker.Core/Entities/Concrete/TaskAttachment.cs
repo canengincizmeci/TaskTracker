@@ -10,6 +10,7 @@ public sealed class TaskAttachment : IEntity
     public TaskAttachmentKind Kind { get; set; }
     public int? TaskMessageId { get; set; }
     public int? TaskSubmissionId { get; set; }
+    public int? SubTaskSubmissionId { get; set; }
     public required string OriginalFileName { get; set; }
     public required string StorageKey { get; set; }
     public required string ContentType { get; set; }
@@ -22,4 +23,5 @@ public sealed class TaskAttachment : IEntity
     public User UploaderUser { get; set; } = null!;
     public TaskMessage? TaskMessage { get; set; }
     public TaskSubmission? TaskSubmission { get; set; }
+    public SubTaskSubmission? SubTaskSubmission { get; set; }
 }

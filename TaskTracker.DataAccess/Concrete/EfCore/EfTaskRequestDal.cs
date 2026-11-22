@@ -191,9 +191,14 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
 
             return new WorkDashboardSummaryDto
             {
-                AssignedToMeCount = assignedToMeCount,
-                AwaitingMyReviewCount = awaitingMyReviewCount,
-                OverdueCount = overdueCount,
+                AssignedToMeCount = assignedToMeCount + await DashboardSubTasks(userId).CountAsync(x => x.IsAssigned &&
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled),
+                AwaitingMyReviewCount = awaitingMyReviewCount + await DashboardSubTasks(userId).CountAsync(x =>
+                    x.IsOwned && !x.ParentLocked && x.Status == TaskStatus.InReview && x.AssigneeCanWork &&
+                    x.AssigneeUserId != x.OwnerId && x.LatestSubmissionAuthorId == x.AssigneeUserId &&
+                    x.LatestReviewDecision == null),
+                OverdueCount = overdueCount + await DashboardSubTasks(userId).CountAsync(x => x.DueDate < todayUtc &&
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled),
                 PendingTaskInvitationsCount = pendingTaskInvitationsCount,
                 PendingWorkspaceInvitationsCount = pendingWorkspaceInvitationsCount
             };
@@ -220,30 +225,12 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                 _ => tasks
             };
 
-            if (query.Search is not null)
-            {
-                var search = query.Search.ToLower();
-                tasks = tasks.Where(x => x.Title.ToLower().Contains(search) ||
-                    x.Description.ToLower().Contains(search) || x.Category.ToLower().Contains(search));
-            }
-            if (query.Status.HasValue) tasks = tasks.Where(x => x.Status == query.Status.Value);
-            if (query.Priority.HasValue) tasks = tasks.Where(x => x.Priority == query.Priority.Value);
-
-            var soonThrough = todayUtc.AddDays(7);
-            tasks = query.Due switch
-            {
-                WorkTaskDueFilter.Overdue => tasks.Where(x => x.DueDate.HasValue && x.DueDate < todayUtc &&
-                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled),
-                WorkTaskDueFilter.Today => tasks.Where(x => x.DueDate == todayUtc),
-                WorkTaskDueFilter.Soon => tasks.Where(x => x.DueDate > todayUtc && x.DueDate <= soonThrough),
-                WorkTaskDueFilter.None => tasks.Where(x => !x.DueDate.HasValue),
-                _ => tasks
-            };
-
-            var totalCount = await tasks.CountAsync();
             var rows = tasks.Select(x => new WorkTaskQueryRow
             {
                 TaskId = x.Id,
+                SubTaskId = null,
+                ParentTitle = null,
+                ParentLocked = false,
                 Version = x.Version,
                 Title = x.Title,
                 Description = x.Description,
@@ -284,23 +271,53 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                 CreatedAt = x.CreatedAt
             });
 
+            if (query.Scope != WorkTaskScope.Shared)
+            {
+                var subtasks = DashboardSubTasks(userId);
+                if (query.Scope == WorkTaskScope.Owned) subtasks = subtasks.Where(x => x.IsOwned);
+                if (query.Scope == WorkTaskScope.Assigned) subtasks = subtasks.Where(x => x.IsAssigned);
+                rows = rows.Concat(subtasks);
+            }
+            if (query.Search is not null)
+            {
+                var search = query.Search.ToLowerInvariant();
+                rows = rows.Where(x => x.Title.ToLower().Contains(search) || x.Description.ToLower().Contains(search) ||
+                    x.Category.ToLower().Contains(search) || (x.ParentTitle != null && x.ParentTitle.ToLower().Contains(search)));
+            }
+            if (query.Status.HasValue) rows = rows.Where(x => x.Status == query.Status.Value);
+            if (query.Priority.HasValue) rows = rows.Where(x => x.Priority == query.Priority.Value);
+            var soonThrough = todayUtc.AddDays(7);
+            rows = query.Due switch
+            {
+                WorkTaskDueFilter.Overdue => rows.Where(x => x.DueDate < todayUtc &&
+                    x.Status != TaskStatus.Completed && x.Status != TaskStatus.Cancelled),
+                WorkTaskDueFilter.Today => rows.Where(x => x.DueDate == todayUtc),
+                WorkTaskDueFilter.Soon => rows.Where(x => x.DueDate > todayUtc && x.DueDate <= soonThrough),
+                WorkTaskDueFilter.None => rows.Where(x => !x.DueDate.HasValue),
+                _ => rows
+            };
+            var totalCount = await rows.CountAsync();
+
             IOrderedQueryable<WorkTaskQueryRow> ordered = query.Sort switch
             {
                 WorkTaskSort.Priority => rows.OrderBy(x => x.Priority == TaskPriority.Critical ? 0 :
                         x.Priority == TaskPriority.High ? 1 : x.Priority == TaskPriority.Medium ? 2 : 3)
                     .ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.TaskId),
                 WorkTaskSort.Recent => rows.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.TaskId),
-                WorkTaskSort.ReviewAge => rows.OrderBy(x => !(x.IsOwned && x.Status == TaskStatus.InReview &&
+                WorkTaskSort.ReviewAge => rows.OrderBy(x => !(!x.ParentLocked && x.IsOwned && x.Status == TaskStatus.InReview &&
                         x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null))
                     .ThenBy(x => x.LatestSubmissionCreatedAt).ThenBy(x => x.TaskId),
                 _ => rows.OrderBy(x => !x.DueDate.HasValue).ThenBy(x => x.DueDate).ThenBy(x => x.TaskId)
             };
 
-            var items = await ordered.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            var items = await ordered.ThenBy(x => x.SubTaskId.HasValue).ThenBy(x => x.SubTaskId)
+                .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
                 .Select(x => new WorkTaskListItemDto
                 {
                     TaskId = x.TaskId,
+                    SubTaskId = x.SubTaskId,
+                    ParentTitle = x.ParentTitle,
                     Version = x.Version,
                     Title = x.Title,
                     Description = x.Description,
@@ -315,7 +332,8 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                     IsOwned = x.IsOwned,
                     IsAssigned = x.IsAssigned,
                     IsShared = x.IsShared,
-                    NextAction = x.IsOwned && x.Status == TaskStatus.InReview && x.AssigneeUserId.HasValue &&
+                    NextAction = x.ParentLocked ? WorkTaskNextAction.View
+                        : x.IsOwned && x.Status == TaskStatus.InReview && x.AssigneeUserId.HasValue &&
                         x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null
                             ? WorkTaskNextAction.Review
@@ -332,7 +350,7 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
                             ? WorkTaskNextAction.Start
                             : WorkTaskNextAction.View,
                     LatestSubmissionId = x.LatestSubmissionId,
-                    ReviewSubmittedAt = x.IsOwned && x.Status == TaskStatus.InReview &&
+                    ReviewSubmittedAt = !x.ParentLocked && x.IsOwned && x.Status == TaskStatus.InReview &&
                         x.AssigneeUserId.HasValue && x.AssigneeUserId != x.OwnerId && x.AssigneeCanWork &&
                         x.LatestSubmissionAuthorId == x.AssigneeUserId && x.LatestReviewDecision == null
                             ? x.LatestSubmissionCreatedAt : null,
@@ -349,9 +367,61 @@ namespace TaskTracker.DataAccess.Concrete.EfCore
             };
         }
 
+        private IQueryable<WorkTaskQueryRow> DashboardSubTasks(int userId) =>
+            from x in _context.SubTasks.AsNoTracking()
+            let parent = x.TaskRequest
+            let owned = parent.OwnerId == userId
+            let canWork = parent.WorkspaceId != null ? parent.Workspace!.Members.Any(m => m.UserId == userId && m.IsActive)
+                : owned || parent.TaskShares.Any(s => s.SharedWithUserId == userId &&
+                    s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage)
+            let assigned = x.AssigneeUserId == userId && canWork
+            let assigneeCanWork = x.AssigneeUserId != null && (parent.WorkspaceId != null
+                ? parent.Workspace!.Members.Any(m => m.UserId == x.AssigneeUserId && m.IsActive)
+                : parent.TaskShares.Any(s => s.SharedWithUserId == x.AssigneeUserId &&
+                    s.Permission >= TaskPermission.Edit && s.Permission <= TaskPermission.Manage))
+            where x.Activity && parent.Activity && parent.Status != TaskStatus.Completed && parent.Status != TaskStatus.Cancelled &&
+                (owned || assigned) && (parent.WorkspaceId == null || canWork)
+            select new WorkTaskQueryRow
+            {
+                TaskId = parent.Id,
+                SubTaskId = x.Id,
+                ParentTitle = parent.Title,
+                ParentLocked = parent.Status == TaskStatus.InReview,
+                Version = x.Version,
+                Title = x.Title,
+                Description = x.Description,
+                Category = parent.Category,
+                Status = x.Status,
+                Priority = x.Priority,
+                DueDate = x.DueDate,
+                OwnerId = parent.OwnerId,
+                OwnerUserName = parent.Owner.UserName,
+                AssigneeUserId = x.AssigneeUserId,
+                AssigneeUserName = x.Assignee != null ? x.Assignee.UserName : null,
+                IsOwned = owned,
+                IsAssigned = assigned,
+                IsShared = false,
+                CurrentUserCanWork = canWork,
+                AssigneeCanWork = assigneeCanWork,
+                LatestSubmissionId = _context.SubTaskSubmissions.Where(s => s.SubTaskId == x.Id && s.TaskRequestId == parent.Id)
+                    .OrderByDescending(s => s.RevisionNumber).Select(s => (int?)s.Id).FirstOrDefault(),
+                LatestSubmissionAuthorId = _context.SubTaskSubmissions.Where(s => s.SubTaskId == x.Id && s.TaskRequestId == parent.Id)
+                    .OrderByDescending(s => s.RevisionNumber).Select(s => (int?)s.SubmittedByUserId).FirstOrDefault(),
+                LatestSubmissionCreatedAt = _context.SubTaskSubmissions.Where(s => s.SubTaskId == x.Id && s.TaskRequestId == parent.Id)
+                    .OrderByDescending(s => s.RevisionNumber).Select(s => (DateTime?)s.CreatedAt).FirstOrDefault(),
+                LatestReviewDecision = _context.SubTaskSubmissions.Where(s => s.SubTaskId == x.Id && s.TaskRequestId == parent.Id)
+                    .OrderByDescending(s => s.RevisionNumber).Select(s => _context.SubTaskSubmissionReviews
+                    .Where(r => r.SubTaskSubmissionId == s.Id).Select(r => (TaskReviewDecision?)r.Decision).SingleOrDefault())
+                    .FirstOrDefault(),
+                CreatedAt = x.CreatedAt
+            };
+
         private sealed class WorkTaskQueryRow
         {
             public int TaskId { get; init; }
+            public int? SubTaskId { get; init; }
+            public string? ParentTitle { get; init; }
+            public bool ParentLocked { get; init; }
             public long Version { get; init; }
             public string Title { get; init; } = null!;
             public string Description { get; init; } = null!;

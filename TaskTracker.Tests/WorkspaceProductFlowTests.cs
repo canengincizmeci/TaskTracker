@@ -371,7 +371,7 @@ public class WorkspaceProductFlowTests
     private static WorkspaceManager Manager(TaskTrackerDbContext context, int userId) =>
         new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId),
             TaskCollaborationTestServices.Create(context),
-            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer(), new EfSubTaskDal(context));
 
     private static WorkspacesController Controller(TaskTrackerDbContext context, int userId) =>
         new(Manager(context, userId), TaskCollaborationTestServices.TaskRequests(context), new CurrentUser(userId));

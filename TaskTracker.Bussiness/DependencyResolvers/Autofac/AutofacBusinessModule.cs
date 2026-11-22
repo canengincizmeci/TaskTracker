@@ -61,6 +61,7 @@ namespace TaskTracker.Bussiness.DependencyResolvers.Autofac
             builder.RegisterType<EfTaskShareDal>().As<ITaskShareDal>().InstancePerLifetimeScope();
 
             builder.RegisterType<EfTaskRequestDal>().As<ITaskRequestDal>().InstancePerLifetimeScope();
+            builder.RegisterType<EfSubTaskDal>().As<ISubTaskDal>().InstancePerLifetimeScope();
             builder.RegisterType<EfTaskCollaborationDal>().As<ITaskCollaborationDal>().InstancePerLifetimeScope();
             builder.RegisterType<EfWorkspaceDal>().As<IWorkspaceDal>().InstancePerLifetimeScope();
 

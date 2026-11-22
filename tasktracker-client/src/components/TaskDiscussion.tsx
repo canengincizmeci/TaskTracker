@@ -1,110 +1,122 @@
-import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { isAxiosError } from "axios";
-import { getTaskMessages, sendTaskMessage } from "../api/taskCollaborationService";
+import { deliverTaskMessage, getDiscussionAttachmentSettings } from "../api/taskCollaborationService";
 import { errorMessage } from "../api/errorMessage";
-import { uploadMessageAttachment } from "../api/taskAttachmentService";
 import { useTaskConversation } from "../hooks/useTaskConversation";
 import { useTaskAttachments } from "../hooks/useTaskAttachments";
-import { AttachmentChips, CollaborationIcon, FilePicker } from "./TaskFileControls";
+import type { DiscussionAttachmentSettings } from "../types/taskCollaboration";
+import { AttachmentChips, CollaborationIcon, DiscussionFilePicker, type SelectedDiscussionFile } from "./TaskFileControls";
 
-export default function TaskDiscussion() {
-  const { taskId, currentUserId, messages, messageError, liveError, loading, addMessage, reload } = useTaskConversation();
-  const { files, error: fileError, refresh } = useTaskAttachments();
+function newDeliveryId() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const id = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
+
+export default function TaskDiscussion({ active = true }: { active?: boolean }) {
+  const { taskId, messages, messageError, liveError, loading, addMessage, reload, onAccessRevoked } = useTaskConversation();
+  const { files, error: fileError, refresh, refreshFresh } = useTaskAttachments();
   const [content, setContent] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState<"sending" | "attaching" | "checking" | null>(null);
+  const [selected, setSelected] = useState<SelectedDiscussionFile[]>([]);
+  const [settings, setSettings] = useState<DiscussionAttachmentSettings>();
+  const [settingsError, setSettingsError] = useState("");
+  const [settingsRevision, setSettingsRevision] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [pending, setPending] = useState<{ messageId: number; file: File } | null>(null);
-  const [uncertain, setUncertain] = useState<Set<number> | null>(null);
-  const guard = useRef(false);
+  const [retryId, setRetryId] = useState<string>();
+  const sending = useRef<AbortController | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const feed = useRef<HTMLOListElement>(null);
   const following = useRef(true);
   const newest = messages.at(-1)?.id;
+
   useLayoutEffect(() => {
     const list = feed.current;
-    if (!list) return;
+    if (!list || !active) return;
     const follow = () => {
       if (following.current && list.clientHeight) list.scrollTop = list.scrollHeight;
     };
     follow();
+    if (typeof ResizeObserver !== "function") return;
     const observer = new ResizeObserver(follow);
     observer.observe(list);
     return () => observer.disconnect();
-  }, [newest]);
+  }, [active, newest]);
 
-  async function attach(messageId: number, chosen: File, retry: boolean) {
-    setBusy("attaching");
-    try {
-      if (retry) {
-        const latest = await refresh();
-        if (latest.some((item) => item.taskMessageId === messageId && item.fileName === chosen.name && item.sizeBytes === chosen.size)) {
-          setPending(null); setNotice("File is attached to your message."); return;
-        }
-      }
-      await uploadMessageAttachment(taskId, messageId, chosen);
-      setPending(null); setNotice("Message and file shared.");
-    } catch (reason) {
-      setPending({ messageId, file: chosen });
-      setError(errorMessage(reason, "File upload could not be confirmed."));
-    }
-  }
+  useEffect(() => {
+    if (!active) return;
+    const request = new AbortController();
+    getDiscussionAttachmentSettings(taskId, request.signal).then(value => {
+      if (!request.signal.aborted) { setSettings(value); setSettingsError(""); }
+    }).catch(reason => {
+      if (request.signal.aborted) return;
+      setSettingsError("Attachment availability could not be checked.");
+      if (isAxiosError(reason) && reason.response?.status === 403) onAccessRevoked();
+    });
+    return () => request.abort();
+  }, [active, onAccessRevoked, settingsRevision, taskId]);
 
+  useEffect(() => () => sending.current?.abort(), []);
+
+  const canSend = Boolean(content.trim() || selected.length) &&
+    (!selected.length || Boolean(settings?.uploadsEnabled) || Boolean(retryId));
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (guard.current || !content.trim() || pending || uncertain) return;
-    const baseline = new Set(messages.map((item) => item.id));
-    guard.current = true; setBusy("sending"); setError(""); setNotice("");
+    if (!active || sending.current || !canSend) return;
+    const id = retryId ?? newDeliveryId();
+    const request = new AbortController();
+    sending.current = request;
+    setBusy(true); setProgress(undefined); setError(""); setNotice("");
     try {
-      const message = await sendTaskMessage(taskId, content.trim());
+      const message = await deliverTaskMessage(taskId, id, content.trim(), selected.map(item => item.file), request.signal, percent => {
+        if (!request.signal.aborted) setProgress(percent);
+      });
+      if (request.signal.aborted) return;
       following.current = true;
-      addMessage(message); setContent(""); setFile(null);
-      if (file) await attach(message.id, file, false);
-      else setNotice("Message sent.");
+      addMessage(message); setContent(""); setSelected([]); setRetryId(undefined);
+      setNotice(selected.length ? "Message and attachments sent." : "Message sent.");
+      if (selected.length) void refreshFresh().catch(() => undefined);
     } catch (reason) {
-      if (isAxiosError(reason) && (!reason.response || reason.response.status >= 500)) {
-        setUncertain(baseline);
-        setError("Delivery could not be confirmed. Check the conversation before sending again.");
-      } else setError(errorMessage(reason, "Could not send message. Try again."));
+      if (request.signal.aborted) return;
+      const response = isAxiosError<{ code?: string }>(reason) ? reason.response : undefined;
+      if (response?.status === 403) {
+        onAccessRevoked();
+        return;
+      }
+      const knownUnavailable = response?.data?.code === "discussion_upload_unavailable" ||
+        response?.data?.code === "file_scan_unavailable";
+      if (!response || (response.status >= 500 && !knownUnavailable)) {
+        setRetryId(id);
+        setError("Delivery could not be confirmed. Retry this delivery to recover it without posting twice.");
+      } else {
+        const message = errorMessage(reason, response.status === 413 ? "The attachments exceed the upload size limit." : "Could not send the message.");
+        setError(retryId ? `${message} Retry the original delivery when available.` : message);
+      }
     } finally {
-      guard.current = false; setBusy(null);
+      if (sending.current === request) sending.current = null;
+      if (!request.signal.aborted) setBusy(false);
     }
   }
 
-  async function checkDelivery() {
-    if (!uncertain || guard.current) return;
-    guard.current = true; setBusy("checking"); setError("");
-    try {
-      const latest = await getTaskMessages(taskId);
-      latest.forEach(addMessage);
-      const matches = latest.filter((item) => !uncertain.has(item.id) && item.senderUserId === currentUserId && item.content === content.trim());
-      if (matches.length === 1) {
-        setContent(""); setFile(null);
-        if (file) setPending({ messageId: matches[0].id, file });
-        setNotice("A matching message from you is already in the conversation.");
-      } else setNotice("Conversation refreshed. Check your message before sending again.");
-      setUncertain(null);
-    } catch (reason) {
-      setError(errorMessage(reason, "Could not check the conversation. Try again."));
-    } finally {
-      guard.current = false; setBusy(null);
-    }
-  }
-
-  async function retryFile() {
-    if (!pending || guard.current) return;
-    guard.current = true; setError(""); setNotice("");
-    try { await attach(pending.messageId, pending.file, true); }
-    finally { guard.current = false; setBusy(null); }
+  const messageFiles = new Map<number, typeof files>();
+  for (const file of files) {
+    if (file.kind !== "Message" || file.taskMessageId == null) continue;
+    const bucket = messageFiles.get(file.taskMessageId);
+    if (bucket) bucket.push(file); else messageFiles.set(file.taskMessageId, [file]);
   }
 
   return <section className="tc-discussion" aria-label="Task discussion">
     <div className="tc-view-head"><div><h2>Discussion</h2><p>Questions and updates from the people working on this task.</p></div>
-      <button className="tc-link" type="button" disabled={!!busy || !!uncertain}
+      <button className="tc-link" type="button" disabled={busy || !!retryId}
         onClick={() => composer.current?.focus()}>Write a message</button>
       <button className="tc-icon-button" type="button" aria-label="Refresh discussion" title="Refresh discussion" disabled={loading}
-        onClick={() => { void reload(); void refresh().catch(() => undefined); }}><CollaborationIcon name="refresh" /></button>
+        onClick={() => { void reload(); void refresh().catch(() => undefined); setSettingsRevision(value => value + 1); }}>
+        <CollaborationIcon name="refresh" /></button>
     </div>
     {liveError && <p className="tc-status" role="status">{liveError}</p>}
     {messageError && <p className="tc-error" role="alert">{messageError}</p>}
@@ -123,32 +135,35 @@ export default function TaskDiscussion() {
         <span aria-hidden="true" className="tc-avatar">{[...item.senderUserName.trim()][0]?.toUpperCase() || "·"}</span>
         <article><header><strong>{item.senderUserName}</strong>
           <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time>
-        </header><p>{item.content}</p>
-          <AttachmentChips files={files.filter((attachment) => attachment.taskMessageId === item.id)} />
+        </header>{item.content && <p>{item.content}</p>}
+          <AttachmentChips files={messageFiles.get(item.id) ?? []} previewImages={active} />
+          {(item.deliveryFileCount ?? 0) > (messageFiles.get(item.id)?.length ?? 0) &&
+            <p className="tc-muted">{fileError ? "Attachments unavailable." : "Loading attachments…"}</p>}
         </article>
       </li>)}
     </ol>}
-    {pending && <div className="tc-pending-file" role="group" aria-label="Message file upload">
-      <strong>Your message is saved</strong><p>Attach <b>{pending.file.name}</b> to your saved message.</p>
-      <div><button className="tc-action" type="button" disabled={!!busy} onClick={() => void retryFile()}>
-        {busy === "attaching" ? "Checking file…" : "Retry attachment"}</button>
-        <button type="button" className="tc-link" disabled={!!busy}
-          onClick={() => { setPending(null); setError(""); setNotice(""); composer.current?.focus(); }}>Dismiss file</button></div>
-    </div>}
     <form className="tc-composer" onSubmit={send}>
       <label htmlFor="workspace-message">Message</label>
       <textarea ref={composer} id="workspace-message" rows={3} maxLength={4000} value={content}
-        disabled={!!busy || !!uncertain} placeholder="Write a message…"
-        onChange={(event) => { setContent(event.target.value); setNotice(""); if (!pending) setError(""); }} />
+        disabled={busy || !!retryId} placeholder="Write a message or attach files…"
+        onChange={(event) => { setContent(event.target.value); setNotice(""); setError(""); }} />
       <div className="tc-composer-tools">
-        <FilePicker file={file} label="Attach file" disabled={!!busy || !!uncertain}
-          onChange={(value) => { setFile(value); setNotice(""); }} />
-        {uncertain ? <button className="tc-action tc-action--primary" type="button" disabled={!!busy} onClick={() => void checkDelivery()}>
-          {busy ? "Checking…" : "Check sent messages"}</button> :
-          <button className="tc-action tc-action--primary" type="submit" disabled={!!busy || !content.trim() || !!pending}>
-            <CollaborationIcon name="send" />{busy === "sending" ? "Sending…" : busy === "attaching" ? "Attaching…" : "Send"}
-          </button>}
+        <div className="tc-discussion-picker">
+          {settings && (settings.uploadsEnabled || selected.length > 0) && <DiscussionFilePicker files={selected} settings={settings}
+            disabled={busy || !!retryId} onChange={value => { setSelected(value); setError(""); setNotice(""); }} />}
+          {settings && !settings.uploadsEnabled && <p className="tc-muted">Discussion file uploads are unavailable.</p>}
+          {settingsError && <p className="tc-error" role="alert">{settingsError} <button type="button" className="tc-link"
+            onClick={() => setSettingsRevision(value => value + 1)}>Retry check</button></p>}
+        </div>
+        <button className="tc-action tc-action--primary" type="submit" disabled={busy || !canSend}>
+          <CollaborationIcon name="send" />{busy ? "Sending…" : retryId ? "Retry delivery" : "Send"}
+        </button>
       </div>
+      {busy && selected.length > 0 && <div className="tc-upload-progress">
+        <progress value={progress} max={100} aria-label="Attachment upload progress" />
+        <span role="status">{progress === 100 ? "Checking files and saving message…" :
+          progress == null ? "Uploading attachments…" : `Uploading attachments… ${progress}%`}</span>
+      </div>}
     </form>
     {error && <p role="alert" className="tc-error">{error}</p>}
     {notice && <p role="status" className="tc-notice">{notice}</p>}

@@ -24,6 +24,11 @@ namespace TaskTracker.Core.Extensions
             {
                 await _next(httpContext);
             }
+            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
+            {
+                if (!httpContext.Response.HasStarted)
+                    httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+            }
             catch (Exception e)
             {
                 await HandleExceptionAsync(httpContext, e);

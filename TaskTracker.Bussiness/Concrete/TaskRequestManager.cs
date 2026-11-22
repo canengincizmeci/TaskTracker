@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
@@ -21,6 +22,7 @@ public class TaskRequestManager : ITaskRequestService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ITaskShareDal _taskShareDal;
     private readonly ITaskRequestDal _taskRequestDal;
+    private readonly ISubTaskDal _subTaskDal;
     private readonly IWorkspaceDal _workspaceDal;
     private readonly ITaskActivityWriter _activityWriter;
     private readonly ITaskCollaborationService _collaboration;
@@ -30,11 +32,12 @@ public class TaskRequestManager : ITaskRequestService
     public TaskRequestManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal, ITaskRequestDal taskRequestDal,
         IWorkspaceDal workspaceDal,
         ITaskActivityWriter activityWriter, ITaskCollaborationService collaboration, INotificationService notifications,
-        ILogger<TaskRequestManager> logger)
+        ILogger<TaskRequestManager> logger, ISubTaskDal subTaskDal)
     {
         _unitOfWork = unitOfWork;
         _taskShareDal = taskShareDal;
         _taskRequestDal = taskRequestDal;
+        _subTaskDal = subTaskDal;
         _workspaceDal = workspaceDal;
         _activityWriter = activityWriter;
         _collaboration = collaboration;
@@ -307,7 +310,12 @@ public class TaskRequestManager : ITaskRequestService
             return new ErrorResult("Delegated work will be completed through submission and review.");
         if (task.Status is not (TaskStatus.Pending or TaskStatus.InProgress))
             return new ErrorResult("Only pending or in-progress personal work can be completed.");
-        return await ApplyStatus(task, currentUserId, TaskStatus.Completed, TaskActivityType.TaskCompleted, "Task completed.");
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+        await _subTaskDal.LockParentAsync(taskId, exclusive: true);
+        if (await _subTaskDal.HasOpenAsync(taskId))
+            return new ConflictResult("Resolve all active subtasks before completing the parent task.");
+        return await ApplyStatus(task, currentUserId, TaskStatus.Completed, TaskActivityType.TaskCompleted,
+            "Task completed.", transaction);
     }
 
     public async Task<IResult> CancelTaskAsync(int taskId, TaskWorkflowCommandDto dto, int currentUserId)
@@ -404,6 +412,10 @@ public class TaskRequestManager : ITaskRequestService
     public async Task<IDataResult<TaskSubmissionReviewDto>> ReviewAsync(int taskId, int submissionId,
         ReviewTaskSubmissionDto dto, int currentUserId)
     {
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+        // Both decisions lock the parent before writing review evidence. This keeps the order
+        // consistent when approval also has to verify that all subtasks are resolved.
+        await _subTaskDal.LockParentAsync(taskId, exclusive: true);
         var task = await GetActiveTask(taskId);
         if (task is null) return new ErrorDataResult<TaskSubmissionReviewDto>(Messages.DataNotFound);
         if (!await _taskRequestDal.CanManageAsync(task.Id, currentUserId))
@@ -429,6 +441,11 @@ public class TaskRequestManager : ITaskRequestService
             await _unitOfWork.GetRepository<TaskSubmissionReview>().AnyAsync(x => x.TaskSubmissionId == submissionId))
             return new ConflictDataResult<TaskSubmissionReviewDto>("This submission is old, reviewed, or no longer actionable.");
 
+        var approving = dto.Decision == TaskReviewDecision.Approved;
+        if (approving && await _subTaskDal.HasOpenAsync(taskId))
+            return new ConflictDataResult<TaskSubmissionReviewDto>(
+                "Resolve all active subtasks before completing the parent task.");
+
         var review = new TaskSubmissionReview
         {
             TaskSubmissionId = latest.Id, TaskSubmission = latest, ReviewerUserId = currentUserId,
@@ -436,15 +453,26 @@ public class TaskRequestManager : ITaskRequestService
         };
         await _unitOfWork.GetRepository<TaskSubmissionReview>().AddAsync(review);
         var from = task.Status;
-        task.Status = dto.Decision == TaskReviewDecision.Approved ? TaskStatus.Completed : TaskStatus.InProgress;
-        var type = dto.Decision == TaskReviewDecision.Approved
+        task.Status = approving ? TaskStatus.Completed : TaskStatus.InProgress;
+        var type = approving
             ? TaskActivityType.SubmissionApproved : TaskActivityType.ChangesRequested;
         var activity = await _activityWriter.WriteAsync(task, currentUserId, type, fromStatus: from,
             toStatus: task.Status, submission: latest, review: review);
-        try { await _unitOfWork.SaveChangesAsync(); }
-        catch (DbUpdateConcurrencyException) { return new ConflictDataResult<TaskSubmissionReviewDto>(ConcurrentChange); }
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _unitOfWork.DiscardTrackedChanges();
+            return new ConflictDataResult<TaskSubmissionReviewDto>(ConcurrentChange);
+        }
         catch (DbUpdateException ex) when (IsUniqueConflict(ex))
-        { return new ConflictDataResult<TaskSubmissionReviewDto>("This submission was already reviewed."); }
+        {
+            _unitOfWork.DiscardTrackedChanges();
+            return new ConflictDataResult<TaskSubmissionReviewDto>("This submission was already reviewed.");
+        }
 
         await _collaboration.PublishActivityAsync(activity);
         await _collaboration.PublishTaskChangedAsync(task.Id);
@@ -461,12 +489,12 @@ public class TaskRequestManager : ITaskRequestService
         new SuccessDataResult<List<AwaitingReviewTaskDto>>(await _taskRequestDal.GetAwaitingReviewAsync(currentUserId));
 
     private async Task<IResult> ApplyStatus(TaskRequest task, int actorId, TaskStatus to,
-        TaskActivityType type, string message)
+        TaskActivityType type, string message, IDbContextTransaction? transaction = null)
     {
         var from = task.Status;
         task.Status = to;
         var activity = await _activityWriter.WriteAsync(task, actorId, type, fromStatus: from, toStatus: to);
-        var result = await SaveTaskChange(task, activity, message);
+        var result = await SaveTaskChange(task, activity, message, transaction: transaction);
         if (!result.Success) return result;
         if (type == TaskActivityType.WorkStarted && actorId != task.OwnerId)
             await TryNotify(task.OwnerId, NotificationType.TaskUpdated, "Work started",
@@ -539,10 +567,18 @@ public class TaskRequestManager : ITaskRequestService
         q => q.Include(x => x.Owner).Include(x => x.Assignee).Include(x => x.Workspace));
 
     private async Task<IResult> SaveTaskChange(TaskRequest task, TaskActivity activity, string message,
-        bool publishActivity = true)
+        bool publishActivity = true, IDbContextTransaction? transaction = null)
     {
-        try { await _unitOfWork.SaveChangesAsync(); }
-        catch (DbUpdateConcurrencyException) { return new ConflictResult(ConcurrentChange); }
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+            if (transaction is not null) await transaction.CommitAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (transaction is not null) _unitOfWork.DiscardTrackedChanges();
+            return new ConflictResult(ConcurrentChange);
+        }
         catch (DbUpdateException ex) when (IsPlanningRevisionUniqueConflict(ex))
         { return new ConflictResult(ConcurrentChange); }
         if (publishActivity) await _collaboration.PublishActivityAsync(activity);
