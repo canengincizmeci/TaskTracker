@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle";
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -29,6 +30,7 @@ function Navbar() {
         aria-label="Primary navigation">
         <Link to="/" onClick={() => setMenuOpen(false)}>Home</Link>
         <Link to="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
+        <ThemeToggle compact className="navbar-theme-toggle" />
         <Link className="navbar-register-link" to="/register" onClick={() => setMenuOpen(false)}>Create account</Link>
       </nav>
     </header>
