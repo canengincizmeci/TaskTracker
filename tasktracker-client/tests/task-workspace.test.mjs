@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -127,4 +128,117 @@ test("only pending invitations expire on the sender and recipient surfaces", asy
   for (const status of ["Accepted", "Rejected", "Cancelled"]) {
     assert.equal(invitationStatus({ status, expiresAt, respondedAt: expiresAt }, deadline + 1), status);
   }
+});
+
+test("theme tokens resolve system and stored preferences and synchronize document data-theme attributes", async () => {
+  const { applyTheme, getStoredTheme, resolveInitialTheme } = await vite.ssrLoadModule("/src/utils/theme.ts");
+  const storage = new Map();
+  const rootAttributes = new Map();
+  const dispatched = [];
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+
+  try {
+    globalThis.window = {
+      localStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, String(value)),
+      },
+      matchMedia: (query) => ({ matches: query.includes("light") ? false : true }),
+      dispatchEvent: (event) => { dispatched.push(event); return true; },
+    };
+    globalThis.document = {
+      documentElement: {
+        style: {},
+        getAttribute: (name) => rootAttributes.get(name) ?? null,
+        setAttribute: (name, value) => rootAttributes.set(name, String(value)),
+      },
+    };
+
+    assert.equal(getStoredTheme(), null);
+    assert.equal(resolveInitialTheme(), "dark");
+
+    applyTheme("light", true);
+    assert.equal(rootAttributes.get("data-theme"), "light");
+    assert.equal(globalThis.document.documentElement.style.colorScheme, "light");
+    assert.equal(getStoredTheme(), "light");
+    assert.equal(resolveInitialTheme(), "light");
+
+    applyTheme("dark", true);
+    assert.equal(rootAttributes.get("data-theme"), "dark");
+    assert.equal(globalThis.document.documentElement.style.colorScheme, "dark");
+    assert.equal(getStoredTheme(), "dark");
+    assert.equal(dispatched.length, 2);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
+test("work, subtasks, discussion, and files stylesheets define all required component selectors and hide native file inputs", () => {
+  const workflowCss = readFileSync(new URL("../src/styles/task-workflow.css", import.meta.url), "utf8");
+  const collaborationCss = readFileSync(new URL("../src/styles/task-collaboration.css", import.meta.url), "utf8");
+  const subtasksCss = readFileSync(new URL("../src/styles/subtasks.css", import.meta.url), "utf8");
+
+  for (const selector of [
+    ".wf-progress",
+    ".wf-progress-mark",
+    ".wf-next-row",
+    ".wf-paper",
+    ".wf-revision-body",
+    ".wf-summary",
+    ".wf-verdict",
+    ".wf-form",
+    ".wf-review",
+    ".wf-compose-actions",
+    ".wf-buttons",
+    ".wf-warning",
+    ".wf-recovery",
+    ".wf-history-entry summary",
+  ]) {
+    assert.ok(workflowCss.includes(selector), `Missing selector in task-workflow.css: ${selector}`);
+  }
+  assert.match(workflowCss, /\.wf-progress\s*\{[^}]*list-style:\s*none/s);
+
+  for (const selector of [
+    ".tc-native-picker",
+    ".tc-picker__row",
+    ".tc-picker__label",
+    ".tc-selected",
+    ".tc-selected-files",
+    ".tc-discussion-picker",
+    ".tc-file-index",
+    ".tc-file-chips",
+    ".tc-file-row",
+    ".tc-file-chip",
+    ".tc-file-download",
+    ".tc-file-type",
+    ".tc-file-info",
+    ".tc-download-icon",
+    ".tc-file-remove",
+    ".tc-confirm",
+    ".tc-messages",
+    ".tc-composer-tools",
+  ]) {
+    assert.ok(collaborationCss.includes(selector), `Missing selector in task-collaboration.css: ${selector}`);
+  }
+  assert.match(collaborationCss, /\.tc-native-picker\s*\{[^}]*clip-path:\s*inset\(50%\)/s);
+  assert.match(collaborationCss, /\.tc-file-index,\s*\.tc-file-chips,\s*\.tc-messages\s*\{[^}]*list-style:\s*none/s);
+
+  for (const selector of [
+    ".st-heading",
+    ".st-progress",
+    ".st-list > li",
+    ".st-select",
+    ".st-actions",
+    ".st-delivery",
+    ".st-draft",
+    ".st-history",
+    ".st-events",
+  ]) {
+    assert.ok(subtasksCss.includes(selector), `Missing selector in subtasks.css: ${selector}`);
+  }
+  assert.match(subtasksCss, /\.st-list,\s*\.st-events\s*\{[^}]*list-style:\s*none/s);
 });
