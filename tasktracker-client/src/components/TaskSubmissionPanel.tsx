@@ -67,7 +67,9 @@ function RevisionBody({ item, attachmentStatus = false }: { item: TaskSubmission
   </div>;
 }
 
-function ReviewForm({ item, workflow, disabled }: { item: TaskSubmission; workflow: TaskSubmissionWorkflow; disabled: boolean }) {
+function ReviewForm({ item, workflow, disabled, completionBlocked }: {
+  item: TaskSubmission; workflow: TaskSubmissionWorkflow; disabled: boolean; completionBlocked: boolean;
+}) {
   const feedbackInput = useRef<HTMLTextAreaElement>(null);
   const approveButton = useRef<HTMLButtonElement>(null);
   const [missingFeedback, setMissingFeedback] = useState(false);
@@ -82,7 +84,7 @@ function ReviewForm({ item, workflow, disabled }: { item: TaskSubmission; workfl
       : <small id="wf-feedback-help">Requesting changes sends the task back to the assignee with your feedback.</small>}
     {workflow.reviewFileNotice && <p role="status" className="wf-warning">{workflow.reviewFileNotice}</p>}
     <div className="wf-buttons">
-      <button ref={approveButton} type="button" className="tw-control tw-control--primary" disabled={disabled || !workflow.reviewFilesReady}
+      <button ref={approveButton} type="button" className="tw-control tw-control--primary" disabled={completionBlocked || disabled || !workflow.reviewFilesReady}
         onClick={() => setApproval(workflow.reviewSnapshot())}>{workflow.operation === "approve" ? "Approving…" : "Approve & complete"}</button>
       <button type="button" className="tw-control" disabled={disabled || !workflow.reviewFilesReady} onClick={() => {
         if (!workflow.feedback.trim()) { setMissingFeedback(true); feedbackInput.current?.focus(); return; }
@@ -90,12 +92,13 @@ function ReviewForm({ item, workflow, disabled }: { item: TaskSubmission; workfl
       }}>{workflow.operation === "requestChanges" ? "Sending…" : "Request changes"}</button>
     </div>
     {approval && <TaskDialog title={`Approve revision ${item.revisionNumber}?`} opener={approveButton} onClose={() => setApproval(undefined)}>
-      <p>This approves the delivery from {item.submittedByUserName} and completes the task.</p>
+      <p>{completionBlocked ? "The subtask list must be current and all open subtasks resolved before approval." :
+        `This approves the delivery from ${item.submittedByUserName} and completes the task.`}</p>
       <p className="wf-muted">{approval.files.length === 0 ? "No delivery files are saved. You are approving the summary alone." :
         `${approval.files.length === 1 ? "1 delivery file" : `${approval.files.length} delivery files`} in the revision you reviewed.`}</p>
       <div className="tw-dialog-actions">
         <button type="button" className="tw-control" onClick={() => setApproval(undefined)}>Keep reviewing</button>
-        <button type="button" className="tw-control tw-control--primary" disabled={disabled || !workflow.reviewFilesReady} onClick={() => {
+        <button type="button" className="tw-control tw-control--primary" disabled={completionBlocked || disabled || !workflow.reviewFilesReady} onClick={() => {
           setApproval(undefined);
           void workflow.review("Approved", approval);
         }}>Confirm approval</button>
@@ -144,9 +147,9 @@ function HistoryError({ workflow }: { workflow: TaskSubmissionWorkflow }) {
     <button type="button" className="tw-inline-action" onClick={() => void workflow.reloadHistory()}>Retry submissions</button></p>;
 }
 
-export default function TaskSubmissionPanel({ task, workflow, onStart, onComplete, onOpenHistory, statusBusy, children }: {
+export default function TaskSubmissionPanel({ task, workflow, onStart, onComplete, onOpenHistory, statusBusy, completionBlocked, children }: {
   task: Task; workflow: TaskSubmissionWorkflow; onStart: () => void; onComplete: () => void;
-  onOpenHistory?: () => void; statusBusy: boolean; children?: ReactNode;
+  onOpenHistory?: () => void; statusBusy: boolean; completionBlocked: boolean; children?: ReactNode;
 }) {
   const artifactHeading = useRef<HTMLHeadingElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -171,7 +174,7 @@ export default function TaskSubmissionPanel({ task, workflow, onStart, onComplet
         {task.canStart ? <button type="button" className="tw-control tw-control--primary" disabled={disabled}
           onClick={onStart}>{statusBusy ? "Starting…" : "Start task"}</button>
         : task.isOwner && !delegated && task.status === "InProgress" ? <button type="button" className="tw-control tw-control--primary"
-          disabled={disabled} onClick={onComplete}>{statusBusy ? "Completing…" : "Complete task"}</button>
+          disabled={disabled || completionBlocked} onClick={onComplete}>{statusBusy ? "Completing…" : "Complete task"}</button>
         : (showReview || canCompose) && <button type="button" className="tw-control tw-control--primary" onClick={jumpToDelivery}>
           {showReview ? `Read revision ${latest.revisionNumber}` : changes ? "Read feedback" : "Write delivery"}<span aria-hidden="true">↓</span>
         </button>}
@@ -199,7 +202,7 @@ export default function TaskSubmissionPanel({ task, workflow, onStart, onComplet
         <RevisionBody item={latest} attachmentStatus />
         {workflow.pendingUpload?.submission.id === latest.id ? <UploadRecovery workflow={workflow} disabled={disabled} /> :
           workflow.canAttach && <RevisionFileForm key={latest.id} id={latest.id} workflow={workflow} disabled={disabled} />}
-        {showReview && <ReviewForm key={latest.id} item={latest} workflow={workflow} disabled={disabled} />}
+        {showReview && <ReviewForm key={latest.id} item={latest} workflow={workflow} disabled={disabled} completionBlocked={completionBlocked} />}
       </article>
     </section>}
     {canCompose && <form className="wf-delivery wf-form" onSubmit={event => { event.preventDefault(); void workflow.submit(); }}>

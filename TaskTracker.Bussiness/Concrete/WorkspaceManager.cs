@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
@@ -9,12 +10,13 @@ using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
 using TaskTracker.DataAccess.Abstract;
 using TaskTracker.Entities.DTOs;
+using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
 namespace TaskTracker.Bussiness.Concrete;
 
 public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal,
     ICurrentUserService currentUserService, ITaskCollaborationService collaborationService,
-    ILogger<WorkspaceManager> logger, IIdentityNormalizer identityNormalizer) : IWorkspaceService
+    ILogger<WorkspaceManager> logger, IIdentityNormalizer identityNormalizer, ISubTaskDal subTaskDal) : IWorkspaceService
 {
     private static bool CanManage(WorkspaceMember membership) =>
         membership.Role is WorkspaceRole.Owner or WorkspaceRole.Admin;
@@ -239,6 +241,8 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
 
     public async Task<IResult> RemoveMemberAsync(int workspaceId, int userId, WorkspaceVersionDto dto)
     {
+        await using var transaction = await unitOfWork.BeginTransactionAsync();
+        await subTaskDal.LockWorkspaceForMemberRemovalAsync(workspaceId);
         var actor = await workspaceDal.GetActiveMembershipAsync(workspaceId, currentUserService.UserId);
         if (actor is null) return new ErrorResult(WorkspaceMessages.NotFound);
         if (!CanManage(actor)) return new ErrorResult(Messages.AuthorizationDenied);
@@ -255,14 +259,21 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         if (await workspaceDal.HasActiveTaskResponsibilityAsync(workspaceId, userId))
             return new ConflictResult(WorkspaceMessages.ActiveTaskResponsibility);
 
+        var assignments = await subTaskDal.GetOpenWorkspaceAssignmentsAsync(workspaceId, userId);
+        if (assignments.Any(x => x.Status == TaskStatus.InReview))
+            return new ConflictResult("A member with an assigned subtask under review cannot be removed.");
+        foreach (var subTask in assignments)
+            await SubTaskActivityWriter.SetAssigneeAsync(unitOfWork, subTask, currentUserService.UserId, null);
         target.IsActive = false;
         target.RemovedAt = DateTime.UtcNow;
         workspaceDal.TouchMembership(actor);
         await AddActivityAsync(workspaceId, WorkspaceActivityType.MemberRemoved, userId);
-        var saved = await SaveAsync(WorkspaceMessages.MemberRemoved, workspaceId);
+        var saved = await SaveAsync(WorkspaceMessages.MemberRemoved, workspaceId, transaction);
         if (!saved.Success) return saved;
 
         await RefreshWorkspaceTaskRostersAsync(workspaceId, userId);
+        foreach (var taskId in assignments.Select(x => x.TaskRequestId).Distinct())
+            await collaborationService.PublishTaskChangedAsync(taskId);
         return saved;
     }
 
@@ -310,19 +321,22 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
             CreatedAt = DateTime.UtcNow
         });
 
-    private async Task<IResult> SaveAsync(string successMessage, int workspaceId)
+    private async Task<IResult> SaveAsync(string successMessage, int workspaceId, IDbContextTransaction? transaction = null)
     {
         try
         {
             await unitOfWork.SaveChangesAsync();
+            if (transaction is not null) await transaction.CommitAsync();
             return new SuccessResult(successMessage);
         }
         catch (DbUpdateConcurrencyException)
         {
+            if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             return new ConflictResult(WorkspaceMessages.ConcurrentChange);
         }
         catch (DbUpdateException ex)
         {
+            if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             logger.LogWarning(ex, "Workspace change could not be saved for workspace {WorkspaceId}", workspaceId);
             return new ConflictResult(WorkspaceMessages.ConflictingState);
         }

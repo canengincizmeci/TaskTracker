@@ -11,6 +11,7 @@ export const ConversationContext = createContext<{
   messageError: string;
   liveError: string;
   rosterRevision: number;
+  taskRevision: number;
   onAccessRevoked: () => void;
   reload: () => Promise<void>;
   addMessage: (message: TaskMessage) => void;

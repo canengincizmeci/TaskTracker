@@ -54,7 +54,7 @@ internal static class TaskCollaborationTestServices
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
             new EfWorkspaceDal(context),
             new TaskActivityWriter(uow), collaboration ?? Create(context), notifications ?? new Notifications(),
-            NullLogger<TaskRequestManager>.Instance);
+            NullLogger<TaskRequestManager>.Instance, new EfSubTaskDal(context));
     }
 
     public static TaskShareManager TaskShares(TaskTrackerDbContext context, int userId,
@@ -63,9 +63,19 @@ internal static class TaskCollaborationTestServices
         var uow = new UnitOfWork(context);
         return new TaskShareManager(uow, new EfTaskShareDal(context), new CurrentUser(userId), new Email(),
             new Notifications(), new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), collaboration ?? Create(context), new IdentityNormalizer());
+            new TaskActivityWriter(uow), collaboration ?? Create(context), new IdentityNormalizer(), new EfSubTaskDal(context));
     }
 
     public static WorkDashboardManager WorkDashboard(TaskTrackerDbContext context, int userId) =>
         new(new EfTaskRequestDal(context), new CurrentUser(userId));
+
+    public static SubTaskManager SubTasks(TaskTrackerDbContext context, ITaskCollaborationService? collaboration = null,
+        INotificationService? notifications = null) =>
+        new(new UnitOfWork(context), new EfSubTaskDal(context), new EfTaskShareDal(context), new EfWorkspaceDal(context),
+            collaboration ?? Create(context), notifications ?? new Notifications(), NullLogger<SubTaskManager>.Instance);
+
+    public static WorkspaceManager Workspaces(TaskTrackerDbContext context, int userId,
+        ITaskCollaborationService? collaboration = null) =>
+        new(new UnitOfWork(context), new EfWorkspaceDal(context), new CurrentUser(userId), collaboration ?? Create(context),
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer(), new EfSubTaskDal(context));
 }

@@ -25,7 +25,8 @@ public class TaskCollaborationManager : ITaskCollaborationService
         _logger = logger;
     }
 
-    public Task<bool> CanAccessAsync(int taskId, int userId) => _collaborationDal.CanAccessAsync(taskId, userId);
+    public Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default) =>
+        _collaborationDal.CanAccessAsync(taskId, userId, ct);
 
     public async Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId)
     {
@@ -40,7 +41,7 @@ public class TaskCollaborationManager : ITaskCollaborationService
         if (!await CanAccessAsync(taskId, userId))
             return new ErrorDataResult<List<TaskMessageDto>>(Messages.AuthorizationDenied);
         return new SuccessDataResult<List<TaskMessageDto>>((await _collaborationDal.GetMessagesAsync(taskId))
-            .Select(MapMessage).ToList());
+            .Select(TaskMessageDto.From).ToList());
     }
 
     public async Task<IDataResult<TaskMessageDto>> SendMessageAsync(int taskId, int userId, string? content)
@@ -57,16 +58,21 @@ public class TaskCollaborationManager : ITaskCollaborationService
         };
         await _unitOfWork.GetRepository<TaskMessage>().AddAsync(message);
         await _unitOfWork.SaveChangesAsync();
-        var dto = MapMessage(message);
+        var dto = TaskMessageDto.From(message);
+        await PublishMessageAsync(taskId, dto);
+        return new SuccessDataResult<TaskMessageDto>(dto);
+    }
+
+    public async Task PublishMessageAsync(int taskId, TaskMessageDto message)
+    {
         try
         {
-            await _realtime.MessageCreatedAsync(taskId, dto);
+            await _realtime.MessageCreatedAsync(taskId, message);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Realtime delivery failed for persisted task message {MessageId}", message.Id);
         }
-        return new SuccessDataResult<TaskMessageDto>(dto);
     }
 
     // Call only after the business operation has committed. Delivery failure cannot undo persistence.
@@ -121,9 +127,4 @@ public class TaskCollaborationManager : ITaskCollaborationService
         CreatedAt = activity.CreatedAt
     };
 
-    private static TaskMessageDto MapMessage(TaskMessage message) => new()
-    {
-        Id = message.Id, SenderUserId = message.SenderUserId, SenderUserName = message.SenderUser.UserName,
-        Content = message.Content, CreatedAt = message.CreatedAt
-    };
 }

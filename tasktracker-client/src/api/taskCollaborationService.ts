@@ -1,6 +1,6 @@
 import axiosClient from "./axiosClient";
 import type { TaskPermission } from "../types/taskPermission";
-import type { TaskActivity, TaskMessage } from "../types/taskCollaboration";
+import type { DiscussionAttachmentSettings, TaskActivity, TaskMessage } from "../types/taskCollaboration";
 
 export type Participant = {
   userId: number;
@@ -55,4 +55,19 @@ export async function getTaskMessages(taskId: number): Promise<TaskMessage[]> {
 
 export async function sendTaskMessage(taskId: number, content: string): Promise<TaskMessage> {
   return (await axiosClient.post(`/TaskWorkspace/${taskId}/messages`, { content })).data;
+}
+
+export async function getDiscussionAttachmentSettings(taskId: number, signal: AbortSignal): Promise<DiscussionAttachmentSettings> {
+  return (await axiosClient.get(`/TaskWorkspace/${taskId}/messages/attachment-settings`, { signal })).data;
+}
+
+export async function deliverTaskMessage(taskId: number, clientRequestId: string, content: string, files: File[],
+  signal: AbortSignal, onProgress: (percent: number | undefined) => void): Promise<TaskMessage> {
+  const data = new FormData();
+  data.append("clientRequestId", clientRequestId);
+  if (content) data.append("content", content);
+  files.forEach(file => data.append("files", file));
+  return (await axiosClient.post(`/TaskWorkspace/${taskId}/messages/delivery`, data, {
+    signal, onUploadProgress: ({ loaded, total }) => onProgress(total ? Math.min(100, Math.floor(loaded * 100 / total)) : undefined),
+  })).data;
 }

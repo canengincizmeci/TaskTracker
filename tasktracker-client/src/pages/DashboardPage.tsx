@@ -90,7 +90,7 @@ function DashboardTaskSection({ title, description, tasks, kind = "standard" }: 
     <header><div><h3 id={`dashboard-${title.toLowerCase().replaceAll(" ", "-")}`}>{title}</h3>
       <p>{description}</p></div><span>{tasks.length}</span></header>
     <div className="dashboard-work-list">{tasks.map((task) =>
-      <DashboardWorkItem key={task.taskId} task={task} />)}</div>
+      <DashboardWorkItem key={`${task.taskId}:${task.subTaskId ?? "task"}`} task={task} />)}</div>
   </section>;
 }
 
@@ -308,7 +308,7 @@ export default function DashboardPage() {
           </form>
 
           <div className="dashboard-work__results" aria-live="polite">
-            <span>{work ? work.totalCount === 0 ? "No tasks" :
+            <span>{work ? work.totalCount === 0 ? "No work items" :
               `Showing ${resultStart}–${resultEnd} of ${work.totalCount}` : "Loading results"}</span>
             {workLoading && work && <span className="dashboard-work__updating">Updating results…</span>}
           </div>
@@ -328,22 +328,22 @@ export default function DashboardPage() {
           </div>}
 
           {work && work.items.length > 0 && <div className="dashboard-work-sections" aria-busy={workLoading}>
-            <DashboardTaskSection title="Needs your attention" description="Tasks with a clear next action or an overdue deadline."
+            <DashboardTaskSection title="Needs your attention" description="Work with a clear next action or an overdue deadline."
               tasks={groupedWork.attention} kind="attention" />
-            <DashboardTaskSection title="My active tasks" description="Other active work you own, are assigned, or can access."
+            <DashboardTaskSection title="My active work" description="Other active work you own, are assigned, or can access."
               tasks={groupedWork.active} />
             <DashboardTaskSection title="Awaiting others" description="Delegated work and submitted work waiting on someone else."
               tasks={groupedWork.awaiting} />
             {groupedWork.recent.length > 0 && <details className="dashboard-recent">
               <summary>Completed / recent <span>{groupedWork.recent.length}</span></summary>
               <div className="dashboard-work-list">{groupedWork.recent.map((task) =>
-                <DashboardWorkItem key={task.taskId} task={task} />)}</div>
+                <DashboardWorkItem key={`${task.taskId}:${task.subTaskId ?? "task"}`} task={task} />)}</div>
             </details>}
           </div>}
 
           {work && !workLoading && work.items.length === 0 && <section className="dashboard-work-empty">
-            <h3>{search ? "No tasks match your search" : scope === "assigned" && !filtersActive ?
-              "No active tasks are currently assigned to you" : "No work matches this view"}</h3>
+            <h3>{search ? "No work matches your search" : scope === "assigned" && !filtersActive ?
+              "No work is currently assigned to you" : "No work matches this view"}</h3>
             <p>{filtersActive ? "Try clearing your search or filters to see more work." :
               "Tasks will appear here when they become relevant to you."}</p>
             <div>
@@ -368,8 +368,8 @@ export default function DashboardPage() {
           <header className="dashboard-pulse__header">
             <div><span className="dashboard-section-number">02</span>
               <h2 id="dashboard-attention-heading">Pulse</h2></div>
-            {summary && <button type="button" className="dashboard-icon-button" disabled={summaryRefreshing}
-              aria-label="Refresh work summary" title="Refresh summary" onClick={() => void loadSummary()}>
+            {summary && <button type="button" className="dashboard-icon-button" disabled={summaryRefreshing || workLoading}
+              aria-label="Refresh work" title="Refresh work" onClick={() => { void loadSummary(); void loadWork(); }}>
               <span aria-hidden="true" className={summaryRefreshing ? "is-spinning" : ""}>↻</span>
             </button>}
           </header>
@@ -390,8 +390,8 @@ export default function DashboardPage() {
             </div>}
             <div className="dashboard-summary-grid">
               <DashboardSummaryCard title="Assigned to me" count={summary.assignedToMeCount}
-                description={summary.assignedToMeCount === 0 ? "No active assigned tasks" :
-                  `${countText(summary.assignedToMeCount, "active task")} to move forward`}
+                description={summary.assignedToMeCount === 0 ? "No active assigned work" :
+                  `${countText(summary.assignedToMeCount, "active work item")} to move forward`}
                 tone="assigned" to="/dashboard?scope=assigned" />
               <DashboardSummaryCard title="Awaiting my review" count={summary.awaitingMyReviewCount}
                 description={summary.awaitingMyReviewCount === 0 ? "No submissions waiting" :
@@ -399,7 +399,7 @@ export default function DashboardPage() {
                 tone="review" to="/dashboard?scope=owned&status=InReview&sort=reviewAge" />
               <DashboardSummaryCard title="Overdue" count={summary.overdueCount}
                 description={summary.overdueCount === 0 ? "Everything is on schedule" :
-                  `${countText(summary.overdueCount, "task")} past the due date`}
+                  `${countText(summary.overdueCount, "work item")} past the due date`}
                 tone="overdue" to="/dashboard?due=overdue" />
               <DashboardSummaryCard title="Task invitations" count={summary.pendingTaskInvitationsCount}
                 description={summary.pendingTaskInvitationsCount === 0 ? "No responses needed" :
@@ -411,7 +411,7 @@ export default function DashboardPage() {
                 tone="invitation" to="/workspaces" />
             </div>
             {allClear && <div className="dashboard-all-clear">
-              <span aria-hidden="true">✓</span><div><strong>All clear</strong><p>Nothing needs your attention.</p></div>
+              <span aria-hidden="true">✓</span><div><strong>All clear</strong><p>No work or invitation alerts.</p></div>
             </div>}
           </>}
 

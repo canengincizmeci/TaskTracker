@@ -1,7 +1,8 @@
-import { useId, useRef, useState } from "react";
-import { deleteTaskAttachment, downloadTaskAttachment } from "../api/taskAttachmentService";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { deleteTaskAttachment, downloadTaskAttachment, getTaskAttachmentBlob } from "../api/taskAttachmentService";
 import { errorMessage } from "../api/errorMessage";
 import type { TaskAttachment } from "../types/taskAttachment";
+import type { DiscussionAttachmentSettings } from "../types/taskCollaboration";
 import "../styles/task-collaboration.css";
 
 const accepted = ".pdf,.docx,.xlsx,.pptx,.txt,.csv,.png,.jpg,.jpeg,.webp,.zip";
@@ -30,27 +31,24 @@ export function CollaborationIcon({ name }: { name: keyof typeof paths }) {
   </svg>;
 }
 
-export function FilePicker({ file, onChange, label, disabled = false }: {
-  file: File | null;
-  onChange: (next: File | null) => void;
-  label: string;
-  disabled?: boolean;
+function fileIssue(file: File) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (!file.size) return "Choose a non-empty file.";
+  if (file.name.length > 255) return "Use a filename under 256 characters.";
+  if (!accepted.split(",").includes(extension)) return "Choose a PDF, Office document, text file, CSV, PNG, JPEG, WebP or ZIP.";
+  return "";
+}
+
+function FileInput({ label, disabled, multiple, onFiles, picker, error, children }: {
+  label: string; disabled: boolean; multiple?: boolean; onFiles: (selected: File[]) => void;
+  picker?: RefObject<HTMLInputElement | null>; error: string; children?: ReactNode;
 }) {
   const id = useId();
-  const [error, setError] = useState("");
   const [over, setOver] = useState(false);
   const depth = useRef(0);
   const pick = (selected: FileList | null) => {
     if (disabled || !selected?.length) return;
-    const next = selected[0];
-    const extension = next.name.slice(next.name.lastIndexOf(".")).toLowerCase();
-    let issue = "";
-    if (selected.length > 1) issue = "Choose one file at a time.";
-    else if (!next.size) issue = "Choose a non-empty file.";
-    else if (next.name.length > 255) issue = "Use a filename under 256 characters.";
-    else if (!accepted.split(",").includes(extension)) issue = "Choose a PDF, Office document, text file, CSV, PNG, JPEG, WebP or ZIP.";
-    setError(issue);
-    onChange(issue ? null : next);
+    onFiles(Array.from(selected));
   };
   return <div className={`tc-picker${over ? " tc-picker--over" : ""}`}
     onDragEnter={(e) => {
@@ -66,30 +64,138 @@ export function FilePicker({ file, onChange, label, disabled = false }: {
       e.preventDefault(); depth.current = 0; setOver(false); pick(e.dataTransfer.files);
     }}>
     <div className="tc-picker__row">
-      <input type="file" id={id} className="tc-native-picker" accept={accepted} disabled={disabled}
+      <input ref={picker} type="file" id={id} className="tc-native-picker" accept={accepted} disabled={disabled} multiple={multiple}
         aria-invalid={!!error || undefined} aria-describedby={error ? `${id}-error` : undefined}
         onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
       <label className="tc-action tc-picker__label" htmlFor={id}>
-        <CollaborationIcon name="attach" /><span>{file ? "Change file" : label}</span>
+        <CollaborationIcon name="attach" /><span>{label}</span>
       </label>
-      {file && <span className="tc-selected">
-        <span>{file.name} <small>· {fileSize(file.size)}</small></span>
-        <button className="tc-icon-button" type="button" aria-label={`Clear ${file.name}`} disabled={disabled}
-          onClick={() => { setError(""); onChange(null); }}><CollaborationIcon name="close" /></button>
-      </span>}
+      {children}
     </div>
     {error && <p id={`${id}-error`} className="tc-error" role="alert">{error}</p>}
   </div>;
 }
 
-export function AttachmentChips({ files, detailed = false }: { files: TaskAttachment[]; detailed?: boolean }) {
+export function FilePicker({ file, onChange, label, disabled = false }: {
+  file: File | null; onChange: (next: File | null) => void; label: string; disabled?: boolean;
+}) {
+  const [error, setError] = useState("");
+  return <FileInput label={file ? "Change file" : label} disabled={disabled} error={error} onFiles={selected => {
+    const issue = selected.length > 1 ? "Choose one file at a time." : fileIssue(selected[0]);
+    setError(issue);
+    onChange(issue ? null : selected[0]);
+  }}>
+    {file && <span className="tc-selected">
+        <span>{file.name} <small>· {fileSize(file.size)}</small></span>
+        <button className="tc-icon-button" type="button" aria-label={`Clear ${file.name}`} disabled={disabled}
+          onClick={() => { setError(""); onChange(null); }}><CollaborationIcon name="close" /></button>
+      </span>}
+  </FileInput>;
+}
+
+const imageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const maxPreviewBytes = 4 * 1024 * 1024;
+export type SelectedDiscussionFile = { id: number; file: File };
+
+export function DiscussionFilePicker({ files, onChange, settings, disabled }: {
+  files: SelectedDiscussionFile[]; onChange: (files: SelectedDiscussionFile[]) => void;
+  settings: DiscussionAttachmentSettings; disabled: boolean;
+}) {
+  const [error, setError] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const selectedList = useRef<HTMLUListElement>(null);
+  const nextId = useRef(0);
+
+  function add(selected: File[]) {
+    if (files.length + selected.length > settings.maxFiles) { setError(`Choose at most ${settings.maxFiles} files per message.`); return; }
+    for (const file of selected) {
+      const issue = fileIssue(file) || (file.size > settings.maxFileSizeBytes
+        ? `The file exceeds the ${fileSize(settings.maxFileSizeBytes)} limit.` : "");
+      if (issue) { setError(`${file.name}. ${issue}`); return; }
+    }
+    const total = files.reduce((size, item) => size + item.file.size, 0) + selected.reduce((size, file) => size + file.size, 0);
+    if (total > settings.maxTotalBytes) {
+      setError(`Selected files exceed the ${fileSize(settings.maxTotalBytes)} total limit.`); return;
+    }
+    setError("");
+    onChange([...files, ...selected.map(file => ({ id: nextId.current++, file }))]);
+  }
+
+  function remove(index: number) {
+    const buttons = selectedList.current?.querySelectorAll("button");
+    (buttons?.[index + 1] ?? buttons?.[index - 1] ?? input.current)?.focus();
+    setError("");
+    onChange(files.filter((_, current) => current !== index));
+  }
+
+  return <div className="tc-discussion-picker">
+    <FileInput label={files.length ? "Add files" : "Attach files"} picker={input} disabled={disabled || !settings.uploadsEnabled}
+      multiple onFiles={add} error={error} />
+    {files.length > 0 && <ul className="tc-selected-files" ref={selectedList} aria-label="Selected attachments">
+      {files.map(({ id, file }, index) => <li key={id} className="tc-selected">
+        {imageTypes.has(file.type) && file.size <= maxPreviewBytes && <SelectedImage file={file} />}
+        <span>{file.name} <small>· {fileSize(file.size)}</small></span>
+        <button className="tc-icon-button" type="button" aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => remove(index)}>
+          <CollaborationIcon name="close" />
+        </button>
+      </li>)}
+    </ul>}
+    <small className="tc-muted">Up to {settings.maxFiles} files, {fileSize(settings.maxFileSizeBytes)} each and {fileSize(settings.maxTotalBytes)} total.</small>
+  </div>;
+}
+
+function SelectedImage({ file }: { file: File }) {
+  const image = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    if (typeof URL.createObjectURL !== "function") return;
+    const target = image.current;
+    if (!target) return;
+    const source = URL.createObjectURL(file);
+    target.src = source;
+    return () => URL.revokeObjectURL(source);
+  }, [file]);
+  return <img ref={image} className="tc-selected-preview" alt="" onError={event => { event.currentTarget.hidden = true; }} />;
+}
+
+function DiscussionImage({ file }: { file: TaskAttachment }) {
+  const { id, contentType } = file;
+  const target = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState<{ id: number; url: string }>();
+  useEffect(() => {
+    const host = target.current;
+    if (!host || typeof URL.createObjectURL !== "function") return;
+    const request = new AbortController();
+    let url: string | undefined;
+    const fetchPreview = () => {
+      void getTaskAttachmentBlob(id, request.signal).then(blob => {
+        if (request.signal.aborted) return;
+        url = URL.createObjectURL(new Blob([blob], { type: contentType }));
+        setPreview({ id, url });
+      }).catch(() => undefined);
+    };
+    const observer = typeof IntersectionObserver === "function" ? new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { observer?.disconnect(); fetchPreview(); }
+    }) : null;
+    if (observer) observer.observe(host); else fetchPreview();
+    return () => { request.abort(); observer?.disconnect(); if (url) URL.revokeObjectURL(url); };
+  }, [id, contentType]);
+
+  return <div className="tc-message-image" ref={target}>{preview?.id === file.id &&
+    <img src={preview.url} alt={`Preview of ${file.fileName}`} onError={event => { event.currentTarget.hidden = true; }} />}</div>;
+}
+
+export function AttachmentChips({ files, detailed = false, download = downloadTaskAttachment, previewImages = false }: {
+  files: TaskAttachment[]; detailed?: boolean; download?: (file: TaskAttachment) => Promise<void>; previewImages?: boolean;
+}) {
   if (!files.length) return null;
   return <ul className={detailed ? "tc-file-index" : "tc-file-chips"}>
-    {files.map((file) => <AttachmentItem key={file.id} file={file} detailed={detailed} />)}
+    {files.map((file) => <AttachmentItem key={file.id} file={file} detailed={detailed} download={download} previewImages={previewImages} />)}
   </ul>;
 }
 
-function AttachmentItem({ file, detailed }: { file: TaskAttachment; detailed: boolean }) {
+function AttachmentItem({ file, detailed, download, previewImages }: {
+  file: TaskAttachment; detailed: boolean; download: (file: TaskAttachment) => Promise<void>; previewImages: boolean;
+}) {
   const [busy, setBusy] = useState<"download" | "delete" | null>(null);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -99,7 +205,7 @@ function AttachmentItem({ file, detailed }: { file: TaskAttachment; detailed: bo
     if (guard.current) return;
     guard.current = true; setBusy(action); setError("");
     try {
-      if (action === "download") await downloadTaskAttachment(file);
+      if (action === "download") await download(file);
       else { await deleteTaskAttachment(file); setConfirm(false); }
     } catch (reason) {
       setError(errorMessage(reason, action === "download" ? "Could not download the file. Try again." : "Could not remove the file. Try again."));
@@ -109,6 +215,7 @@ function AttachmentItem({ file, detailed }: { file: TaskAttachment; detailed: bo
   };
   const label = file.fileName.split(".").at(-1)?.toUpperCase() ?? "FILE";
   return <li className={detailed ? "tc-file-row" : "tc-file-chip"}>
+    {previewImages && file.sizeBytes <= maxPreviewBytes && imageTypes.has(file.contentType) && <DiscussionImage file={file} />}
     <button className="tc-file-download" type="button" disabled={!!busy} aria-label={`Download ${file.fileName}`}
       onClick={() => void operate("download")}>
       <span className="tc-file-type" aria-hidden="true">{detailed ? label : <CollaborationIcon name="file" />}</span>

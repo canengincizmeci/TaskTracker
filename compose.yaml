@@ -14,6 +14,22 @@ services:
       retries: 10
       start_period: 5s
     restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+    ports:
+      - "127.0.0.1:${CLAMAV_HOST_PORT:-3310}:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/local/bin/clamdcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+    restart: unless-stopped
   
   migrate:
     build:
@@ -51,11 +67,22 @@ services:
       Smtp__Pass: ${SMTP_PASS}
       Smtp__FromEmail: ${SMTP_FROM_EMAIL}
       ClientApp__BaseUrl: ${CLIENT_APP_BASE_URL}
+      TaskFiles__RequireCleanScan: "true"
+      TaskFiles__EnableDiscussionUploads: ${TASKFILES_ENABLE_DISCUSSION_UPLOADS:-false}
+      TaskFiles__EnableSubTaskSubmissionUploads: ${TASKFILES_ENABLE_SUBTASK_SUBMISSION_UPLOADS:-false}
+      TaskFiles__Scanner__Enabled: ${CLAMAV_ENABLED:-false}
+      TaskFiles__Scanner__Host: ${CLAMAV_HOST:-clamav}
+      TaskFiles__Scanner__Port: ${CLAMAV_PORT:-3310}
+      TaskFiles__Scanner__ConnectTimeoutMs: ${CLAMAV_CONNECT_TIMEOUT_MS:-3000}
+      TaskFiles__Scanner__ScanTimeoutMs: ${CLAMAV_SCAN_TIMEOUT_MS:-15000}
+      TaskFiles__Scanner__MaxConcurrentScans: ${CLAMAV_MAX_CONCURRENT_SCANS:-4}
     depends_on:
       db:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
 
   client:
     build:
@@ -73,3 +100,4 @@ services:
 
 volumes:
   postgres_data:
+  clamav_data:

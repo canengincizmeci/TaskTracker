@@ -11,7 +11,9 @@ export function useModalFocus(dialog: RefObject<HTMLDialogElement | null>, opene
     return () => {
       modal.close();
       if (document.activeElement === document.body || document.activeElement === priorFocus) {
-        const target = priorFocus?.isConnected ? priorFocus : fallbackTarget;
+        const target = priorFocus?.isConnected && (!fallbackTarget ||
+          (priorFocus instanceof HTMLElement && !priorFocus.matches(":disabled") && !priorFocus.closest("[hidden]")))
+          ? priorFocus : fallbackTarget;
         if (target instanceof HTMLElement && target.isConnected) target.focus({ preventScroll: true });
       }
     };

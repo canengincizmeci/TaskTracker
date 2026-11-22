@@ -46,7 +46,8 @@ public class InvitationTests
         return new TaskShareManager(uow, new EfTaskShareDal(context), user, new Email(),
             new NotificationManager(uow, user, new Realtime(failRealtime), NullLogger<NotificationManager>.Instance),
             new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
-            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context), new IdentityNormalizer());
+            new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context), new IdentityNormalizer(),
+            new EfSubTaskDal(context));
     }
     private static async Task Seed(TaskTrackerDbContext context, bool expired = false, TaskPermission permission = TaskPermission.Edit)
     {

@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using TaskTracker.Core.DataAccess.EfCore.Repository;
+using Microsoft.EntityFrameworkCore.Storage;
 
 
 namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
@@ -22,6 +23,10 @@ namespace TaskTracker.Core.DataAccess.EfCore.UnitOfWork
         {
             return await _context.SaveChangesAsync();
         }
+
+        public Task<IDbContextTransaction> BeginTransactionAsync() => _context.Database.BeginTransactionAsync();
+
+        public void DiscardTrackedChanges() => _context.ChangeTracker.Clear();
 
         IEntityRepository<T> IUnitOfWork.GetRepository<T>()
         {

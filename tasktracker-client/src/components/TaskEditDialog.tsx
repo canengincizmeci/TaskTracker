@@ -6,12 +6,13 @@ import type { Task } from "../types/task";
 import { localCalendarDate, maxTaskCategoryLength } from "../utils/localCalendarDate";
 import { useModalFocus } from "../hooks/useModalFocus";
 
-export function TaskDialog({ title, children, busy, onClose, opener }: {
+export function TaskDialog({ title, children, busy, onClose, opener, fallback }: {
   title: string; children: ReactNode; busy?: boolean; onClose: () => void; opener?: RefObject<HTMLElement | null>;
+  fallback?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  useModalFocus(ref, opener);
+  useModalFocus(ref, opener, fallback);
   return <dialog className="tw-dialog" ref={ref} aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <div className="tw-edit-dialog-head"><h2 id={titleId}>{title}</h2>

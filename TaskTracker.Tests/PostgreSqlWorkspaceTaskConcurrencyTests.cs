@@ -77,7 +77,7 @@ public class PostgreSqlWorkspaceTaskConcurrencyTests
         var uow = new UnitOfWork(context);
         return new WorkspaceManager(uow, new EfWorkspaceDal(context), new CurrentUser(userId),
             TaskCollaborationTestServices.Create(context),
-            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer());
+            NullLogger<WorkspaceManager>.Instance, new IdentityNormalizer(), new EfSubTaskDal(context));
     }
 
     private sealed class CurrentUser(int id) : ICurrentUserService

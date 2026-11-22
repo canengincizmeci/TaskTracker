@@ -30,7 +30,8 @@ public class ResponsibilityTests
     private sealed class RecordingCollaboration : ITaskCollaborationService
     {
         public List<(int TaskId, int UserId)> Revocations { get; } = [];
-        public Task<bool> CanAccessAsync(int taskId, int userId) => Task.FromResult(true);
+        public Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default) => Task.FromResult(true);
+        public Task PublishMessageAsync(int taskId, TaskMessageDto message) => throw new NotSupportedException();
         public Task<IDataResult<List<TaskActivityDto>>> GetActivitiesAsync(int taskId, int userId) =>
             throw new NotSupportedException();
         public Task<IDataResult<List<TaskMessageDto>>> GetMessagesAsync(int taskId, int userId) =>
@@ -56,7 +57,7 @@ public class ResponsibilityTests
         return new TaskRequestManager(uow, new EfTaskShareDal(context), new EfTaskRequestDal(context),
             new EfWorkspaceDal(context),
             new TaskActivityWriter(uow), TaskCollaborationTestServices.Create(context, failRealtime), notifications,
-            NullLogger<TaskRequestManager>.Instance);
+            NullLogger<TaskRequestManager>.Instance, new EfSubTaskDal(context));
     }
 
     private static TaskShareManager Shares(TaskTrackerDbContext context, int userId = 1,
@@ -68,7 +69,7 @@ public class ResponsibilityTests
         return new TaskShareManager(uow, new EfTaskShareDal(context), current, new Email(), notifications,
             new ConfigurationBuilder().Build(), NullLogger<TaskShareManager>.Instance,
             new TaskActivityWriter(uow), collaboration ?? TaskCollaborationTestServices.Create(context),
-            new IdentityNormalizer());
+            new IdentityNormalizer(), new EfSubTaskDal(context));
     }
 
     [Fact]

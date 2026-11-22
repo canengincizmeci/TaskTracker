@@ -62,9 +62,7 @@ builder.Services.AddCors(options =>
 });
  
 builder.Services.AddScoped<TaskRequestValidator>();
-builder.Services.Configure<TaskFileOptions>(builder.Configuration.GetSection("TaskFiles"));
-builder.Services.AddSingleton<ITaskFileStore, PrivateTaskFileStore>();
-builder.Services.AddSingleton<ITaskFileScanner, NoOpTaskFileScanner>();
+builder.Services.AddTaskFileServices(builder.Configuration, builder.Environment);
 var tokenOptions = builder.Configuration.GetSection("TokenOptions");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -49,12 +49,15 @@ function WorkspaceConnection({ task, view, children, onAccessRevoked, onTaskChan
   const [messageError, setMessageError] = useState("");
   const [liveError, setLiveError] = useState("");
   const [rosterRevision, setRosterRevision] = useState(0);
+  const [taskRevision, setTaskRevision] = useState(0);
   const [loading, setLoading] = useState(allowed);
   const historyRequest = useRef({ sequence: 0 });
-  const changed = useEffectEvent(onTaskChanged);
   const revoked = useEffectEvent(onAccessRevoked);
   const syncFiles = useEffectEvent(() => attachments.invalidate().catch(() => undefined));
-  const syncTask = useEffectEvent(() => Promise.resolve(onTaskChanged()).catch(() => undefined));
+  const syncTask = useEffectEvent(() => {
+    setTaskRevision(revision => revision + 1);
+    return Promise.resolve(onTaskChanged()).catch(() => undefined);
+  });
   const refreshRoster = useEffectEvent((workspaceId: number) => {
     if (workspaceId === task.workspaceId) setRosterRevision(version => version + 1);
   });
@@ -149,8 +152,8 @@ function WorkspaceConnection({ task, view, children, onAccessRevoked, onTaskChan
         if (!disposed) void syncFiles();
       }, 80);
     });
-    connection.on("TaskChanged", () => {
-      if (disposed || taskSync !== undefined) return;
+    connection.on("TaskChanged", (changedTaskId: number) => {
+      if (disposed || changedTaskId !== taskId || taskSync !== undefined) return;
       taskSync = setTimeout(() => {
         taskSync = undefined;
         if (!disposed) void syncTask();
@@ -170,7 +173,7 @@ function WorkspaceConnection({ task, view, children, onAccessRevoked, onTaskChan
       setLiveError("");
       // Fetch after joining so events arriving during the request are merged by id.
       if (reconnecting) setRosterRevision(version => version + 1);
-      await Promise.all([loadSavedHistory(), Promise.resolve(changed()), reconnecting && syncFiles()]);
+      await Promise.all([loadSavedHistory(), syncTask(), reconnecting && syncFiles()]);
     };
     const start = async (reconnecting: boolean) => {
       try {
@@ -223,7 +226,7 @@ function WorkspaceConnection({ task, view, children, onAccessRevoked, onTaskChan
 
   return <AttachmentContext.Provider value={attachments}>
     <ConversationContext.Provider value={{
-      taskId, currentUserId, activities, messages, loading, liveError, rosterRevision, onAccessRevoked,
+      taskId, currentUserId, activities, messages, loading, liveError, rosterRevision, taskRevision, onAccessRevoked,
       reload, addMessage, messageError, activityError,
     }}>
       {children}

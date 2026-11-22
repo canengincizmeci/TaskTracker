@@ -238,6 +238,262 @@ namespace TaskTracker.Core.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int?>("AssigneeUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeletedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssigneeUserId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DeletedByUserId");
+
+                    b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.ToTable("SubTasks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubTasks_DeletionAudit", "(\"Activity\" = TRUE AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR (\"Activity\" = FALSE AND \"DeletedAt\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL AND \"DeletedAt\" >= \"CreatedAt\")");
+
+                            t.HasCheckConstraint("CK_SubTasks_Description", "length(trim(\"Description\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0");
+
+                            t.HasCheckConstraint("CK_SubTasks_Priority", "\"Priority\" IN ('Low', 'Medium', 'High', 'Critical')");
+
+                            t.HasCheckConstraint("CK_SubTasks_Status", "\"Status\" IN ('Pending', 'InProgress', 'Completed', 'Cancelled', 'InReview')");
+
+                            t.HasCheckConstraint("CK_SubTasks_Title", "length(trim(\"Title\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0");
+
+                            t.HasCheckConstraint("CK_SubTasks_Version", "\"Version\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskActivity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActivityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("ReviewId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SubTaskId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SubmissionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TargetUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ToStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("ReviewId", "SubmissionId");
+
+                    b.HasIndex("SubTaskId", "TaskRequestId");
+
+                    b.HasIndex("SubmissionId", "SubTaskId");
+
+                    b.HasIndex("SubTaskId", "CreatedAt", "Id");
+
+                    b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.ToTable("SubTaskActivities", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubTaskActivities_DeletionStatus", "\"ActivityType\" <> 'TaskDeleted' OR (\"FromStatus\" IS NULL AND \"ToStatus\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_FromStatus", "\"FromStatus\" IN ('Pending', 'InProgress', 'Completed', 'Cancelled', 'InReview')");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_Review", "(\"ActivityType\" IN ('ChangesRequested', 'SubmissionApproved')) = (\"ReviewId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_Submission", "(\"ActivityType\" IN ('SubmissionCreated', 'ChangesRequested', 'SubmissionApproved')) = (\"SubmissionId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_Target", "(\"ActivityType\" IN ('UserAssigned', 'UserUnassigned')) = (\"TargetUserId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_ToStatus", "\"ToStatus\" IN ('Pending', 'InProgress', 'Completed', 'Cancelled', 'InReview')");
+
+                            t.HasCheckConstraint("CK_SubTaskActivities_Type", "\"ActivityType\" IN ('TaskCreated', 'TaskDetailsUpdated', 'TaskDeleted', 'UserAssigned', 'UserUnassigned', 'WorkStarted', 'SubmissionCreated', 'ChangesRequested', 'SubmissionApproved', 'TaskCompleted', 'TaskCancelled', 'TaskReopened', 'ResponsibilityReset')");
+                        });
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskSubmission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SubTaskId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SubmittedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmittedByUserId");
+
+                    b.HasIndex("SubTaskId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SubTaskId", "TaskRequestId");
+
+                    b.ToTable("SubTaskSubmissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubTaskSubmissions_Content", "length(trim(\"Content\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0");
+
+                            t.HasCheckConstraint("CK_SubTaskSubmissions_RevisionNumber", "\"RevisionNumber\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskSubmissionReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<int>("ReviewerUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SubTaskSubmissionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewerUserId");
+
+                    b.HasIndex("SubTaskSubmissionId")
+                        .IsUnique();
+
+                    b.ToTable("SubTaskSubmissionReviews", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SubTaskSubmissionReviews_Decision", "\"Decision\" IN ('Approved', 'ChangesRequested')");
+
+                            t.HasCheckConstraint("CK_SubTaskSubmissionReviews_Feedback", "\"Decision\" <> 'ChangesRequested' OR (\"Feedback\" IS NOT NULL AND length(trim(\"Feedback\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0)");
+                        });
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskActivity", b =>
                 {
                     b.Property<int>("Id")
@@ -325,6 +581,7 @@ namespace TaskTracker.Core.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<int>("Kind")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer");
 
                     b.Property<string>("OriginalFileName")
@@ -339,6 +596,9 @@ namespace TaskTracker.Core.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("SubTaskSubmissionId")
+                        .HasColumnType("integer");
 
                     b.Property<int?>("TaskMessageId")
                         .HasColumnType("integer");
@@ -363,9 +623,14 @@ namespace TaskTracker.Core.Migrations
 
                     b.HasIndex("UploaderUserId");
 
+                    b.HasIndex("SubTaskSubmissionId", "TaskRequestId");
+
                     b.HasIndex("TaskRequestId", "CreatedAt", "Id");
 
-                    b.ToTable("TaskAttachments");
+                    b.ToTable("TaskAttachments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TaskAttachments_Context", "(\"Kind\" = 0 AND \"TaskMessageId\" IS NULL AND \"TaskSubmissionId\" IS NULL AND \"SubTaskSubmissionId\" IS NULL) OR (\"Kind\" = 1 AND \"TaskMessageId\" IS NOT NULL AND \"TaskSubmissionId\" IS NULL AND \"SubTaskSubmissionId\" IS NULL) OR (\"Kind\" = 2 AND \"TaskMessageId\" IS NULL AND \"TaskSubmissionId\" IS NOT NULL AND \"SubTaskSubmissionId\" IS NULL) OR (\"Kind\" = 3 AND \"TaskMessageId\" IS NULL AND \"TaskSubmissionId\" IS NULL AND \"SubTaskSubmissionId\" IS NOT NULL AND NOT \"IsDeleted\" AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMessage", b =>
@@ -376,6 +641,9 @@ namespace TaskTracker.Core.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -385,6 +653,13 @@ namespace TaskTracker.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("DeliveryFileCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DeliveryFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("SenderUserId")
                         .HasColumnType("integer");
@@ -398,9 +673,14 @@ namespace TaskTracker.Core.Migrations
 
                     b.HasIndex("TaskRequestId", "CreatedAt", "Id");
 
+                    b.HasIndex("TaskRequestId", "SenderUserId", "ClientRequestId")
+                        .IsUnique();
+
                     b.ToTable("TaskMessages", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TaskMessages_Content", "length(trim(\"Content\")) > 0 AND length(\"Content\") <= 4000");
+                            t.HasCheckConstraint("CK_TaskMessages_Content", "(length(trim(\"Content\")) > 0 OR (\"Content\" = '' AND \"DeliveryFileCount\" > 0)) AND length(\"Content\") <= 4000");
+
+                            t.HasCheckConstraint("CK_TaskMessages_Delivery", "(\"ClientRequestId\" IS NULL AND \"DeliveryFingerprint\" IS NULL AND \"DeliveryFileCount\" = 0) OR (\"ClientRequestId\" IS NOT NULL AND \"DeliveryFingerprint\" IS NOT NULL AND length(\"DeliveryFingerprint\") = 64 AND \"DeliveryFileCount\" BETWEEN 0 AND 10)");
                         });
                 });
 
@@ -1051,6 +1331,129 @@ namespace TaskTracker.Core.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTask", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "DeletedByUser")
+                        .WithMany()
+                        .HasForeignKey("DeletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Assignee");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("DeletedByUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskActivity", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "TargetUser")
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTaskSubmissionReview", "Review")
+                        .WithMany()
+                        .HasForeignKey("ReviewId", "SubmissionId")
+                        .HasPrincipalKey("Id", "SubTaskSubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTask", "SubTask")
+                        .WithMany()
+                        .HasForeignKey("SubTaskId", "TaskRequestId")
+                        .HasPrincipalKey("Id", "TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTaskSubmission", "Submission")
+                        .WithMany()
+                        .HasForeignKey("SubmissionId", "SubTaskId")
+                        .HasPrincipalKey("Id", "SubTaskId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Review");
+
+                    b.Navigation("SubTask");
+
+                    b.Navigation("Submission");
+
+                    b.Navigation("TargetUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskSubmission", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "SubmittedByUser")
+                        .WithMany()
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTask", "SubTask")
+                        .WithMany()
+                        .HasForeignKey("SubTaskId", "TaskRequestId")
+                        .HasPrincipalKey("Id", "TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SubTask");
+
+                    b.Navigation("SubmittedByUser");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.SubTaskSubmissionReview", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", "ReviewerUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTaskSubmission", "SubTaskSubmission")
+                        .WithOne()
+                        .HasForeignKey("TaskTracker.Core.Entities.Concrete.SubTaskSubmissionReview", "SubTaskSubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewerUser");
+
+                    b.Navigation("SubTaskSubmission");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskActivity", b =>
                 {
                     b.HasOne("TaskTracker.Core.Entities.Concrete.User", "ActorUser")
@@ -1121,6 +1524,14 @@ namespace TaskTracker.Core.Migrations
                         .HasForeignKey("UploaderUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.SubTaskSubmission", "SubTaskSubmission")
+                        .WithMany()
+                        .HasForeignKey("SubTaskSubmissionId", "TaskRequestId")
+                        .HasPrincipalKey("Id", "TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("SubTaskSubmission");
 
                     b.Navigation("TaskMessage");
 

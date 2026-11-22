@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Storage;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.DataAccess.EfCore.UnitOfWork;
@@ -17,7 +18,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
     ICurrentUserService currentUserService, IEmailService emailService,
     INotificationService notificationService, IConfiguration configuration,
     ILogger<TaskShareManager> logger, ITaskActivityWriter activityWriter,
-    ITaskCollaborationService collaborationService, IIdentityNormalizer identityNormalizer) : ITaskShareService
+    ITaskCollaborationService collaborationService, IIdentityNormalizer identityNormalizer, ISubTaskDal subTaskDal)
+    : ITaskShareService
 {
     private const string TaskUnavailable = "This task is inactive or completed/cancelled and cannot receive participants.";
     private const string ConcurrentChange = "The task or invitation changed. Refresh and retry.";
@@ -87,21 +89,24 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         return result;
     }
 
-    private async Task<IResult> SaveInvitationChange(TaskRequest task, string message)
+    private async Task<IResult> SaveInvitationChange(TaskRequest task, string message, IDbContextTransaction? transaction = null)
     {
         taskShareDal.TouchTask(task);
         try
         {
             // One transaction persists membership, invitation and version. Competing writes roll back.
             await unitOfWork.SaveChangesAsync();
+            if (transaction is not null) await transaction.CommitAsync();
             return new SuccessResult(message);
         }
         catch (DbUpdateConcurrencyException)
         {
+            if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             return new ConflictResult(ConcurrentChange);
         }
         catch (DbUpdateException ex)
         {
+            if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             logger.LogWarning(ex, "Invitation change could not be saved for task {TaskId}", task.Id);
             return new ErrorResult("The invitation change could not be saved. Refresh and retry.");
         }
@@ -314,6 +319,8 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
 
     public async Task<IResult> UpdateParticipantPermissionAsync(int taskId, int userId, UpdateParticipantPermissionDto dto)
     {
+        await using var transaction = await unitOfWork.BeginTransactionAsync();
+        await subTaskDal.LockParentAsync(taskId, exclusive: true);
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
@@ -328,6 +335,13 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         if (task.Status == TaskStatus.InReview && task.AssigneeUserId == userId &&
             dto.Permission < TaskPermission.Edit)
             return new ConflictResult("The current assignee's working access cannot be reduced while the task is under review.");
+        if (dto.Permission < TaskPermission.Edit)
+        {
+            var assignments = await subTaskDal.GetOpenTaskAssignmentsAsync(taskId, userId);
+            if (assignments.Any(x => x.Status == TaskStatus.InReview))
+                return new ConflictResult("Working access cannot be reduced while an assigned subtask is under review.");
+            await ReleaseSubTaskResponsibilitiesAsync(assignments);
+        }
         share.Permission = dto.Permission;
         var activityTime = DateTime.UtcNow;
         TaskActivity? unassigned = null;
@@ -346,7 +360,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         }
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
             TaskActivityType.ParticipantPermissionChanged, userId, createdAt: activityTime);
-        var result = await SaveInvitationChange(task, "Participant permission updated.");
+        var result = await SaveInvitationChange(task, "Participant permission updated.", transaction);
         if (!result.Success) return result;
         if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
         if (resetActivity is not null) await collaborationService.PublishActivityAsync(resetActivity);
@@ -359,15 +373,22 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
 
     public async Task<IResult> RemoveParticipantAsync(int taskId, int userId, long version)
     {
+        await using var transaction = await unitOfWork.BeginTransactionAsync();
+        await subTaskDal.LockParentAsync(taskId, exclusive: true);
         var task = await unitOfWork.GetRepository<TaskRequest>().GetByIdAsync(taskId);
         if (task is null || !task.Activity) return new ErrorResult(Messages.DataNotFound);
         if (task.OwnerId != currentUserService.UserId) return new ErrorResult(Messages.AuthorizationDenied);
         if (task.WorkspaceId.HasValue) return new ConflictResult(WorkspaceTaskSharingUnavailable);
         if (userId == task.OwnerId) return new ErrorResult("The task owner cannot be removed.");
         if (task.Version != version) return new ConflictResult(ConcurrentChange);
-        if (task.Status == TaskStatus.InReview) return new ErrorResult("Participants cannot be removed while a task is under review.");
+        var assignments = await subTaskDal.GetOpenTaskAssignmentsAsync(taskId, userId);
+        if (assignments.Any(x => x.Status == TaskStatus.InReview))
+            return new ConflictResult("Access cannot be removed while an assigned subtask is under review.");
+        if (task.Status == TaskStatus.InReview)
+            return new ErrorResult("Participants cannot be removed while a task is under review.");
         var share = await taskShareDal.GetAsync(x => x.TaskRequestId == taskId && x.SharedWithUserId == userId);
         if (share is null) return new ErrorResult("Participant not found.");
+        await ReleaseSubTaskResponsibilitiesAsync(assignments);
         var activityTime = DateTime.UtcNow;
         TaskActivity? unassigned = null;
         TaskActivity? resetActivity = null;
@@ -386,7 +407,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         taskShareDal.Delete(share);
         var activity = await activityWriter.WriteAsync(task, currentUserService.UserId,
             TaskActivityType.ParticipantRemoved, userId, createdAt: activityTime);
-        var result = await SaveInvitationChange(task, "Participant removed.");
+        var result = await SaveInvitationChange(task, "Participant removed.", transaction);
         if (!result.Success) return result;
         try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
         catch (Exception ex) { logger.LogWarning(ex, "Could not revoke live workspace access for task {TaskId}", task.Id); }
@@ -397,6 +418,12 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         await TryTaskNotification(userId, "Removed from task", $"You no longer have access to '{task.Title}'.",
             task.Id, "/tasks/shared-tasks");
         return result;
+    }
+
+    private async Task ReleaseSubTaskResponsibilitiesAsync(IEnumerable<SubTask> assignments)
+    {
+        foreach (var subTask in assignments)
+            await SubTaskActivityWriter.SetAssigneeAsync(unitOfWork, subTask, currentUserService.UserId, null);
     }
 
     private async Task TryTaskNotification(int userId, string title, string message, int taskId,

@@ -4,7 +4,10 @@ import { isAxiosError } from "axios";
 import { deleteTask, taskAction } from "../api/taskService";
 import { errorMessage } from "../api/errorMessage";
 import { useTaskSubmissionWorkflow } from "../hooks/useTaskSubmissionWorkflow";
+import { useTaskConversation } from "../hooks/useTaskConversation";
+import { useSubTaskList } from "../hooks/useSubTasks";
 import { taskStatusLabel } from "../utils/taskDisplay";
+import { isOpenSubTask } from "../utils/subTaskWorkflow";
 import type { Task } from "../types/task";
 import TaskResponsibility from "./TaskResponsibility";
 import TaskSubmissionPanel, { TaskSubmissionHistory } from "./TaskSubmissionPanel";
@@ -12,6 +15,7 @@ import TaskDiscussion from "./TaskDiscussion";
 import TaskFiles, { TaskReferenceFiles } from "./TaskFiles";
 import { TaskWorkspaceActivity } from "./TaskCollaborationPanel";
 import TaskEditDialog, { TaskDialog } from "./TaskEditDialog";
+import SubTasksSection from "./SubTasksSection";
 
 import { tabs, labels, type View } from "../utils/taskWorkspaceViews";
 
@@ -55,11 +59,20 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
   const menuEnter = useRef(false);
   const jumpToSubmission = useRef<"submit" | "review" | null>(null);
   const tabList = useRef<HTMLDivElement>(null);
+  const collaborative = Boolean(task.canViewParticipants);
+  const { taskRevision, onAccessRevoked, rosterRevision } = useTaskConversation();
+  const subTasks = useSubTaskList(task.id, collaborative, taskRevision, onAccessRevoked, refreshTask);
+  const openSubTasks = subTasks.items?.filter(item => isOpenSubTask(item.status)).length ?? 0;
+  const completionBlocked = collaborative && (openSubTasks > 0 || subTasks.loading || Boolean(subTasks.error));
+  const reloadSubTasks = subTasks.reload;
+  const refreshWork = useCallback(() => {
+    reloadSubTasks();
+    return refreshTask();
+  }, [refreshTask, reloadSubTasks]);
   const clearFeedback = useCallback(() => { setNotice(null); setError(""); }, []);
-  const workflow = useTaskSubmissionWorkflow(task, refreshTask, clearFeedback);
+  const workflow = useTaskSubmissionWorkflow(task, refreshWork, clearFeedback);
   const blocked = busy || workflow.busy || refreshFailed;
   const back = task.workspaceId != null ? `/workspaces/${task.workspaceId}` : "/dashboard";
-  const collaborative = Boolean(task.canViewParticipants);
   const availableTabs = collaborative ? tabs : (["work"] as const);
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -108,7 +121,7 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
     if (alive.current) setNotice({ version: version ?? task.version, message });
   }
   async function execute(command: Command) {
-    if (lock.current || blocked || editing) return;
+    if (lock.current || blocked || editing || (command === "complete" && completionBlocked)) return;
     if (confirmation && confirmation.version !== task.version) {
       setConfirmation(null);
       setError("The task changed. Check its current state before choosing this action again.");
@@ -128,7 +141,7 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
       const uncertain = isAxiosError(reason) && (!reason.response || reason.response.status >= 500);
       setError(uncertain ? "The server could not confirm this action. Check the current task state before retrying."
         : errorMessage(reason, "The task action could not be completed."));
-      await refreshTask().catch(() => undefined);
+      await refreshWork().catch(() => undefined);
     } finally {
       lock.current = false;
       if (alive.current) setBusy(false);
@@ -196,16 +209,18 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
       <button type="button" className="tw-inline-action" onClick={() => void refreshTask().catch(() => undefined)}>Reload task</button></div>}
 
     <section id="view-work" className="tw-panel" role="tabpanel" aria-labelledby="tab-work" tabIndex={0} hidden={view !== "work"}>
-      <TaskSubmissionPanel task={task} workflow={workflow} statusBusy={busy || editing || refreshFailed}
+      <TaskSubmissionPanel task={task} workflow={workflow} statusBusy={busy || editing || refreshFailed} completionBlocked={completionBlocked}
         onOpenHistory={() => { selectView("activity"); document.getElementById("tab-activity")?.focus(); }}
         onStart={() => execute("start")} onComplete={() => execute("complete")}>
         <section className="tw-description" aria-labelledby="task-description-title"><h2 id="task-description-title">Description</h2>
           <p>{task.description}</p></section>
+        {collaborative && <SubTasksSection task={task} list={subTasks} active={view === "work"} disabled={blocked || editing}
+          rosterRevision={rosterRevision} openCount={openSubTasks} refreshParent={refreshTask} />}
         {collaborative && <TaskReferenceFiles onOpenFiles={() => { selectView("files"); document.getElementById("tab-files")?.focus(); }} />}
       </TaskSubmissionPanel>
     </section>
     {collaborative && <>
-      <section id="view-discussion" className="tw-panel" role="tabpanel" aria-labelledby="tab-discussion" tabIndex={0} hidden={view !== "discussion"}><TaskDiscussion /></section>
+      <section id="view-discussion" className="tw-panel" role="tabpanel" aria-labelledby="tab-discussion" tabIndex={0} hidden={view !== "discussion"}><TaskDiscussion active={view === "discussion"} /></section>
       <section id="view-files" className="tw-panel" role="tabpanel" aria-labelledby="tab-files" tabIndex={0} hidden={view !== "files"}>
         <TaskFiles revisions={workflow.submissions} canDeliver={task.canSubmit || workflow.canAttach}
           onOpenWork={() => { jumpToSubmission.current = "submit"; selectView("work"); }} />
