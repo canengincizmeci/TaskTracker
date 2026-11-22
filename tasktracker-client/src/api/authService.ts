@@ -1,3 +1,4 @@
+import axios from "axios";
 import axiosClient from "./axiosClient";
 
 type LoginRequest = {
@@ -101,6 +102,10 @@ async function refreshToken(
 async function login(data: LoginRequest): Promise<LoginResponse> {
   const response = await axiosClient.post("/Auth/login", data);
   return response.data;
+}
+
+export async function revokeSession(refreshToken: string): Promise<void> {
+  await axios.post(`${import.meta.env.VITE_API_BASE_URL}/Auth/logout`, { refreshToken }, { timeout: 10_000 });
 }
 
 export async function getProfile(signal: AbortSignal): Promise<{ username: string }> {

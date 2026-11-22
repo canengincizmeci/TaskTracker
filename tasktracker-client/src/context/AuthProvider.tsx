@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HubConnectionState } from "@microsoft/signalr";
+import toast from "react-hot-toast";
 import {
   clearAuthTokens,
   getAccessToken,
-  saveAuthTokens,
+  getRefreshToken,
+  startAuthSession,
 } from "../utils/authStorage";
 import { decodeJwt, getRoleFromToken, isTokenExpired } from "../utils/jwtHelper";
 import { notificationHubConnection } from "../services/signalRService";
 import { AuthContext, type AuthUser } from "./authContextValue";
+import { revokeSession } from "../api/authService";
 
 const NAME_CLAIM =
   "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
@@ -54,13 +57,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    saveAuthTokens(accessToken, refreshToken, expiration);
+    startAuthSession(accessToken, refreshToken, expiration);
     setToken(accessToken);
   };
 
   const logout = () => {
+    const refreshToken = getRefreshToken();
     clearAuthTokens();
     setToken(null);
+    if (refreshToken) {
+      void revokeSession(refreshToken).catch(() => {
+        toast.error("Signed out on this device. Server sign-out could not be confirmed.");
+      });
+    }
   };
 
   useEffect(() => {

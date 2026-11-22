@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:auth": "node --test --test-timeout=15000 tests/auth-session.test.mjs",
     "test:workspace": "node --test --test-timeout=15000 tests/task-workspace.test.mjs",
     "test:subtasks": "node --test --test-timeout=15000 tests/subtasks.test.mjs",
     "test:discussion": "node --test --test-timeout=15000 tests/task-discussion.test.mjs",

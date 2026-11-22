@@ -38,6 +38,17 @@ const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 const ACCESS_TOKEN_EXPIRATION_KEY = "accessTokenExpiration";
 
+let authGeneration = 0;
+
+function getAuthGeneration() {
+  return authGeneration;
+}
+
+function startAuthSession(accessToken: string, refreshToken: string, expiration: string) {
+  authGeneration += 1;
+  saveAuthTokens(accessToken, refreshToken, expiration);
+}
+
 function saveAuthTokens(
   accessToken: string,
   refreshToken: string,
@@ -61,6 +72,7 @@ function getAccessTokenExpiration() {
 }
 
 function clearAuthTokens() {
+  authGeneration += 1;
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(ACCESS_TOKEN_EXPIRATION_KEY);
@@ -71,6 +83,8 @@ function isAuthenticated() {
 }
 
 export {
+  getAuthGeneration,
+  startAuthSession,
   saveAuthTokens,
   getAccessToken,
   getRefreshToken,
