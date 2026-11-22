@@ -5,7 +5,9 @@ public sealed class TaskFileOptions
     public string RootPath { get; set; } = "App_Data/task-files";
     public long MaxFileSizeBytes { get; set; } = 20 * 1024 * 1024;
     public bool RequireCleanScan { get; set; } = true;
-    public bool EnableSubTaskSubmissionUploads { get; set; }
+    public bool EnableSubTaskSubmissionUploads { get; set; } = true;
+    public int MaxSubTaskSubmissionAttachments { get; set; } = 5;
+    public long MaxSubTaskSubmissionUploadBytes { get; set; } = 40 * 1024 * 1024;
     public bool EnableDiscussionUploads { get; set; } = true;
     public int MaxDiscussionAttachments { get; set; } = 5;
     public long MaxDiscussionUploadBytes { get; set; } = 40 * 1024 * 1024;

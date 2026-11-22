@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle";
 
 type AuthLayoutProps = {
   eyebrow: string;
@@ -29,9 +30,12 @@ export default function AuthLayout({ eyebrow, title, description, children, foot
       </aside>
 
       <div className="public-auth-workspace">
-        <Link className="public-auth-mobile-brand" to="/" aria-label="TaskTracker home">
-          <span>T</span><strong>TaskTracker</strong>
-        </Link>
+        <div className="public-auth-utility">
+          <Link className="public-auth-mobile-brand" to="/" aria-label="TaskTracker home">
+            <span>T</span><strong>TaskTracker</strong>
+          </Link>
+          <ThemeToggle compact className="public-auth-theme-toggle" />
+        </div>
         <section className="public-auth-panel" aria-labelledby="auth-page-title">
           <header className="public-auth-panel__header">
             <p className="public-auth-eyebrow">{eyebrow}</p>

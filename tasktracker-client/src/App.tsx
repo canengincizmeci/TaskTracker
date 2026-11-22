@@ -36,11 +36,15 @@ function App() {
       <Toaster
         position="top-right"
         toastOptions={{
-          duration: 3000,
+          duration: 3200,
           style: {
-            background: "#111827",
-            color: "#fff",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "var(--color-surface-elevated)",
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border-strong)",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--shadow-md)",
+            fontSize: "0.8125rem",
+            fontWeight: 550,
           },
         }}
       />

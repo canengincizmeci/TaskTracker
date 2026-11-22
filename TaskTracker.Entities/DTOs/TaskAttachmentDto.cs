@@ -18,4 +18,9 @@ public sealed class TaskAttachmentDto
 }
 
 public sealed record SubTaskFilesDto(long Version, bool UploadsEnabled, int? UploadSubmissionId,
-    List<TaskAttachmentDto> Files);
+    List<TaskAttachmentDto> Files)
+{
+    public int MaxFiles { get; init; } = 5;
+    public long MaxFileSizeBytes { get; init; } = 20 * 1024 * 1024;
+    public long MaxTotalBytes { get; init; } = 40 * 1024 * 1024;
+}

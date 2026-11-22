@@ -412,6 +412,9 @@ namespace TaskTracker.Core.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<Guid?>("ClientRequestId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasMaxLength(10000)
@@ -421,6 +424,13 @@ namespace TaskTracker.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("DeliveryFileCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DeliveryFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("RevisionNumber")
                         .HasColumnType("integer");
@@ -443,9 +453,14 @@ namespace TaskTracker.Core.Migrations
 
                     b.HasIndex("SubTaskId", "TaskRequestId");
 
+                    b.HasIndex("SubTaskId", "SubmittedByUserId", "ClientRequestId")
+                        .IsUnique();
+
                     b.ToTable("SubTaskSubmissions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_SubTaskSubmissions_Content", "length(trim(\"Content\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0");
+                            t.HasCheckConstraint("CK_SubTaskSubmissions_Content", "(length(trim(\"Content\", U&'\\0020\\0009\\000A\\000B\\000C\\000D\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')) > 0 OR (\"Content\" = '' AND \"DeliveryFileCount\" > 0)) AND length(\"Content\") <= 10000");
+
+                            t.HasCheckConstraint("CK_SubTaskSubmissions_Delivery", "(\"ClientRequestId\" IS NULL AND \"DeliveryFingerprint\" IS NULL AND \"DeliveryFileCount\" = 0) OR (\"ClientRequestId\" IS NOT NULL AND \"DeliveryFingerprint\" IS NOT NULL AND length(\"DeliveryFingerprint\") = 64 AND \"DeliveryFileCount\" BETWEEN 0 AND 10)");
 
                             t.HasCheckConstraint("CK_SubTaskSubmissions_RevisionNumber", "\"RevisionNumber\" > 0");
                         });
@@ -741,6 +756,83 @@ namespace TaskTracker.Core.Migrations
                     b.ToTable("TaskPlanningRevisions", null, t =>
                         {
                             t.HasCheckConstraint("CK_TaskPlanningRevisions_RevisionNumber", "\"RevisionNumber\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskPlanningSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("InitialAssignmentState")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("InitialDescriptionLength")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("InitialDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("InitialPlannedCalendarDays")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("InitialPlannedDurationSeconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("InitialPriority")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("InitialTitleLength")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InitialUtcOffsetMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InitialVisibility")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsWorkspaceTask")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("OriginalDueAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedAtUtc", "Id");
+
+                    b.ToTable("TaskPlanningSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TaskPlanningSnapshots_DeadlineConsistency", "(\"InitialDueDate\" IS NULL AND \"OriginalDueAtUtc\" IS NULL AND \"InitialPlannedCalendarDays\" IS NULL AND \"InitialPlannedDurationSeconds\" IS NULL) OR (\"InitialDueDate\" IS NOT NULL AND \"OriginalDueAtUtc\" IS NOT NULL AND \"InitialPlannedCalendarDays\" IS NOT NULL AND \"InitialPlannedDurationSeconds\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_TaskPlanningSnapshots_TextLengths", "\"InitialTitleLength\" > 0 AND \"InitialTitleLength\" <= 150 AND \"InitialDescriptionLength\" > 0 AND \"InitialDescriptionLength\" <= 10000");
+
+                            t.HasCheckConstraint("CK_TaskPlanningSnapshots_UtcOffsetMinutes", "\"InitialUtcOffsetMinutes\" BETWEEN -720 AND 840");
                         });
                 });
 
@@ -1576,6 +1668,17 @@ namespace TaskTracker.Core.Migrations
                         .IsRequired();
 
                     b.Navigation("ChangedByUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskPlanningSnapshot", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("TaskRequest");
                 });

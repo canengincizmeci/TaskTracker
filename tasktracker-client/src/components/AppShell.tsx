@@ -4,6 +4,7 @@ import { getUserNotifications } from "../api/notificationService";
 import { useAuth } from "../context/AuthContext";
 import { notificationHubConnection } from "../services/signalRService";
 import type { Notification } from "../types/notification";
+import ThemeToggle from "./ThemeToggle";
 
 const UNREAD_COUNT_EVENT = "notification-unread-count-change";
 
@@ -229,6 +230,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   </>;
 
   return <div className={`app-shell${user?.role === "User" ? " app-shell--user" : ""}`}>
+    <a className="app-shell__skip-link" href="#main-content">Skip to main content</a>
     <aside className="app-shell__sidebar" aria-label="Application sidebar">
       <Link className="app-shell__brand" to={user?.role === "Admin" ? "/admin-dashboard" : "/dashboard"}
         aria-label="TaskTracker">
@@ -253,6 +255,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <div className="app-shell__account">
+        <ThemeToggle className="app-shell__theme-toggle" />
         <button ref={accountButtonRef} type="button" className="app-shell__account-button"
           aria-expanded={accountOpen} aria-controls="shell-account-navigation"
           aria-label={accountOpen ? "Close account navigation" : "Open account navigation"}
@@ -276,10 +279,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <ShellIcon name={mobileOpen ? "close" : "menu"} />
         </button>
         <div><span>TaskTracker</span><strong>{pageTitle(location.pathname)}</strong></div>
-        <Link className="app-shell__topbar-inbox" to="/notifications"
-          aria-label={`Inbox${displayedUnreadCount > 0 ? ` (${displayedUnreadCount} unread)` : ""}`}>
-          <ShellIcon name="inbox" /><UnreadBadge count={displayedUnreadCount} />
-        </Link>
+        <div className="app-shell__topbar-actions">
+          <ThemeToggle compact className="app-shell__topbar-theme" />
+          <Link className="app-shell__topbar-inbox" to="/notifications"
+            aria-label={`Inbox${displayedUnreadCount > 0 ? ` (${displayedUnreadCount} unread)` : ""}`}>
+            <ShellIcon name="inbox" /><UnreadBadge count={displayedUnreadCount} />
+          </Link>
+        </div>
       </header>
 
       {mobileOpen && <>
@@ -300,7 +306,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </aside>
       </>}
 
-      <div className="app-shell__content">{children}</div>
+      <div id="main-content" className="app-shell__content" tabIndex={-1}>{children}</div>
     </div>
 
     {user?.role === "User" && <nav className="app-shell__mobile-nav" aria-label="Mobile primary navigation">

@@ -14,19 +14,16 @@ import "./styles/auth.css";
 import "./styles/home.css";
 import "./styles/phase-seven.css";
 import App from "./App.tsx";
-
+import { initializeTheme } from "./utils/theme";
 import { AuthProvider } from "./context/AuthContext";
 
-
+initializeTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-
-      
         <App />
-
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

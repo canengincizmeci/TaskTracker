@@ -33,6 +33,7 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskSubmissionReview> TaskSubmissionReviews { get; set; }
         public DbSet<TaskActivity> TaskActivities { get; set; }
         public DbSet<TaskPlanningRevision> TaskPlanningRevisions { get; set; }
+        public DbSet<TaskPlanningSnapshot> TaskPlanningSnapshots { get; set; }
         public DbSet<TaskMessage> TaskMessages { get; set; }
         public DbSet<TaskAttachment> TaskAttachments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
@@ -65,7 +66,7 @@ namespace TaskTracker.Core.DataAccess
             foreach (var entry in ChangeTracker.Entries())
             {
                 if (entry.Entity is TaskSubmission or TaskSubmissionReview or TaskActivity or TaskMessage or
-                        TaskPlanningRevision or SubTaskSubmission or SubTaskSubmissionReview or SubTaskActivity &&
+                        TaskPlanningRevision or TaskPlanningSnapshot or SubTaskSubmission or SubTaskSubmissionReview or SubTaskActivity &&
                     entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workflow history is immutable. Add a new revision or decision instead.");
 
@@ -116,10 +117,8 @@ namespace TaskTracker.Core.DataAccess
                      (review.Decision == TaskReviewDecision.ChangesRequested && string.IsNullOrWhiteSpace(review.Feedback))))
                     throw new ValidationException("A review requires a valid decision, feedback up to 5000 characters, and nonblank feedback when requesting changes.");
 
-                if (entry.Entity is SubTaskSubmission subTaskSubmission &&
-                    (subTaskSubmission.RevisionNumber <= 0 || string.IsNullOrWhiteSpace(subTaskSubmission.Content) ||
-                     subTaskSubmission.Content.Length > SubTaskSubmission.MaxContentLength))
-                    throw new ValidationException("A subtask submission requires a positive revision and nonblank content within the length limit.");
+                if (entry.Entity is SubTaskSubmission subTaskSubmission)
+                    ValidateSubTaskSubmission(subTaskSubmission);
 
                 if (entry.Entity is SubTaskSubmissionReview subTaskReview &&
                     (!Enum.IsDefined(subTaskReview.Decision) || subTaskReview.Feedback?.Length > SubTaskSubmissionReview.MaxFeedbackLength ||
@@ -136,6 +135,9 @@ namespace TaskTracker.Core.DataAccess
                      (activity.ActivityType == TaskActivityType.TaskDeleted &&
                       (activity.FromStatus.HasValue || activity.ToStatus.HasValue))))
                     throw new ValidationException("Activity type and optional statuses must be defined values.");
+
+                if (entry.Entity is TaskPlanningSnapshot snapshot)
+                    ValidatePlanningSnapshot(snapshot);
             }
 
             foreach (var entry in ChangeTracker.Entries().Where(x => x.State == EntityState.Modified &&
@@ -169,6 +171,36 @@ namespace TaskTracker.Core.DataAccess
             if (files.Length != message.DeliveryFileCount || files.Any(x => x.Kind != TaskAttachmentKind.Message ||
                 x.TaskRequestId != message.TaskRequestId || x.UploaderUserId != message.SenderUserId || x.IsDeleted))
                 throw new ValidationException("All discussion delivery files must be saved with their message.");
+        }
+
+        private void ValidateSubTaskSubmission(SubTaskSubmission submission)
+        {
+            if (submission.RevisionNumber <= 0 ||
+                submission.Content is null ||
+                submission.Content.Length > SubTaskSubmission.MaxContentLength ||
+                (string.IsNullOrWhiteSpace(submission.Content) && (submission.Content.Length != 0 || submission.DeliveryFileCount <= 0)))
+                throw new ValidationException("A subtask submission requires a positive revision and nonblank content within the length limit.");
+
+            if (submission.ClientRequestId is null)
+            {
+                if (submission.DeliveryFingerprint is not null || submission.DeliveryFileCount != 0)
+                    throw new ValidationException("A subtask submission delivery requires a request identifier.");
+                return;
+            }
+
+            if (submission.ClientRequestId == Guid.Empty ||
+                submission.DeliveryFingerprint?.Length != 64 ||
+                submission.DeliveryFileCount is < 0 or > SubTaskSubmission.MaxDeliveryFileCount)
+                throw new ValidationException("Subtask submission delivery metadata is invalid.");
+
+            var files = ChangeTracker.Entries<TaskAttachment>().Where(x => x.State == EntityState.Added &&
+                ReferenceEquals(x.Entity.SubTaskSubmission, submission)).Select(x => x.Entity).ToArray();
+            if (files.Length != submission.DeliveryFileCount ||
+                files.Any(x => x.Kind != TaskAttachmentKind.SubTaskSubmission ||
+                    x.TaskRequestId != submission.TaskRequestId ||
+                    x.UploaderUserId != submission.SubmittedByUserId ||
+                    x.IsDeleted))
+                throw new ValidationException("All subtask submission delivery files must be saved with their submission.");
         }
 
         private static void ValidateAttachment(EntityEntry<TaskAttachment> entry)
@@ -239,6 +271,23 @@ namespace TaskTracker.Core.DataAccess
                 (type == TaskActivityType.TaskDeleted && (activity.FromStatus.HasValue || activity.ToStatus.HasValue)) ||
                 hasTarget != assignment || hasReview != review || hasSubmission != (type == TaskActivityType.SubmissionCreated || review))
                 throw new ValidationException("The subtask activity type, statuses and linked records must match the operation.");
+        }
+
+        private static void ValidatePlanningSnapshot(TaskPlanningSnapshot snapshot)
+        {
+            var hasDeadline = snapshot.InitialDueDate.HasValue;
+            if (string.IsNullOrWhiteSpace(snapshot.SchemaVersion) ||
+                snapshot.SchemaVersion.Length > TaskPlanningSnapshot.MaxSchemaVersionLength ||
+                snapshot.InitialUtcOffsetMinutes is < -720 or > 840 ||
+                !Enum.IsDefined(snapshot.InitialPriority) ||
+                !Enum.IsDefined(snapshot.InitialAssignmentState) ||
+                !Enum.IsDefined(snapshot.InitialVisibility) ||
+                snapshot.InitialTitleLength is <= 0 or > TaskRequest.MaxTitleLength ||
+                snapshot.InitialDescriptionLength is <= 0 or > TaskRequest.MaxDescriptionLength ||
+                snapshot.OriginalDueAtUtc.HasValue != hasDeadline ||
+                snapshot.InitialPlannedCalendarDays.HasValue != hasDeadline ||
+                snapshot.InitialPlannedDurationSeconds.HasValue != hasDeadline)
+                throw new ValidationException("A planning snapshot requires valid initial features and consistent deadline metadata.");
         }
 
         protected override void OnModelCreating(ModelBuilder builder)
