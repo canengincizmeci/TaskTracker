@@ -8,7 +8,7 @@ import { getSafeLoginRedirect } from "../utils/loginRedirect";
 function VerifyEmailPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const state = location.state as { email?: unknown; redirect?: unknown; deliveryFailed?: unknown; verificationRequired?: unknown } | null;
+  const state = location.state as { email?: unknown; redirect?: unknown; registrationMessage?: unknown; verificationRequired?: unknown } | null;
   const redirect = getSafeLoginRedirect(typeof state?.redirect === "string" ? state.redirect : null);
   const loginPath = redirect ? `/login?${new URLSearchParams({ redirect })}` : "/login";
   const [email, setEmail] = useState(typeof state?.email === "string" ? state.email : "");
@@ -18,8 +18,8 @@ function VerifyEmailPage() {
   const [error, setError] = useState("");
   const submitting = useRef(false);
   const [successMessage, setSuccessMessage] = useState(() => {
-    return state?.deliveryFailed === true
-      ? "Your account was created, but email delivery failed. You can resend the verification code below."
+    return typeof state?.registrationMessage === "string"
+      ? state.registrationMessage
       : state?.verificationRequired === true ? "Verify your email before signing in." : "";
   });
 

@@ -35,7 +35,7 @@ function RegisterPage() {
         password,
       });
       navigate("/verify-email", { replace: true, state: {
-        email: submittedEmail, deliveryFailed: response.code === "verification_delivery_failed",
+        email: submittedEmail, registrationMessage: response.message,
       } });
     } catch (requestError: unknown) {
       setError(errorMessage(requestError, "Could not confirm registration. Check your inbox before trying again."));

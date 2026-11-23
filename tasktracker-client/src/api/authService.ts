@@ -88,7 +88,6 @@ type ResultResponse = {
 
 type RegisterResponse = {
   success?: boolean;
-  code?: string;
   message: string;
 };
 

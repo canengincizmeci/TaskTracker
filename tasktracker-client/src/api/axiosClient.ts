@@ -71,7 +71,8 @@ axiosClient.interceptors.response.use(
         }
         return axiosClient(originalRequest);
       } catch (refreshError) {
-        if (getAuthGeneration() === generation) {
+        if (getAuthGeneration() === generation &&
+            !(axios.isAxiosError(refreshError) && refreshError.response?.status === 429)) {
           clearAuthTokens();
           window.location.href = "/login";
         }
