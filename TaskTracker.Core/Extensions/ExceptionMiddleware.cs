@@ -1,11 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Text;
 using FluentValidation;
-using FluentValidation.Results;
-using Microsoft.AspNetCore.Http;
 
 namespace TaskTracker.Core.Extensions
 {
@@ -38,29 +32,23 @@ namespace TaskTracker.Core.Extensions
         private Task HandleExceptionAsync(HttpContext httpContext, Exception e)
         {
             httpContext.Response.ContentType = "application/json";
-            httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-
-            string message = "Internal Server Error";
-            IEnumerable<ValidationFailure> errors;
-
-            if (e.GetType() == typeof(ValidationException))
+            if (e is ValidationException validation)
             {
-                message = e.Message;
-                errors = ((ValidationException)e).Errors;
-                httpContext.Response.StatusCode = 400;
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
                 return httpContext.Response.WriteAsync(new ValidationErrorDetails
                 {
-                    StatusCode = 400,
+                    StatusCode = StatusCodes.Status400BadRequest,
                     Code = "validation_failed",
-                    Message = message,
-                    Errors = errors
+                    Message = ValidationFieldError.Summary,
+                    Errors = validation.Errors.Select(ValidationFieldError.FromFailure).ToArray()
                 }.ToString());
             }
 
+            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
             return httpContext.Response.WriteAsync(new ErrorDetails
             {
                 StatusCode = httpContext.Response.StatusCode,
-                Message = message
+                Message = "Internal Server Error"
             }.ToString());
         }
 

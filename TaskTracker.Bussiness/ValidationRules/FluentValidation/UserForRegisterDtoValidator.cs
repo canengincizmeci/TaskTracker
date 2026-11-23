@@ -11,6 +11,8 @@ public sealed class UserForRegisterDtoValidator : AbstractValidator<UserForRegis
 
     public UserForRegisterDtoValidator()
     {
+        RuleFor(x => x.FirstName).MaximumLength(100);
+        RuleFor(x => x.LastName).MaximumLength(100);
         RuleFor(x => x.Email)
             .Must(BeValidEmail)
             .WithMessage("A valid email address up to 200 characters is required.");

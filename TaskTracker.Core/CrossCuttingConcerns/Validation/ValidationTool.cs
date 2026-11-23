@@ -1,7 +1,5 @@
 ﻿using FluentValidation;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using TaskTracker.Core.Extensions;
 
 namespace TaskTracker.Core.CrossCuttingConcerns.Validation
 {
@@ -13,7 +11,7 @@ namespace TaskTracker.Core.CrossCuttingConcerns.Validation
             var result = validator.Validate(context);
             if (!result.IsValid)
             {
-                throw new ValidationException(result.Errors);
+                throw ValidationFieldError.CreateException(result.Errors);
             }
 
 
