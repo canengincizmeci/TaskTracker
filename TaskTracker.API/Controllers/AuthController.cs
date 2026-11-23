@@ -14,6 +14,8 @@ namespace TaskTracker.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [RequestSizeLimit(AuthRateLimits.MaxRequestBytes)]
+    [ServiceFilter(typeof(AuthIdentityRateLimitFilter))]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -34,28 +36,27 @@ namespace TaskTracker.API.Controllers
             return username is null ? NotFound() : Ok(new { username });
         }
         [HttpPost("register")]
+        [AuthRateLimit(AuthOperation.Register)]
         public async Task<IActionResult> Register(UserForRegisterDto dto)
         {
             var result = await _authService.RegisterAsync(dto);
 
             return result switch
             {
-                { Success: true } => Ok(result),
-                IConflictResult => Conflict(new
-                {
-                    code = "identity_conflict",
-                    message = Messages.IdentityConflict
-                }),
-                _ when result.Message == Messages.VerificationEmailDeliveryFailed => Accepted(new
-                {
-                    code = "verification_delivery_failed",
-                    message = Messages.VerificationEmailDeliveryFailed
-                }),
-                _ => BadRequest(new { code = "validation_failed", message = result.Message })
+                { Success: true } or IConflictResult => RegistrationAccepted(),
+                _ when result.Message == Messages.VerificationEmailDeliveryFailed => RegistrationAccepted(),
+                _ => BadRequest(new { code = "validation_failed", message = "Check the registration fields and try again." })
             };
         }
 
+        private IActionResult RegistrationAccepted() => Ok(new
+        {
+            success = true,
+            message = "If these details can be registered, a verification code will be sent."
+        });
+
         [HttpPost("login")]
+        [AuthRateLimit(AuthOperation.Login)]
         public async Task<IActionResult> Login(UserForLoginDto dto)
         {
             var result = await _authService.LoginAsync(dto);
@@ -99,6 +100,7 @@ namespace TaskTracker.API.Controllers
             return Ok(result);
         }
         [HttpPost("refresh-token")]
+        [AuthRateLimit(AuthOperation.Refresh)]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto dto)
         {
             var result = await _authService.RefreshTokenAsync(dto);
@@ -116,6 +118,7 @@ namespace TaskTracker.API.Controllers
         }
 
         [HttpPost("forgot-password")]
+        [AuthRateLimit(AuthOperation.ForgotPassword)]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
             var result = await _authService.ForgotPasswordAsync(dto);
@@ -123,6 +126,7 @@ namespace TaskTracker.API.Controllers
         }
 
         [HttpPost("verify-password-reset-code")]
+        [AuthRateLimit(AuthOperation.VerifyResetCode)]
         public async Task<IActionResult> VerifyPasswordResetCode([FromBody] VerifyPasswordResetCodeDto dto)
         {
             var result = await _authService.VerifyPasswordResetCodeAsync(dto);
@@ -134,6 +138,7 @@ namespace TaskTracker.API.Controllers
         }
 
         [HttpPost("reset-password")]
+        [AuthRateLimit(AuthOperation.ResetPassword)]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
         {
             var result = await _authService.ResetPasswordAsync(dto);

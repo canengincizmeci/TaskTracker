@@ -58,6 +58,7 @@ builder.Services.AddCors(options =>
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
+            .WithExposedHeaders("Retry-After")
             .AllowCredentials();
     });
 });
@@ -121,6 +122,7 @@ builder.Services.AddSingleton<SessionHubFilter>();
 builder.Services.AddHostedService(services => services.GetRequiredService<SessionHubFilter>());
 builder.Services.AddSignalR(options => options.AddFilter<SessionHubFilter>());
 builder.Services.AddAuthRateLimits();
+builder.Services.AddTrustedProxyHeaders(builder.Configuration);
 builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -144,6 +146,7 @@ builder.Services.AddSwaggerGen(c =>
         });
 });
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
@@ -159,6 +162,7 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors("AllowFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
