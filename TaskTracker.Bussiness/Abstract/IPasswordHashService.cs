@@ -19,4 +19,5 @@ public interface IPasswordHashService
 {
     PasswordHashData CreateHash(User user, string password);
     PasswordVerificationOutcome Verify(User user, string? password);
+    void VerifyUnknownAccount(string? password);
 }

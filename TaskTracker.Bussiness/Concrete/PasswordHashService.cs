@@ -11,11 +11,21 @@ public sealed class PasswordHashService : IPasswordHashService
 {
     private const int LegacyHashLength = 64;
     private const int LegacySaltLength = 128;
+    private static readonly byte[] DummySalt = RandomNumberGenerator.GetBytes(16);
     private readonly PasswordHasher<User> identityHasher;
+    private readonly int iterations;
 
     public PasswordHashService(IOptions<PasswordHasherOptions> options)
     {
         identityHasher = new PasswordHasher<User>(options);
+        iterations = options.Value.IterationCount;
+    }
+
+    public void VerifyUnknownAccount(string? password)
+    {
+        Span<byte> output = stackalloc byte[32];
+        Rfc2898DeriveBytes.Pbkdf2((password ?? string.Empty).AsSpan(), DummySalt, output, iterations, HashAlgorithmName.SHA512);
+        CryptographicOperations.ZeroMemory(output);
     }
 
     public PasswordHashData CreateHash(User user, string password)

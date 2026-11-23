@@ -57,11 +57,18 @@ namespace TaskTracker.Bussiness.Concrete
             var normalizedEmail = _identityNormalizer.NormalizeEmail(dto.Email);
             var user = await userRepo.GetAsync(u => u.Email == normalizedEmail);
             if (user is null || !user.Status)
+            {
+                _passwordHashService.VerifyUnknownAccount(dto.Password);
                 return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
+            }
 
             var verificationOutcome = _passwordHashService.Verify(user, dto.Password);
             if (verificationOutcome == PasswordVerificationOutcome.Failed)
+            {
+                if (user.PasswordHashVersion == PasswordHashVersion.LegacyHmacSha512)
+                    _passwordHashService.VerifyUnknownAccount(dto.Password);
                 return new ErrorDataResult<LoginResponseDto>(Messages.PasswordError);
+            }
 
             if (!user.IsVerified)
                 return new ErrorDataResult<LoginResponseDto>(Messages.EmailNotVerified);
@@ -143,12 +150,6 @@ namespace TaskTracker.Bussiness.Concrete
             var displayUserName = _identityNormalizer.TrimUserName(dto.UserName);
             var normalizedUserName = _identityNormalizer.NormalizeUserName(dto.UserName);
 
-            if (await userRepo.AnyAsync(u =>
-                    u.Email == normalizedEmail || u.NormalizedUserName == normalizedUserName))
-            {
-                return new ConflictResult(Messages.IdentityConflict);
-            }
-
             var user = new User
             {
                 Email = normalizedEmail,
@@ -163,6 +164,11 @@ namespace TaskTracker.Bussiness.Concrete
                 IsPhoneVerified = false
             };
 
+            ApplyNewPasswordHash(user, dto.Password);
+            if (await userRepo.AnyAsync(u =>
+                    u.Email == normalizedEmail || u.NormalizedUserName == normalizedUserName))
+                return new ConflictResult(Messages.IdentityConflict);
+
             var code = GenerateFreshVerificationCode();
 
             var verification = new EmailVerification
@@ -173,8 +179,6 @@ namespace TaskTracker.Bussiness.Concrete
                 CreatedAt = DateTime.UtcNow,
                 DeliveryToken = Guid.NewGuid()
             };
-
-            ApplyNewPasswordHash(user, dto.Password);
 
             await userRepo.AddAsync(user);
             await verificationRepo.AddAsync(verification);
@@ -448,55 +452,66 @@ namespace TaskTracker.Bussiness.Concrete
             if (user is null)
                 return genericResult;
 
-            var now = DateTime.UtcNow;
-            var activeRequests = await passwordResetRepo.GetAllAsync(r =>
-                r.UserId == user.Id &&
-                r.UsedAt == null &&
-                r.InvalidatedAt == null &&
-                (r.ExpiresAt > now ||
-                 (r.ResetTokenExpiresAt.HasValue && r.ResetTokenExpiresAt.Value > now)));
-
-            if (activeRequests.Any(r => r.CreatedAt > now.AddSeconds(-resendCooldownSeconds)))
-                return genericResult;
-
-            var hmacSecret = _configuration["PasswordRecovery:HmacSecret"]!;
-
-            foreach (var activeRequest in activeRequests)
+            string code;
+            PasswordResetRequest request;
+            await using (var transaction = await _unitOfWork.BeginUserSessionWriteAsync(user.Id))
             {
-                activeRequest.InvalidatedAt = now;
-                passwordResetRepo.Update(activeRequest);
+                if (transaction is not null && !await userRepo.AnyAsync(u =>
+                    u.Id == user.Id && u.Email == normalizedEmail && u.Status && u.IsVerified))
+                    return genericResult;
+
+                var now = DateTime.UtcNow;
+                var activeRequests = await passwordResetRepo.GetAllAsync(r =>
+                    r.UserId == user.Id &&
+                    r.UsedAt == null &&
+                    r.InvalidatedAt == null &&
+                    (r.ExpiresAt > now ||
+                     (r.ResetTokenExpiresAt.HasValue && r.ResetTokenExpiresAt.Value > now)));
+
+                if (activeRequests.Any(r => r.CreatedAt > now.AddSeconds(-resendCooldownSeconds)))
+                    return genericResult;
+
+                foreach (var activeRequest in activeRequests)
+                    activeRequest.InvalidatedAt = now;
+
+                code = CodeGenerator.Generate6DigitCode();
+                request = new PasswordResetRequest
+                {
+                    UserId = user.Id,
+                    CodeHash = PasswordResetCodeHasher.Hash(normalizedEmail, code, _configuration["PasswordRecovery:HmacSecret"]!),
+                    CreatedAt = now,
+                    ExpiresAt = now.AddMinutes(otpLifetimeMinutes)
+                };
+
+                await passwordResetRepo.AddAsync(request);
+                await _unitOfWork.SaveChangesAsync();
+                if (transaction is not null) await transaction.CommitAsync();
             }
-
-            var code = CodeGenerator.Generate6DigitCode();
-            var request = new PasswordResetRequest
-            {
-                UserId = user.Id,
-                CodeHash = PasswordResetCodeHasher.Hash(normalizedEmail, code, hmacSecret),
-                CreatedAt = now,
-                ExpiresAt = now.AddMinutes(otpLifetimeMinutes),
-                FailedAttemptCount = 0
-            };
-
-            await passwordResetRepo.AddAsync(request);
-            await _unitOfWork.SaveChangesAsync();
 
             try
             {
                 await _emailService.SendPasswordResetCodeAsync(user.Email, code);
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                _logger.LogError(exception, "Password reset email delivery failed.");
+                _logger.LogError("Password reset email delivery failed.");
 
                 try
                 {
+                    // Delivery runs outside the lock. Never overwrite a concurrent verification or reset.
+                    await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(user.Id);
+                    if (transaction is not null)
+                        await passwordResetRepo.ReloadAsync(request);
+                    if (request.InvalidatedAt.HasValue || request.VerifiedAt.HasValue || request.UsedAt.HasValue)
+                        return genericResult;
+
                     request.InvalidatedAt = DateTime.UtcNow;
-                    passwordResetRepo.Update(request);
                     await _unitOfWork.SaveChangesAsync();
+                    if (transaction is not null) await transaction.CommitAsync();
                 }
-                catch (Exception invalidationException)
+                catch (Exception)
                 {
-                    _logger.LogError(invalidationException, "Failed to invalidate an undelivered password reset request.");
+                    _logger.LogError("Failed to invalidate an undelivered password reset request.");
                 }
             }
 
@@ -523,14 +538,18 @@ namespace TaskTracker.Bussiness.Concrete
             if (user is null)
                 return failureResult;
 
-            var requests = await passwordResetRepo.GetAllAsync(r => r.UserId == user.Id);
-            var currentRequest = requests
-                .OrderByDescending(r => r.CreatedAt)
-                .ThenByDescending(r => r.Id)
-                .FirstOrDefault();
+            // Share the Batch 01 user lock with issuance, password changes and resets.
+            await using var transaction = await _unitOfWork.BeginUserSessionWriteAsync(user.Id);
+            if (transaction is not null && !await userRepo.AnyAsync(u =>
+                u.Id == user.Id && u.Email == normalizedEmail && u.Status && u.IsVerified))
+                return failureResult;
 
+            var currentRequest = await passwordResetRepo.GetAsync(r => r.UserId == user.Id,
+                query => query.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id));
             if (currentRequest is null)
                 return failureResult;
+            if (transaction is not null)
+                await passwordResetRepo.ReloadAsync(currentRequest);
 
             var now = DateTime.UtcNow;
             var isUnusable =
@@ -558,14 +577,11 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 currentRequest.FailedAttemptCount++;
 
-                if (currentRequest.FailedAttemptCount >= maximumAttempts)
-                {
-                    currentRequest.FailedAttemptCount = maximumAttempts;
+                if (currentRequest.FailedAttemptCount == maximumAttempts)
                     currentRequest.LockedUntil = currentRequest.ExpiresAt;
-                }
 
-                passwordResetRepo.Update(currentRequest);
                 await _unitOfWork.SaveChangesAsync();
+                if (transaction is not null) await transaction.CommitAsync();
                 return failureResult;
             }
 
@@ -574,8 +590,8 @@ namespace TaskTracker.Bussiness.Concrete
             currentRequest.ResetTokenHash = PasswordResetTokenGenerator.HashToken(resetToken);
             currentRequest.ResetTokenExpiresAt = now.AddMinutes(resetTokenLifetimeMinutes);
 
-            passwordResetRepo.Update(currentRequest);
             await _unitOfWork.SaveChangesAsync();
+            if (transaction is not null) await transaction.CommitAsync();
 
             return new SuccessDataResult<PasswordResetTokenDto>(
                 new PasswordResetTokenDto
@@ -817,9 +833,9 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 await _emailService.SendVerificationCodeAsync(user.Email, code);
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                _logger.LogError(exception, "Verification email delivery failed for user {UserId}.", user.Id);
+                _logger.LogError("Verification email delivery failed for user {UserId}.", user.Id);
                 outcome = VerificationDeliveryOutcome.Failed;
             }
             finally
