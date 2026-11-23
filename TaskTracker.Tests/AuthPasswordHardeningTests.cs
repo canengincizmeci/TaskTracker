@@ -102,7 +102,7 @@ public class AuthPasswordHardeningTests
     }
 
     [Fact]
-    public async Task DeliveryFailureKeepsRegistrationRecoverableAndMapsToAcceptedResponse()
+    public async Task DeliveryFailureKeepsRegistrationRecoverableAndUsesTheGenericResponse()
     {
         using var database = new TestDatabase();
         var email = new Email { FailVerificationDelivery = true };
@@ -111,10 +111,10 @@ public class AuthPasswordHardeningTests
 
         var response = await controller.Register(Registration("delivery@example.test", "delivery-user"));
 
-        var unavailable = Assert.IsType<AcceptedResult>(response);
-        Assert.Equal(202, unavailable.StatusCode);
-        Assert.Equal("verification_delivery_failed",
-            unavailable.Value!.GetType().GetProperty("code")!.GetValue(unavailable.Value));
+        var unavailable = Assert.IsType<OkObjectResult>(response);
+        var duplicate = Assert.IsType<OkObjectResult>(
+            await controller.Register(Registration("delivery@example.test", "delivery-user")));
+        Assert.Equal(duplicate.Value, unavailable.Value);
         var user = await context.Users.SingleAsync(x => x.Email == "delivery@example.test");
         var originalVerification = await context.EmailVerifications.SingleAsync(x => x.UserId == user.Id);
 
@@ -524,7 +524,7 @@ public class AuthPasswordHardeningTests
     }
 
     [Fact]
-    public async Task ExactRegistrationDuplicateMapsToStableIdentityConflictResponse()
+    public async Task ExactRegistrationDuplicateUsesTheSamePublicResponseAsNewRegistration()
     {
         using var database = new TestDatabase();
         await using var context = database.CreateContext();
@@ -539,12 +539,16 @@ public class AuthPasswordHardeningTests
             Password = NewPassword
         });
 
-        var conflict = Assert.IsType<ConflictObjectResult>(response);
-        Assert.Equal(409, conflict.StatusCode);
-        Assert.Equal("identity_conflict",
-            conflict.Value!.GetType().GetProperty("code")!.GetValue(conflict.Value));
-        Assert.Equal(Messages.IdentityConflict,
-            conflict.Value.GetType().GetProperty("message")!.GetValue(conflict.Value));
+        var duplicate = Assert.IsType<OkObjectResult>(response);
+        var registration = Assert.IsType<OkObjectResult>(await controller.Register(new UserForRegisterDto
+        {
+            Email = "new@example.test",
+            UserName = "new-user",
+            FirstName = "New",
+            LastName = "User",
+            Password = NewPassword
+        }));
+        Assert.Equal(registration.Value, duplicate.Value);
     }
 
     [Fact]

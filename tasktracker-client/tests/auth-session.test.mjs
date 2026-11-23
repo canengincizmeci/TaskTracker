@@ -99,6 +99,18 @@ test("parallel unauthorized requests share one refresh and both retry", async ()
   assert.equal(auth.getRefreshToken(), "rotated-refresh");
 });
 
+test("a rate-limited refresh preserves the local session for retry later", async () => {
+  axios.defaults.adapter = async config => {
+    throw new AxiosError("Too many requests", undefined, config, undefined, {
+      status: 429, config, headers: { "Retry-After": "10" },
+    });
+  };
+  await assert.rejects(client.get("/protected"), error => error.response?.status === 429);
+  assert.equal(auth.getAccessToken(), "old-access");
+  assert.equal(auth.getRefreshToken(), "old-refresh");
+  assert.equal(window.location.href, "/tasks");
+});
+
 test("server logout uses the captured refresh credential without a bearer interceptor", async () => {
   axios.defaults.adapter = async config => {
     assert.equal(config.url, "/api/Auth/logout");
