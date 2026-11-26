@@ -65,9 +65,9 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 await _realtimeNotificationService.SendNotificationAsync(userId, notificationDto);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Realtime delivery failed for persisted notification {NotificationId}", notification.Id);
+                _logger.LogWarning("Realtime delivery failed for a persisted notification.");
             }
 
             
@@ -93,9 +93,9 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 await _realtimeNotificationService.SendNotificationAsync(userId, Map(notification));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Realtime delivery failed for persisted notification {NotificationId}", notification.Id);
+                _logger.LogWarning("Realtime delivery failed for a persisted notification.");
             }
         }
 

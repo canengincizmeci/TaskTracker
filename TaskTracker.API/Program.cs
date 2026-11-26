@@ -18,6 +18,7 @@ using TaskTracker.Core.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
+RequestCredentialProtection.ConfigureLogging(builder.Logging);
 
 builder.Services.Configure<PasswordHasherOptions>(options =>
 {
@@ -64,12 +65,15 @@ builder.Services.AddCors(options =>
 });
  
 builder.Services.AddScoped<TaskRequestValidator>();
+builder.Services.AddSingleton<MlDatasetResourceFilter>();
 builder.Services.AddTaskFileServices(builder.Configuration, builder.Environment);
 var tokenOptions = builder.Configuration.GetSection("TokenOptions");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.IncludeErrorDetails = false;
+        options.SaveToken = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -87,19 +91,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
         options.Events = new JwtBearerEvents
         {
-            OnMessageReceived = context =>
-            {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-
-                if (!string.IsNullOrWhiteSpace(accessToken) &&
-                    (path.StartsWithSegments("/hubs/notifications") || path.StartsWithSegments("/hubs/task-workspace")))
-                {
-                    context.Token = accessToken;
-                }
-
-                return Task.CompletedTask;
-            },
+            OnMessageReceived = RequestCredentialProtection.ReadHubTokenAsync,
             OnTokenValidated = async context =>
             {
                 var db = context.HttpContext.RequestServices.GetRequiredService<TaskTrackerDbContext>();
@@ -146,6 +138,7 @@ builder.Services.AddSwaggerGen(c =>
         });
 });
 var app = builder.Build();
+app.Use(RequestCredentialProtection.RemoveQueryTokenAsync);
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())

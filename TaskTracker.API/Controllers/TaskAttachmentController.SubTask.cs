@@ -259,9 +259,9 @@ public sealed partial class TaskAttachmentController
                     taskId,
                     $"/tasks/task-detail/{taskId}?subtask={subTaskId}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                logger?.LogWarning(ex, "Subtask submission notification failed for subtask {SubTaskId}", subTaskId);
+                logger?.LogWarning("Subtask submission notification delivery failed.");
             }
         }
 

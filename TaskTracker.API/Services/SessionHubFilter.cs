@@ -89,9 +89,9 @@ internal sealed class SessionHubFilter(IServiceScopeFactory scopes, ILogger<Sess
                 {
                     return;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    logger.LogWarning(ex, "Could not verify active SignalR sessions.");
+                    logger.LogWarning("Could not verify active SignalR sessions.");
                     foreach (var connection in batch)
                         connection.Context.Abort();
                 }

@@ -334,10 +334,10 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
             if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             return new ConflictResult(WorkspaceMessages.ConcurrentChange);
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
             if (transaction is not null) unitOfWork.DiscardTrackedChanges();
-            logger.LogWarning(ex, "Workspace change could not be saved for workspace {WorkspaceId}", workspaceId);
+            logger.LogWarning("Workspace change could not be saved for workspace {WorkspaceId}", workspaceId);
             return new ConflictResult(WorkspaceMessages.ConflictingState);
         }
         catch (ValidationException ex)
@@ -353,9 +353,9 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
         {
             taskIds = await workspaceDal.GetActiveTaskIdsAsync(workspaceId);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogWarning(ex,
+            logger.LogWarning(
                 "Could not load active task groups after a membership change in workspace {WorkspaceId}", workspaceId);
             return;
         }
@@ -365,11 +365,10 @@ public class WorkspaceManager(IUnitOfWork unitOfWork, IWorkspaceDal workspaceDal
             foreach (var taskId in taskIds)
             {
                 try { await collaborationService.RevokeAccessAsync(taskId, removedUserId.Value); }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    logger.LogWarning(ex,
-                        "Could not revoke task collaboration access for user {UserId}, task {TaskId}, workspace {WorkspaceId}",
-                        removedUserId.Value, taskId, workspaceId);
+                    logger.LogWarning("Could not revoke task collaboration access for task {TaskId}, workspace {WorkspaceId}",
+                        taskId, workspaceId);
                 }
             }
         }

@@ -607,10 +607,9 @@ public class TaskRequestManager : ITaskRequestService
     private async Task TryNotify(int userId, NotificationType type, string title, string message, int taskId)
     {
         try { await _notifications.CreateTaskNotificationAsync(userId, type, title, message, taskId); }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Task notification delivery failed for task {TaskId} and user {UserId}",
-                taskId, userId);
+            _logger.LogWarning("Task notification delivery failed for notification type {NotificationType}.", type);
         }
     }
 

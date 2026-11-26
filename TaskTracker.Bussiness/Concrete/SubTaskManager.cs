@@ -339,10 +339,10 @@ public class SubTaskManager(IUnitOfWork unitOfWork, ISubTaskDal subTasks, ITaskS
             await notifications.CreateTaskNotificationAsync(recipient, type, title, message, item.TaskRequestId,
                 $"/tasks/task-detail/{item.TaskRequestId}?subtask={item.Id}");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             unitOfWork.DiscardTrackedChanges();
-            logger.LogWarning(ex, "Subtask notification failed for subtask {SubTaskId} and recipient {UserId}", item.Id, recipient);
+            logger.LogWarning("Subtask notification delivery failed.");
         }
     }
 

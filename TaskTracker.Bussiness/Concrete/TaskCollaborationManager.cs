@@ -78,9 +78,9 @@ public class TaskCollaborationManager : ITaskCollaborationService
         {
             await _realtime.MessageCreatedAsync(taskId, message);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Realtime delivery failed for persisted task message {MessageId}", message.Id);
+            _logger.LogWarning("Realtime delivery failed for a persisted task message.");
         }
     }
 
@@ -93,9 +93,9 @@ public class TaskCollaborationManager : ITaskCollaborationService
             if (persisted is not null)
                 await _realtime.ActivityCreatedAsync(persisted.TaskRequestId, MapActivity(persisted));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Realtime delivery failed for persisted task activity {ActivityId}", activity.Id);
+            _logger.LogWarning("Realtime delivery failed for a persisted task activity.");
         }
     }
 
@@ -105,9 +105,9 @@ public class TaskCollaborationManager : ITaskCollaborationService
         {
             await _realtime.TaskChangedAsync(taskId);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Realtime task refresh delivery failed for task {TaskId}", taskId);
+            _logger.LogWarning("Realtime task refresh delivery failed for task {TaskId}", taskId);
         }
     }
 
@@ -116,14 +116,14 @@ public class TaskCollaborationManager : ITaskCollaborationService
     public async Task PublishAttachmentsChangedAsync(int taskId)
     {
         try { await _realtime.AttachmentsChangedAsync(taskId); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Realtime attachment refresh failed for task {TaskId}", taskId); }
+        catch (Exception) { _logger.LogWarning("Realtime attachment refresh failed for task {TaskId}", taskId); }
     }
 
     public async Task PublishWorkspaceRosterChangedAsync(int workspaceId, IReadOnlyList<int> taskIds)
     {
         if (taskIds.Count == 0) return;
         try { await _realtime.WorkspaceRosterChangedAsync(workspaceId, taskIds); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Realtime roster refresh failed for workspace {WorkspaceId}", workspaceId); }
+        catch (Exception) { _logger.LogWarning("Realtime roster refresh failed for workspace {WorkspaceId}", workspaceId); }
     }
 
     private static TaskActivityDto MapActivity(TaskActivity activity) => new()
