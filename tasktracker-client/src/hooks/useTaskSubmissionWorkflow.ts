@@ -5,19 +5,15 @@ import { uploadSubmissionAttachment } from "../api/taskAttachmentService";
 import { errorMessage } from "../api/errorMessage";
 import type { Task } from "../types/task";
 import type { SubmissionReview, TaskSubmission } from "../types/taskSubmission";
-import { deliveryFileIds, matchingDeliveryFileIds, sameFiles, workflowSubmission } from "../utils/taskWorkflowState";
+import { deliveryFileIds, sameFiles, workflowSubmission } from "../utils/taskWorkflowState";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { useTaskConversation } from "./useTaskConversation";
 
 type Operation = "submit" | "approve" | "requestChanges" | "attach";
 type History = { version: number; items: TaskSubmission[]; error: string };
 type Notice = { version: number; message: string };
-type PendingUpload = { submission: TaskSubmission; file: File | null; reason: string; previousMatches?: number[] };
+type PendingUpload = { submission: TaskSubmission; file: File | null; reason: string };
 type ReviewSnapshot = { id: number; version: number; files: number[] };
-
-function outcomeUncertain(reason: unknown) {
-  return isAxiosError(reason) && (!reason.response || reason.response.status >= 500);
-}
 
 export type TaskSubmissionWorkflow = ReturnType<typeof useTaskSubmissionWorkflow>;
 
@@ -142,8 +138,7 @@ export function useTaskSubmissionWorkflow(task: Task, onChanged: () => Promise<n
           await uploadSubmissionAttachment(task.id, submission.id, file);
         } catch (reason) {
           if (mounted.current) setPendingUpload({ submission, file,
-            reason: errorMessage(reason, "The upload could not be confirmed."),
-            previousMatches: outcomeUncertain(reason) ? [] : undefined });
+            reason: errorMessage(reason, "The upload could not be confirmed.") });
         }
       }
       await confirmWrite(`Revision ${submission.revisionNumber} was sent for review.`);
@@ -189,26 +184,14 @@ export function useTaskSubmissionWorkflow(task: Task, onChanged: () => Promise<n
     latest.submittedByUserId === task.assigneeUserId && current && !current.error);
   const attachToRevision = async (submissionId: number, retryFile: File) => {
     if (!latest || !canAttach || latest.id !== submissionId || !begin("attach")) return;
-    let previousMatches = pendingUpload?.submission.id === latest.id && pendingUpload.file === retryFile
-      ? pendingUpload.previousMatches : undefined;
     try {
-      const existing = await attachments.refreshFresh();
-      if (!mounted.current) return;
-      const matching = matchingDeliveryFileIds(existing, latest.id, latest.submittedByUserId, retryFile.name, retryFile.size);
-      const originalMatches = previousMatches;
-      const mayBeSaved = originalMatches && matching.some(id => !originalMatches.includes(id));
-      previousMatches = matching;
-      if (!mayBeSaved) {
-        await uploadSubmissionAttachment(task.id, latest.id, retryFile);
-      }
+      await uploadSubmissionAttachment(task.id, latest.id, retryFile);
       if (!mounted.current) return;
       setPendingUpload(undefined);
-      await confirmWrite(mayBeSaved ? "A new file with this name and size is on this revision. Open it to check the contents."
-        : `File attached to revision ${latest.revisionNumber}.`);
+      await confirmWrite(`File attached to revision ${latest.revisionNumber}.`);
     } catch (reason) {
       if (mounted.current) setPendingUpload({ submission: latest, file: retryFile,
-        reason: errorMessage(reason, "Could not confirm the file upload. Check the connection and try again."),
-        previousMatches: outcomeUncertain(reason) ? previousMatches : undefined });
+        reason: errorMessage(reason, "Could not confirm the file upload. Check the connection and try again.") });
       await sync();
     } finally { finish(); }
   };
@@ -226,6 +209,6 @@ export function useTaskSubmissionWorkflow(task: Task, onChanged: () => Promise<n
     reviewFileNotice: reviewFileNotice && reviewFileNotice.id === latest?.id ? reviewFileNotice.message : "",
     dismissUpload: () => setPendingUpload(undefined),
     setRetryFile: (next: File | null) => setPendingUpload(currentUpload => currentUpload &&
-      { ...currentUpload, file: next, previousMatches: undefined }),
+      { ...currentUpload, file: next }),
   };
 }

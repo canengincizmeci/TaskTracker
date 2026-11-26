@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { isAxiosError } from "axios";
 import { uploadTaskAttachment } from "../api/taskAttachmentService";
 import { errorMessage } from "../api/errorMessage";
 import { useTaskAttachments } from "../hooks/useTaskAttachments";
@@ -25,40 +24,23 @@ export function TaskReferenceFiles({ onOpenFiles }: { onOpenFiles: () => void })
 export default function TaskFiles({ revisions = [], canDeliver, onOpenWork }: {
   revisions?: Pick<TaskSubmission, "id" | "revisionNumber">[]; canDeliver: boolean; onOpenWork: () => void;
 }) {
-  const { taskId, currentUserId } = useTaskConversation();
+  const { taskId } = useTaskConversation();
   const { files, loading, error, refresh } = useTaskAttachments();
   const [selected, setSelected] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
   const guard = useRef(false);
-  const beforeUpload = useRef<Set<number> | null>(null);
 
   const send = async () => {
     if (!selected || guard.current) return;
     guard.current = true; setUploading(true); setFailure(""); setNotice("");
     try {
-      if (beforeUpload.current) {
-        const latest = await refresh();
-        const previousIds = beforeUpload.current;
-        const match = latest.some((item) => !previousIds.has(item.id) && item.kind === "Task" && item.fileName === selected.name
-          && item.sizeBytes === selected.size && item.uploaderUserId === currentUserId);
-        if (match) {
-          setNotice("A matching file from you is already in reference files.");
-          setSelected(null); beforeUpload.current = null; return;
-        }
-      }
-      const baseline = new Set(files.map((file) => file.id));
-      try {
-        await uploadTaskAttachment(taskId, selected);
-      } catch (reason) {
-        if (isAxiosError(reason) && (!reason.response || reason.response.status >= 500)) beforeUpload.current = baseline;
-        throw reason;
-      }
+      await uploadTaskAttachment(taskId, selected);
       setNotice("Reference file uploaded.");
-      setSelected(null); beforeUpload.current = null;
+      setSelected(null);
     } catch (reason) {
-      setFailure(errorMessage(reason, beforeUpload.current ? "Upload could not be confirmed. Retry to check the file list." : "Could not upload the file. Try again."));
+      setFailure(errorMessage(reason, "Could not confirm the file upload. Try again."));
     } finally {
       guard.current = false; setUploading(false);
     }
@@ -76,7 +58,7 @@ export default function TaskFiles({ revisions = [], canDeliver, onOpenWork }: {
         : "Completed work is submitted from the Work tab when available."}</p>
     <div className="tc-uploader">
       <FilePicker label="Choose reference file" file={selected} disabled={uploading}
-        onChange={(file) => { setSelected(file); setFailure(""); setNotice(""); beforeUpload.current = null; }} />
+        onChange={(file) => { setSelected(file); setFailure(""); setNotice(""); }} />
       {selected ? <button type="button" className="tc-action tc-action--primary" disabled={uploading} onClick={() => void send()}>
         {uploading ? "Uploading…" : "Upload file"}
       </button> : <span className="tc-drop-hint">or drop it on the picker</span>}
