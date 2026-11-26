@@ -8,7 +8,7 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
     public interface ITokenHelper
     {
         AccessToken CreateToken(User user, List<OperationClaim> operationClaims, Guid sessionId);
-        RefreshToken CreateRefreshToken(int userId, Guid sessionId);
+        (string Credential, RefreshToken Record) CreateRefreshToken(int userId, Guid sessionId);
 
     }
 }

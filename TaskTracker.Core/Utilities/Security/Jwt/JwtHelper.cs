@@ -43,12 +43,6 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             );
 
             var token = new JwtSecurityTokenHandler().WriteToken(jwt);
-            Console.WriteLine("=== GENERATED JWT DEBUG ===");
-            Console.WriteLine($"User Id: {user.Id}");
-            Console.WriteLine($"User Email: {user.Email}");
-            Console.WriteLine($"User Name: {user.FirstName} {user.LastName}");
-            Console.WriteLine($"Roles: {string.Join(",", operationClaims.Select(x => x.Name))}");
-            Console.WriteLine("===========================");
             return new AccessToken
             {
                 Token = token,
@@ -86,19 +80,7 @@ namespace TaskTracker.Core.Utilities.Security.Jwt
             return claims;
         }
 
-        public RefreshToken CreateRefreshToken(int userId, Guid sessionId)
-        {
-            return new RefreshToken
-            {
-                UserId = userId,
-                SessionId = sessionId,
-                Token = Guid.NewGuid().ToString(),
-                Expires = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenExpirationDays),
-                CreatedAt = DateTime.UtcNow,
-                IsRevoked = false
-            };
-
-
-        }
+        public (string Credential, RefreshToken Record) CreateRefreshToken(int userId, Guid sessionId) =>
+            RefreshTokenCredential.Issue(userId, sessionId, TimeSpan.FromDays(_tokenOptions.RefreshTokenExpirationDays));
     }
 }

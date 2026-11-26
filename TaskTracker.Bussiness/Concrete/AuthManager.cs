@@ -95,7 +95,7 @@ namespace TaskTracker.Bussiness.Concrete
             if (verificationOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
                 ApplyNewPasswordHash(user, dto.Password);
 
-            await refreshTokenRepo.AddAsync(refreshToken);
+            await refreshTokenRepo.AddAsync(refreshToken.Record);
             try
             {
                 await _unitOfWork.SaveChangesAsync();
@@ -103,7 +103,7 @@ namespace TaskTracker.Bussiness.Concrete
             catch (DbUpdateConcurrencyException)
                 when (verificationOutcome == PasswordVerificationOutcome.ValidNeedsUpgrade)
             {
-                refreshTokenRepo.Detach(refreshToken);
+                refreshTokenRepo.Detach(refreshToken.Record);
                 await userRepo.ReloadAsync(user);
 
                 var currentOutcome = _passwordHashService.Verify(user, dto.Password);
@@ -115,7 +115,7 @@ namespace TaskTracker.Bussiness.Concrete
 
                 accessToken = _tokenHelper.CreateToken(user, claims, sessionId);
                 refreshToken = _tokenHelper.CreateRefreshToken(user.Id, sessionId);
-                await refreshTokenRepo.AddAsync(refreshToken);
+                await refreshTokenRepo.AddAsync(refreshToken.Record);
 
                 try
                 {
@@ -133,7 +133,7 @@ namespace TaskTracker.Bussiness.Concrete
                 new LoginResponseDto
                 {
                     AccessToken = accessToken,
-                    RefreshToken = refreshToken.Token
+                    RefreshToken = refreshToken.Credential
                 },
                 Messages.SuccessfulLogin
             );
@@ -360,9 +360,13 @@ namespace TaskTracker.Bussiness.Concrete
         public async Task<IDataResult<TokenResponseDto>> RefreshTokenAsync(RefreshTokenDto dto)
         {
             var invalid = new ErrorDataResult<TokenResponseDto>(Messages.RefreshTokenInvalid);
+            var digest = RefreshTokenCredential.DigestPresentedToken(dto.RefreshToken);
+            if (digest is null)
+                return invalid;
+
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
             var refreshToken = await refreshTokenRepo.GetAsync(rt =>
-                rt.Token == dto.RefreshToken &&
+                rt.TokenDigest == digest &&
                 rt.SessionId != Guid.Empty &&
                 !rt.IsRevoked &&
                 rt.Expires > DateTime.UtcNow);
@@ -386,7 +390,7 @@ namespace TaskTracker.Bussiness.Concrete
             var accessToken = _tokenHelper.CreateToken(user, claims, refreshToken.SessionId);
             var newRefreshToken = _tokenHelper.CreateRefreshToken(user.Id, refreshToken.SessionId);
 
-            await refreshTokenRepo.AddAsync(newRefreshToken);
+            await refreshTokenRepo.AddAsync(newRefreshToken.Record);
             try
             {
                 await _unitOfWork.SaveChangesAsync();
@@ -402,15 +406,19 @@ namespace TaskTracker.Bussiness.Concrete
             {
                 AccessToken = accessToken.Token,
                 AccessTokenExpiration = accessToken.Expiration,
-                RefreshToken = newRefreshToken.Token
+                RefreshToken = newRefreshToken.Credential
             });
         }
 
         public async Task LogoutAsync(RefreshTokenDto dto)
         {
+            var digest = RefreshTokenCredential.DigestPresentedToken(dto.RefreshToken);
+            if (digest is null)
+                return;
+
             var refreshTokenRepo = _unitOfWork.GetRepository<RefreshToken>();
             // A consumed token still identifies the session if rotation won the race with logout.
-            var token = await refreshTokenRepo.GetAsync(rt => rt.Token == dto.RefreshToken &&
+            var token = await refreshTokenRepo.GetAsync(rt => rt.TokenDigest == digest &&
                 rt.SessionId != Guid.Empty && rt.Expires > DateTime.UtcNow);
             if (token is null)
                 return;
@@ -835,7 +843,7 @@ namespace TaskTracker.Bussiness.Concrete
             }
             catch (Exception)
             {
-                _logger.LogError("Verification email delivery failed for user {UserId}.", user.Id);
+                _logger.LogError("Verification email delivery failed.");
                 outcome = VerificationDeliveryOutcome.Failed;
             }
             finally
@@ -847,10 +855,9 @@ namespace TaskTracker.Bussiness.Concrete
                 {
                     await _unitOfWork.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException exception)
+                catch (DbUpdateConcurrencyException)
                 {
-                    _logger.LogWarning(exception,
-                        "Verification delivery ownership was already invalidated for user {UserId}.", user.Id);
+                    _logger.LogWarning("Verification delivery ownership was already invalidated.");
                 }
             }
 
