@@ -586,6 +586,10 @@ namespace TaskTracker.Core.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ContentSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -649,6 +653,9 @@ namespace TaskTracker.Core.Migrations
                     b.HasIndex("SubTaskSubmissionId", "TaskRequestId");
 
                     b.HasIndex("TaskRequestId", "CreatedAt", "Id");
+
+                    b.HasIndex("TaskRequestId", "UploaderUserId", "Kind", "ContentSha256")
+                        .HasFilter("\"ContentSha256\" IS NOT NULL");
 
                     b.ToTable("TaskAttachments", null, t =>
                         {

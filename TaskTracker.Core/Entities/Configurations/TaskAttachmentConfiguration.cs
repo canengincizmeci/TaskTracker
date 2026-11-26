@@ -19,8 +19,11 @@ public sealed class TaskAttachmentConfiguration : IEntityTypeConfiguration<TaskA
         builder.Property(x => x.OriginalFileName).HasMaxLength(255).IsRequired();
         builder.Property(x => x.StorageKey).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ContentType).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.ContentSha256).HasMaxLength(64);
         builder.HasIndex(x => x.StorageKey).IsUnique();
         builder.HasIndex(x => new { x.TaskRequestId, x.CreatedAt, x.Id });
+        builder.HasIndex(x => new { x.TaskRequestId, x.UploaderUserId, x.Kind, x.ContentSha256 })
+            .HasFilter("\"ContentSha256\" IS NOT NULL");
         builder.HasOne(x => x.TaskRequest).WithMany().HasForeignKey(x => x.TaskRequestId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.UploaderUser).WithMany().HasForeignKey(x => x.UploaderUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.TaskMessage).WithMany().HasForeignKey(x => x.TaskMessageId).OnDelete(DeleteBehavior.Restrict);

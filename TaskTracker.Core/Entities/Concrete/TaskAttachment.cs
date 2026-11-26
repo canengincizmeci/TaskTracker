@@ -15,6 +15,7 @@ public sealed class TaskAttachment : IEntity
     public required string StorageKey { get; set; }
     public required string ContentType { get; set; }
     public long SizeBytes { get; set; }
+    public string? ContentSha256 { get; init; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
