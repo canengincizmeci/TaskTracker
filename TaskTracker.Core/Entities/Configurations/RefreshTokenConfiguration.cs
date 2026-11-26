@@ -8,7 +8,8 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
 {
     public void Configure(EntityTypeBuilder<RefreshToken> builder)
     {
-        builder.HasIndex(token => token.Token);
+        builder.Property(token => token.TokenDigest).HasMaxLength(64);
+        builder.HasIndex(token => token.TokenDigest).IsUnique();
         builder.HasIndex(token => new { token.SessionId, token.IsRevoked });
         builder.Property(token => token.IsRevoked).IsConcurrencyToken();
     }

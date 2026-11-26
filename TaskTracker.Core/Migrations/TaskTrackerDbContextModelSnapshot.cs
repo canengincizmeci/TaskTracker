@@ -228,16 +228,18 @@ namespace TaskTracker.Core.Migrations
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("TokenDigest")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Token");
+                    b.HasIndex("TokenDigest")
+                        .IsUnique();
 
                     b.HasIndex("UserId");
 

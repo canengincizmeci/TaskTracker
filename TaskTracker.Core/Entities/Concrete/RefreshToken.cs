@@ -10,7 +10,7 @@ namespace TaskTracker.Core.Entities.Concrete
 
         public int UserId { get; set; }
         public Guid SessionId { get; set; }
-        public string Token { get; set; } = null!;
+        public string TokenDigest { get; set; } = null!;
        
         public DateTime Expires { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
