@@ -9,7 +9,8 @@ public interface ITaskFileStore
     void Delete(string key);
 }
 
-public sealed class PrivateTaskFileStore(IOptions<TaskFileOptions> options, IWebHostEnvironment environment) : ITaskFileStore
+public sealed class PrivateTaskFileStore(IOptions<TaskFileOptions> options, IWebHostEnvironment environment,
+    ILogger<PrivateTaskFileStore>? logger = null) : ITaskFileStore
 {
     private readonly string _root = Path.GetFullPath(Path.IsPathRooted(options.Value.RootPath)
         ? options.Value.RootPath : Path.Combine(environment.ContentRootPath, options.Value.RootPath));
@@ -20,15 +21,31 @@ public sealed class PrivateTaskFileStore(IOptions<TaskFileOptions> options, IWeb
         var key = Guid.NewGuid().ToString("N");
         var finalPath = Resolve(key);
         var temporaryPath = finalPath + ".upload";
+        var created = false;
         try
         {
             await using (var destination = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write,
                 FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                created = true;
                 await source.CopyToAsync(destination, cancellationToken);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, finalPath);
             return key;
         }
-        catch { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); throw; }
+        catch
+        {
+            if (created)
+            {
+                try { File.Delete(temporaryPath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logger?.LogWarning(ex, "Could not remove a partial task upload");
+                }
+            }
+            throw;
+        }
     }
 
     public Stream OpenRead(string key) => new FileStream(Resolve(key), FileMode.Open, FileAccess.Read,

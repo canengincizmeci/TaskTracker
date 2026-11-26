@@ -9,6 +9,7 @@ public interface ISubTaskDal
     Task LockParentWorkspaceAsync(int taskId, CancellationToken ct = default);
     Task LockWorkspaceForMemberRemovalAsync(int workspaceId, CancellationToken ct = default);
     Task LockSubTaskForReadAsync(int taskId, int subTaskId, CancellationToken ct = default);
+    Task LockSubTaskForWriteAsync(int taskId, int subTaskId, CancellationToken ct = default);
     Task<TaskRequest?> GetActiveParentAsync(int taskId, CancellationToken ct = default);
     Task<SubTask?> GetActiveAsync(int taskId, int subTaskId, CancellationToken ct = default);
     Task<bool> HasActiveAsync(int taskId, int subTaskId, CancellationToken ct = default);

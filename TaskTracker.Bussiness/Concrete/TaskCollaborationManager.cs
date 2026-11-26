@@ -15,14 +15,16 @@ public class TaskCollaborationManager : ITaskCollaborationService
     private readonly ITaskCollaborationDal _collaborationDal;
     private readonly ITaskCollaborationRealtimeService _realtime;
     private readonly ILogger<TaskCollaborationManager> _logger;
+    private readonly ISubTaskDal _subTasks;
 
     public TaskCollaborationManager(IUnitOfWork unitOfWork, ITaskCollaborationDal collaborationDal,
-        ITaskCollaborationRealtimeService realtime, ILogger<TaskCollaborationManager> logger)
+        ITaskCollaborationRealtimeService realtime, ILogger<TaskCollaborationManager> logger, ISubTaskDal subTasks)
     {
         _unitOfWork = unitOfWork;
         _collaborationDal = collaborationDal;
         _realtime = realtime;
         _logger = logger;
+        _subTasks = subTasks;
     }
 
     public Task<bool> CanAccessAsync(int taskId, int userId, CancellationToken ct = default) =>
@@ -46,18 +48,25 @@ public class TaskCollaborationManager : ITaskCollaborationService
 
     public async Task<IDataResult<TaskMessageDto>> SendMessageAsync(int taskId, int userId, string? content)
     {
-        if (!await CanAccessAsync(taskId, userId))
-            return new ErrorDataResult<TaskMessageDto>(Messages.AuthorizationDenied);
-        if (string.IsNullOrWhiteSpace(content) || content.Length > TaskMessage.MaxContentLength)
-            return new ErrorDataResult<TaskMessageDto>("Message must contain 1–4000 characters of nonblank text.");
-        var sender = await _unitOfWork.GetRepository<User>().GetByIdAsync(userId);
-        var message = new TaskMessage
+        TaskMessage message;
+        await using (var transaction = await _unitOfWork.BeginTransactionAsync())
         {
-            TaskRequestId = taskId, SenderUserId = userId, SenderUser = sender!,
-            Content = content.Trim(), CreatedAt = DateTime.UtcNow
-        };
-        await _unitOfWork.GetRepository<TaskMessage>().AddAsync(message);
-        await _unitOfWork.SaveChangesAsync();
+            await _subTasks.LockParentWorkspaceAsync(taskId);
+            await _subTasks.LockParentAsync(taskId, exclusive: false);
+            if (!await CanAccessAsync(taskId, userId))
+                return new ErrorDataResult<TaskMessageDto>(Messages.AuthorizationDenied);
+            if (string.IsNullOrWhiteSpace(content) || content.Length > TaskMessage.MaxContentLength)
+                return new ErrorDataResult<TaskMessageDto>("Message must contain 1–4000 characters of nonblank text.");
+            var sender = await _unitOfWork.GetRepository<User>().GetByIdAsync(userId);
+            message = new TaskMessage
+            {
+                TaskRequestId = taskId, SenderUserId = userId, SenderUser = sender!,
+                Content = content.Trim(), CreatedAt = DateTime.UtcNow
+            };
+            await _unitOfWork.GetRepository<TaskMessage>().AddAsync(message);
+            await _unitOfWork.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
         var dto = TaskMessageDto.From(message);
         await PublishMessageAsync(taskId, dto);
         return new SuccessDataResult<TaskMessageDto>(dto);

@@ -21,6 +21,7 @@ public sealed partial class TaskAttachmentController(
     ITaskFileStore store, ITaskFileScanner scanner, IOptions<TaskFileOptions> options, ISubTaskDal subTasks,
     ILogger<TaskAttachmentController>? logger = null, INotificationService? notifications = null) : ControllerBase
 {
+    private const long LegacyUploadRequestLimit = 21 * 1024 * 1024;
     private bool ScannerConfigured => scanner is not NoOpTaskFileScanner &&
         (scanner is not ClamAvTaskFileScanner clamAv || clamAv.IsConfigured);
     private bool SubTaskUploadsEnabled => options.Value.EnableSubTaskSubmissionUploads &&
@@ -52,17 +53,23 @@ public sealed partial class TaskAttachmentController(
         return Ok(entities.Select(x => Map(x, userId, ownerId)));
     }
 
-    [HttpPost("task/{taskId:int}"), RequestSizeLimit(21 * 1024 * 1024)]
+    [HttpPost("task/{taskId:int}"), RequestSizeLimit(LegacyUploadRequestLimit)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
+    [RequestFormLimits(ValueCountLimit = 12)]
     [Authorize(Roles = "User")]
     public Task<IActionResult> UploadTask(int taskId, IFormFile file, CancellationToken ct) =>
         Upload(taskId, file, TaskAttachmentKind.Task, null, null, ct);
 
-    [HttpPost("task/{taskId:int}/messages/{messageId:int}"), RequestSizeLimit(21 * 1024 * 1024)]
+    [HttpPost("task/{taskId:int}/messages/{messageId:int}"), RequestSizeLimit(LegacyUploadRequestLimit)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
+    [RequestFormLimits(ValueCountLimit = 12)]
     [Authorize(Roles = "User")]
     public Task<IActionResult> UploadMessage(int taskId, int messageId, IFormFile file, CancellationToken ct) =>
         Upload(taskId, file, TaskAttachmentKind.Message, messageId, null, ct);
 
-    [HttpPost("task/{taskId:int}/submissions/{submissionId:int}"), RequestSizeLimit(21 * 1024 * 1024)]
+    [HttpPost("task/{taskId:int}/submissions/{submissionId:int}"), RequestSizeLimit(LegacyUploadRequestLimit)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
+    [RequestFormLimits(ValueCountLimit = 12)]
     [Authorize(Roles = "User")]
     public Task<IActionResult> UploadSubmission(int taskId, int submissionId, IFormFile file, CancellationToken ct) =>
         Upload(taskId, file, TaskAttachmentKind.Submission, null, submissionId, ct);
@@ -92,7 +99,9 @@ public sealed partial class TaskAttachmentController(
     }
 
     [HttpPost("/api/TaskRequest/{taskId:int}/subtasks/{subTaskId:int}/submissions/{submissionId:int}/files")]
-    [RequestSizeLimit(21 * 1024 * 1024)]
+    [RequestSizeLimit(LegacyUploadRequestLimit)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
+    [RequestFormLimits(ValueCountLimit = 12)]
     public Task<IActionResult> UploadSubTaskFile(int taskId, int subTaskId, int submissionId, [FromQuery] long? version,
         IFormFile file, CancellationToken ct) =>
         Upload(taskId, file, TaskAttachmentKind.SubTaskSubmission, null, submissionId, ct, subTaskId, version);
@@ -128,90 +137,33 @@ public sealed partial class TaskAttachmentController(
     public async Task<IActionResult> Delete(int id)
     {
         var userId = currentUser.UserId;
-        var attachment = await ParentAttachments().Include(x => x.TaskRequest).SingleOrDefaultAsync(x => x.Id == id);
-        if (attachment is null) return NotFound();
-        if (!await collaboration.CanAccessAsync(attachment.TaskRequestId, userId)) return Forbid();
-        if (attachment.Kind != TaskAttachmentKind.Task) return Conflict("Discussion and submission evidence is immutable.");
-        if (attachment.UploaderUserId != userId && attachment.TaskRequest.OwnerId != userId) return Forbid();
-        attachment.IsDeleted = true; attachment.DeletedAt = DateTime.UtcNow; attachment.DeletedByUserId = userId;
-        await db.SaveChangesAsync();
-        store.Delete(attachment.StorageKey);
-        await collaboration.PublishAttachmentsChangedAsync(attachment.TaskRequestId);
+        var ct = HttpContext?.RequestAborted ?? CancellationToken.None;
+        var taskId = await ParentAttachments().Where(x => x.Id == id).Select(x => (int?)x.TaskRequestId).SingleOrDefaultAsync(ct);
+        if (taskId is null) return NotFound();
+        TaskAttachment attachment;
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            await LockSubTaskScopeAsync(taskId.Value, ct, exclusiveParent: true);
+            if (!await collaboration.CanAccessAsync(taskId.Value, userId, ct)) return Forbid();
+            var current = await ParentAttachments().Include(x => x.TaskRequest)
+                .SingleOrDefaultAsync(x => x.Id == id && x.TaskRequestId == taskId.Value, ct);
+            if (current is null) return NotFound();
+            if (current.Kind != TaskAttachmentKind.Task) return Conflict("Discussion and submission evidence is immutable.");
+            if (current.UploaderUserId != userId && current.TaskRequest.OwnerId != userId) return Forbid();
+            attachment = current;
+            attachment.IsDeleted = true;
+            attachment.DeletedAt = DateTime.UtcNow;
+            attachment.DeletedByUserId = userId;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(CancellationToken.None);
+        }
+        RemoveStagedFile(attachment.StorageKey);
+        await collaboration.PublishAttachmentsChangedAsync(taskId.Value);
         return NoContent();
     }
 
     private IQueryable<TaskAttachment> ParentAttachments() => db.TaskAttachments
         .Where(x => !x.IsDeleted && x.Kind != TaskAttachmentKind.SubTaskSubmission);
-
-    private async Task<IActionResult> Upload(int taskId, IFormFile file, TaskAttachmentKind kind,
-        int? messageId, int? submissionId, CancellationToken ct, int? subTaskId = null, long? version = null)
-    {
-        var userId = currentUser.UserId;
-        if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
-        if (subTaskId is int childId)
-        {
-            if (!SubTaskUploadsEnabled) return StatusCode(503, "Subtask delivery file uploads are unavailable.");
-            if (version is null or < 0) return BadRequest("A subtask version is required.");
-            if (!await subTasks.HasActiveAsync(taskId, childId, ct)) return NotFound();
-            if (!await CanUploadSubTaskFileAsync(taskId, childId, submissionId!.Value, userId, ct))
-                return Conflict("Files can only be attached to your current unreviewed subtask submission.");
-        }
-        if (kind == TaskAttachmentKind.Message && !DiscussionUploadsEnabled) return DiscussionUnavailable();
-        if (kind == TaskAttachmentKind.Message && !await CanAddLegacyDiscussionFileAsync(taskId, messageId!.Value, userId, ct))
-            return BadRequest("Files can only be added separately to your own legacy message in this task.");
-        var (upload, failure) = InspectUpload(file,
-            kind == TaskAttachmentKind.Message ? DiscussionFileLimit : options.Value.MaxFileSizeBytes);
-        if (failure is not null) return failure;
-        await using var source = upload!.File.OpenReadStream();
-        var scanFailure = await ScanUploadAsync(upload, source, requireClean: true, ct);
-        if (scanFailure is not null) return scanFailure;
-        var name = upload.Name;
-        if (kind == TaskAttachmentKind.Message)
-            return await SaveLegacyDiscussionFileAsync(taskId, messageId!.Value, userId, upload, source, ct);
-        if (subTaskId.HasValue)
-            return await SaveSubTaskFileAsync(taskId, subTaskId.Value, submissionId!.Value, version!.Value,
-                userId, source, name, upload.Mime, file.Length, ct);
-        if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
-        var task = await db.TaskRequests.SingleOrDefaultAsync(x => x.Id == taskId && x.Activity, ct);
-        if (task is null) return Forbid();
-        if (kind == TaskAttachmentKind.Submission)
-        {
-            var validSubmission = task.Status == TaskStatus.InReview && task.AssigneeUserId == userId &&
-                await db.TaskSubmissions.AnyAsync(x => x.Id == submissionId &&
-                x.TaskRequestId == taskId && x.SubmittedByUserId == userId &&
-                !db.TaskSubmissionReviews.Any(r => r.TaskSubmissionId == x.Id) &&
-                !db.TaskSubmissions.Any(newer => newer.TaskRequestId == taskId && newer.RevisionNumber > x.RevisionNumber), ct);
-            if (!validSubmission) return Conflict("Files can only be attached to your current unreviewed submission revision.");
-        }
-
-        var uploader = await db.Users.SingleAsync(x => x.Id == userId, ct);
-        var key = await store.SaveAsync(source, ct);
-        var entity = new TaskAttachment { TaskRequestId = taskId, UploaderUserId = userId, UploaderUser = uploader, Kind = kind,
-            TaskSubmissionId = submissionId, OriginalFileName = name,
-            StorageKey = key, ContentType = upload.Mime, SizeBytes = file.Length, CreatedAt = DateTime.UtcNow };
-        try
-        {
-            if (!await collaboration.CanAccessAsync(taskId, userId, ct))
-            {
-                store.Delete(key);
-                return Forbid();
-            }
-            if (kind == TaskAttachmentKind.Submission)
-                db.Entry(task).Property(x => x.Version).IsModified = true;
-            db.TaskAttachments.Add(entity);
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            store.Delete(key);
-            return Conflict("The task changed before the upload finished. Check the current revision and try again.");
-        }
-        catch { store.Delete(key); throw; }
-
-        if (kind == TaskAttachmentKind.Submission) await collaboration.PublishTaskChangedAsync(taskId);
-        await collaboration.PublishAttachmentsChangedAsync(taskId);
-        return CreatedAtAction(nameof(Download), new { id = entity.Id }, Map(entity, userId, task.OwnerId));
-    }
 
     private sealed record UploadFile(IFormFile File, string Name, string Mime, Func<byte[], bool> Signature);
 
@@ -252,48 +204,6 @@ public sealed partial class TaskAttachmentController(
         return null;
     }
 
-    private async Task<IActionResult> SaveSubTaskFileAsync(int taskId, int subTaskId, int submissionId, long version,
-        int userId, Stream source, string name, string mime, long size, CancellationToken ct)
-    {
-        var key = await store.SaveAsync(source, ct);
-        var commitAttempted = false;
-        TaskAttachment attachment;
-        try
-        {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await LockSubTaskScopeAsync(taskId, ct);
-            if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
-            var subTask = await subTasks.GetActiveAsync(taskId, subTaskId, ct);
-            if (subTask is null) return NotFound();
-            if (subTask.Version != version || !await CanUploadSubTaskFileAsync(taskId, subTaskId, submissionId, userId, ct))
-                return Conflict("The submission or subtask changed. Reload the current revision before uploading.");
-            var uploader = await db.Users.SingleAsync(x => x.Id == userId, ct);
-            attachment = new TaskAttachment
-            {
-                TaskRequestId = taskId, UploaderUserId = userId, UploaderUser = uploader,
-                Kind = TaskAttachmentKind.SubTaskSubmission, SubTaskSubmissionId = submissionId,
-                StorageKey = key, OriginalFileName = name, ContentType = mime, SizeBytes = size
-            };
-            db.Entry(subTask).Property(x => x.Version).IsModified = true;
-            db.TaskAttachments.Add(attachment);
-            await db.SaveChangesAsync(ct);
-            // A lost commit response may still leave a valid DB reference to the private file.
-            commitAttempted = true;
-            await transaction.CommitAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Conflict("The subtask changed before the file was saved.");
-        }
-        finally
-        {
-            if (!commitAttempted) store.Delete(key);
-        }
-        await collaboration.PublishTaskChangedAsync(taskId);
-        return CreatedAtAction(nameof(DownloadSubTaskFile), new { taskId, subTaskId, submissionId, id = attachment.Id },
-            Map(attachment, userId, ownerId: 0));
-    }
-
     private IQueryable<TaskAttachment> SubTaskFiles(int taskId, int subTaskId) => db.TaskAttachments.AsNoTracking()
         .Where(x => x.TaskRequestId == taskId && x.Kind == TaskAttachmentKind.SubTaskSubmission && !x.IsDeleted &&
             x.SubTaskSubmission != null && x.SubTaskSubmission.SubTaskId == subTaskId && x.SubTaskSubmission.SubTask.Activity);
@@ -309,10 +219,47 @@ public sealed partial class TaskAttachmentController(
             !db.SubTaskSubmissionReviews.Any(r => r.SubTaskSubmissionId == x.Id) &&
             !db.SubTaskSubmissions.Any(s => s.SubTaskId == subTaskId && s.RevisionNumber > x.RevisionNumber), ct);
 
-    private async Task LockSubTaskScopeAsync(int taskId, CancellationToken ct = default)
+    private async Task LockSubTaskScopeAsync(int taskId, CancellationToken ct = default, bool exclusiveParent = false)
     {
         await subTasks.LockParentWorkspaceAsync(taskId, ct);
-        await subTasks.LockParentAsync(taskId, exclusive: false, ct);
+        await subTasks.LockParentAsync(taskId, exclusiveParent, ct);
+    }
+
+    private async Task CleanupUploadAsync(int taskId, IEnumerable<string> staged, bool commitStarted)
+    {
+        var keys = staged.ToArray();
+        if (keys.Length == 0) return;
+        if (commitStarted)
+        {
+            // A lost commit acknowledgement can leave durable references. Fence the former
+            // writer with the parent lock before deciding whether its files can be removed.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                var ct = cleanup.Token;
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+                await LockSubTaskScopeAsync(taskId, ct, exclusiveParent: true);
+                var saved = await db.TaskAttachments.AsNoTracking().Where(x => keys.Contains(x.StorageKey))
+                    .Select(x => x.StorageKey).ToListAsync(ct);
+                keys = keys.Except(saved).ToArray();
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Could not verify the commit outcome for uploaded files on task {TaskId}", taskId);
+                return;
+            }
+        }
+
+        foreach (var key in keys) RemoveStagedFile(key);
+    }
+
+    private void RemoveStagedFile(string key)
+    {
+        try { store.Delete(key); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger?.LogWarning(ex, "Could not remove a private task file");
+        }
     }
 
     private FileStreamResult StreamAttachment(TaskAttachment attachment)

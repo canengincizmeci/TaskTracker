@@ -43,7 +43,8 @@ public sealed partial class TaskAttachmentController
     [HttpPost("/api/TaskWorkspace/{taskId:int}/messages/delivery")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(DiscussionRequestLimit)]
-    [RequestFormLimits(MultipartBodyLengthLimit = DiscussionRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = DiscussionRequestLimit, ValueCountLimit = 16)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
     public async Task<IActionResult> DeliverDiscussionMessage(int taskId, [FromForm] DiscussionDeliveryForm form, CancellationToken ct)
     {
         var userId = currentUser.UserId;
@@ -89,15 +90,15 @@ public sealed partial class TaskAttachmentController
         if (uploads.Count > 0)
         {
             if (!DiscussionUploadsEnabled) return DiscussionUnavailable();
-            if (uploads.Count > DiscussionAttachmentLimit)
-                return BadRequest($"Send at most {DiscussionAttachmentLimit} files per message.");
-            if (totalBytes > DiscussionTotalLimit) return StatusCode(413, "The files exceed the configured message size limit.");
+            var quotaFailure = CheckDiscussionQuota(uploads.Count, totalBytes);
+            if (quotaFailure is not null) return quotaFailure;
             var oversized = uploads.FirstOrDefault(x => x.File.Length > DiscussionFileLimit);
             if (oversized is not null) return StatusCode(413, $"'{oversized.Name}' exceeds the configured file size limit.");
         }
 
         var staged = new List<(UploadFile File, string Key)>(uploads.Count);
-        var commitAttempted = false;
+        var commitStarted = false;
+        var committed = false;
         TaskMessage message;
         try
         {
@@ -110,8 +111,7 @@ public sealed partial class TaskAttachmentController
             }
 
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await subTasks.LockParentWorkspaceAsync(taskId, ct);
-            await subTasks.LockParentAsync(taskId, exclusive: true, ct);
+            await LockSubTaskScopeAsync(taskId, ct, exclusiveParent: true);
             if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
             var previous = await FindDiscussionDeliveryAsync(taskId, userId, form.ClientRequestId, ct);
             if (previous is not null) return DiscussionReceipt(previous, fingerprint);
@@ -130,14 +130,13 @@ public sealed partial class TaskAttachmentController
                 db.TaskAttachments.Add(attachment);
             }
             await db.SaveChangesAsync(ct);
-            commitAttempted = true;
+            commitStarted = true;
             await transaction.CommitAsync(CancellationToken.None);
+            committed = true;
         }
         finally
         {
-            // If commit acknowledgement is lost, the durable receipt can still reference these blobs.
-            if (!commitAttempted)
-                foreach (var (_, key) in staged) RemoveStagedDiscussionFile(key);
+            if (!committed) await CleanupUploadAsync(taskId, staged.Select(file => file.Key), commitStarted);
         }
 
         var dto = TaskMessageDto.From(message);
@@ -163,63 +162,16 @@ public sealed partial class TaskAttachmentController
         db.TaskMessages.AnyAsync(x => x.Id == messageId && x.TaskRequestId == taskId &&
             x.SenderUserId == userId && x.ClientRequestId == null, ct);
 
-    private async Task<IActionResult> SaveLegacyDiscussionFileAsync(int taskId, int messageId, int userId,
-        UploadFile upload, Stream source, CancellationToken ct)
-    {
-        var digest = await SHA256.HashDataAsync(source, ct);
-        source.Position = 0;
-        var key = await store.SaveAsync(source, ct);
-        var commitAttempted = false;
-        TaskAttachment attachment;
-        try
-        {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await subTasks.LockParentWorkspaceAsync(taskId, ct);
-            await subTasks.LockParentAsync(taskId, exclusive: true, ct);
-            if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
-            if (!await CanAddLegacyDiscussionFileAsync(taskId, messageId, userId, ct))
-                return BadRequest("Files can only be added separately to your own legacy message in this task.");
-            var existing = await db.TaskAttachments.AsNoTracking().Include(x => x.UploaderUser)
-                .Where(x => x.TaskRequestId == taskId && x.Kind == TaskAttachmentKind.Message &&
-                    x.TaskMessageId == messageId && !x.IsDeleted).ToListAsync(ct);
-            foreach (var match in existing.Where(x => x.OriginalFileName == upload.Name && x.SizeBytes == upload.File.Length))
-            {
-                await using var saved = store.OpenRead(match.StorageKey);
-                if ((await SHA256.HashDataAsync(saved, ct)).AsSpan().SequenceEqual(digest))
-                    return Ok(Map(match, userId, ownerId: 0));
-            }
-            if (existing.Count >= DiscussionAttachmentLimit)
-                return BadRequest($"Send at most {DiscussionAttachmentLimit} files per message.");
-            if (existing.Sum(x => x.SizeBytes) + upload.File.Length > DiscussionTotalLimit)
-                return StatusCode(413, "The files exceed the configured message size limit.");
-            var sender = await db.Users.SingleAsync(x => x.Id == userId, ct);
-            attachment = DiscussionAttachment(taskId, sender, upload, key);
-            attachment.TaskMessageId = messageId;
-            db.TaskAttachments.Add(attachment);
-            await db.SaveChangesAsync(ct);
-            commitAttempted = true;
-            await transaction.CommitAsync(CancellationToken.None);
-        }
-        finally
-        {
-            if (!commitAttempted) RemoveStagedDiscussionFile(key);
-        }
-        await collaboration.PublishAttachmentsChangedAsync(taskId);
-        return CreatedAtAction(nameof(Download), new { id = attachment.Id }, Map(attachment, userId, ownerId: 0));
-    }
-
     private static TaskAttachment DiscussionAttachment(int taskId, User sender, UploadFile upload, string key) => new()
     {
         TaskRequestId = taskId, UploaderUserId = sender.Id, UploaderUser = sender, Kind = TaskAttachmentKind.Message,
         OriginalFileName = upload.Name, ContentType = upload.Mime, SizeBytes = upload.File.Length, StorageKey = key
     };
 
-    private void RemoveStagedDiscussionFile(string key)
+    private IActionResult? CheckDiscussionQuota(int count, long bytes)
     {
-        try { store.Delete(key); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger?.LogWarning(ex, "Could not clean up an uncommitted discussion file");
-        }
+        if (count > DiscussionAttachmentLimit) return BadRequest($"Send at most {DiscussionAttachmentLimit} files per message.");
+        if (bytes > DiscussionTotalLimit) return StatusCode(413, "The files exceed the configured message size limit.");
+        return null;
     }
 }

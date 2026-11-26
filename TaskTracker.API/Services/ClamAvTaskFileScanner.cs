@@ -25,6 +25,8 @@ public static class TaskFileServiceRegistration
         var section = configuration.GetSection("TaskFiles");
         services.Configure<TaskFileOptions>(section);
         services.AddSingleton<ITaskFileStore, PrivateTaskFileStore>();
+        services.AddSingleton<TaskUploadSlots>();
+        services.AddScoped<TaskUploadFilter>();
 
         var options = section.Get<TaskFileOptions>() ?? new TaskFileOptions();
         if (options.Scanner.Enabled)

@@ -27,6 +27,10 @@ public class EfSubTaskDal(TaskTrackerDbContext context) : ISubTaskDal
         SELECT "Id" FROM "SubTasks" WHERE "TaskRequestId" = {taskId} AND "Id" = {subTaskId} FOR SHARE
         """, ct);
 
+    public Task LockSubTaskForWriteAsync(int taskId, int subTaskId, CancellationToken ct = default) => LockAsync($"""
+        SELECT "Id" FROM "SubTasks" WHERE "TaskRequestId" = {taskId} AND "Id" = {subTaskId} FOR NO KEY UPDATE
+        """, ct);
+
     private Task LockAsync(FormattableString sql, CancellationToken ct)
     {
         if (context.Database.CurrentTransaction is null)

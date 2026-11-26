@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using TaskTracker.API.Services;
 using TaskTracker.Bussiness.Constanst;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
@@ -32,7 +33,8 @@ public sealed partial class TaskAttachmentController
     [HttpPost("/api/TaskRequest/{taskId:int}/subtasks/{subTaskId:int}/submissions/delivery")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(SubTaskRequestLimit)]
-    [RequestFormLimits(MultipartBodyLengthLimit = SubTaskRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = SubTaskRequestLimit, ValueCountLimit = 16)]
+    [ServiceFilter(typeof(TaskUploadFilter))]
     public async Task<IActionResult> DeliverSubTaskSubmission(
         int taskId, int subTaskId, [FromForm] SubTaskDeliveryForm form, CancellationToken ct)
     {
@@ -42,6 +44,9 @@ public sealed partial class TaskAttachmentController
             return BadRequest("A nonnegative subtask version is required.");
         if (form.ClientRequestId == Guid.Empty)
             return BadRequest("A delivery identifier is required.");
+        var userId = currentUser.UserId;
+        if (!await collaboration.CanAccessAsync(taskId, userId, ct))
+            return Forbid();
 
         var content = form.Content?.Trim() ?? string.Empty;
         if (content.Length > SubTaskSubmission.MaxContentLength)
@@ -76,7 +81,6 @@ public sealed partial class TaskAttachmentController
         var fingerprint = Convert.ToHexString(SHA256.HashData(
             JsonSerializer.SerializeToUtf8Bytes(new { content, identities })));
 
-        var userId = currentUser.UserId;
         await using (var read = await db.Database.BeginTransactionAsync(ct))
         {
             await LockSubTaskScopeAsync(taskId, ct);
@@ -117,17 +121,16 @@ public sealed partial class TaskAttachmentController
         {
             if (!SubTaskUploadsEnabled)
                 return SubTaskUploadUnavailable();
-            if (uploads.Count > SubTaskAttachmentLimit)
-                return BadRequest($"Attach at most {SubTaskAttachmentLimit} files per submission.");
-            if (totalBytes > SubTaskTotalLimit)
-                return StatusCode(StatusCodes.Status413PayloadTooLarge, "The files exceed the configured submission size limit.");
+            var quotaFailure = CheckSubTaskQuota(uploads.Count, totalBytes);
+            if (quotaFailure is not null) return quotaFailure;
             var oversized = uploads.FirstOrDefault(x => x.File.Length > SubTaskFileLimit);
             if (oversized is not null)
                 return StatusCode(StatusCodes.Status413PayloadTooLarge, $"'{oversized.Name}' exceeds the configured file size limit.");
         }
 
         var staged = new List<(UploadFile File, string Key)>(uploads.Count);
-        var commitAttempted = false;
+        var commitStarted = false;
+        var committed = false;
         SubTaskDto? committedDto = null;
         int ownerId = 0;
 
@@ -221,25 +224,26 @@ public sealed partial class TaskAttachmentController
 
             await db.SaveChangesAsync(ct);
             committedDto = await subTasks.GetDetailAsync(taskId, subTaskId, userId, ct);
-            commitAttempted = true;
+            commitStarted = true;
             await transaction.CommitAsync(CancellationToken.None);
+            committed = true;
         }
         catch (Exception ex) when (ex is DbUpdateConcurrencyException || IsSubTaskDeliveryConflict(ex))
         {
             db.ChangeTracker.Clear();
-            var committed = await FindSubTaskDeliveryAsync(taskId, subTaskId, userId, form.ClientRequestId, CancellationToken.None);
-            if (committed is not null)
-                return await SubTaskDeliveryReceiptAsync(taskId, subTaskId, userId, committed, fingerprint, CancellationToken.None);
+            await using var read = await db.Database.BeginTransactionAsync(ct);
+            await LockSubTaskScopeAsync(taskId, ct);
+            if (!await collaboration.CanAccessAsync(taskId, userId, ct)) return Forbid();
+            await subTasks.LockSubTaskForReadAsync(taskId, subTaskId, ct);
+            var previous = await FindSubTaskDeliveryAsync(taskId, subTaskId, userId, form.ClientRequestId, ct);
+            if (previous is not null && await subTasks.HasActiveAsync(taskId, subTaskId, ct))
+                return await SubTaskDeliveryReceiptAsync(taskId, subTaskId, userId, previous, fingerprint, ct);
 
             return Conflict(new { code = "conflict", message = "The subtask changed. Refresh and retry." });
         }
         finally
         {
-            if (!commitAttempted)
-            {
-                foreach (var (_, key) in staged)
-                    RemoveStagedDiscussionFile(key);
-            }
+            if (!committed) await CleanupUploadAsync(taskId, staged.Select(file => file.Key), commitStarted);
         }
 
         await collaboration.PublishTaskChangedAsync(taskId);
@@ -284,6 +288,14 @@ public sealed partial class TaskAttachmentController
 
     private IActionResult SubTaskUploadUnavailable() => StatusCode(StatusCodes.Status503ServiceUnavailable,
         new { code = "subtask_upload_unavailable", message = "Subtask delivery file uploads are unavailable." });
+
+    private IActionResult? CheckSubTaskQuota(int count, long bytes)
+    {
+        if (count > SubTaskAttachmentLimit) return BadRequest($"Attach at most {SubTaskAttachmentLimit} files per submission.");
+        if (bytes > SubTaskTotalLimit)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, "The files exceed the configured submission size limit.");
+        return null;
+    }
 
     private Task<bool> IsEligibleSubTaskAssigneeAsync(TaskRequest parent, int userId, CancellationToken ct) =>
         parent.WorkspaceId.HasValue
