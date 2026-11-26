@@ -70,7 +70,7 @@ function InvitationDetails({ id }: { id: number }) {
       await respondToTaskInvitation(id, accept, responseMessage);
       if (!mounted.current) return;
       toast.success(accept ? "Invitation accepted" : "Invitation rejected");
-      navigate(accept && invitation ? `/tasks/task-detail/${invitation.taskRequestId}` : "/tasks/invitations", { replace: true });
+      navigate(accept && invitation.taskRequestId !== null ? `/tasks/task-detail/${invitation.taskRequestId}` : "/tasks/invitations", { replace: true });
     } catch (reason: unknown) {
       if (!mounted.current) return;
       await load();
@@ -113,7 +113,7 @@ function InvitationDetails({ id }: { id: number }) {
               <h2 id="invitation-context-title">Invitation details</h2>
             </div>
             <dl className="inbox-detail-list">
-              <div><dt>Invited by</dt><dd>{invitation.inviterUserName}</dd></div>
+              {invitation.inviterUserName && <div><dt>Invited by</dt><dd>{invitation.inviterUserName}</dd></div>}
               <div><dt>Permission</dt><dd>{permissionText(invitation.permission)} access</dd></div>
               <div><dt>Received</dt><dd><time dateTime={invitation.createdAt}>{formatDate(invitation.createdAt)}</time></dd></div>
               {invitation.expiresAt && (status === "Pending" || status === "Expired") && <div><dt>Expires</dt><dd>
@@ -135,7 +135,8 @@ function InvitationDetails({ id }: { id: number }) {
                 {invitation.canReject && <button className="secondary-button" onClick={() => respond(false)} disabled={action !== null}
                   type="button">{action === "reject" ? "Rejecting..." : "Reject invitation"}</button>}
               </div>
-            </div> : status === "Accepted" && <Link className="primary-button" to={`/tasks/task-detail/${invitation.taskRequestId}`}>Open task</Link>}
+            </div> : status === "Accepted" && invitation.taskRequestId !== null &&
+              <Link className="primary-button" to={`/tasks/task-detail/${invitation.taskRequestId}`}>Open task</Link>}
           </section>
         </>}
       </div>

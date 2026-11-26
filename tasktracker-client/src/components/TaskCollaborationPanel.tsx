@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
-import { HubConnectionBuilder } from "@microsoft/signalr";
+import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { isAxiosError } from "axios";
 import { getTaskActivity, getTaskMessages } from "../api/taskCollaborationService";
 import { attachmentChangeEvent } from "../api/taskAttachmentService";
@@ -135,6 +135,7 @@ function WorkspaceConnection({ task, view, children, onAccessRevoked, onTaskChan
     const apiBase = import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, "");
     const connection = new HubConnectionBuilder()
       .withUrl(`${apiBase}/hubs/task-workspace`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      .configureLogging(LogLevel.None)
       .withAutomaticReconnect().build();
 
     // Keep saved history usable even when establishing a live connection takes time.

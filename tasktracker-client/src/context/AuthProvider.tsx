@@ -80,8 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await notificationHubConnection.start();
           }
         })
-        .catch((error) => {
-          console.error("Failed to start notification connection:", error);
+        .catch(() => {
+          console.error("Failed to start notification connection.");
         });
     }
 
@@ -92,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await notificationHubConnection.stop();
           }
         })
-        .catch((error) => {
-          console.error("Failed to stop notification connection:", error);
+        .catch(() => {
+          console.error("Failed to stop notification connection.");
         });
     };
   }, [token]);

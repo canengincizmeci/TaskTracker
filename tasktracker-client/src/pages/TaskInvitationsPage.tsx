@@ -59,7 +59,7 @@ function Invitations({ canUseInvitationActions }: { canUseInvitationActions: boo
       await (accept ? acceptTaskInvitation(id) : rejectTaskInvitation(id));
       if (!mounted.current) return;
       setInvitations((current) => current.filter((item) => item.id !== id));
-      if (accept) navigate(`/tasks/task-detail/${invite.taskRequestId}`);
+      if (accept && invite.taskRequestId !== null) navigate(`/tasks/task-detail/${invite.taskRequestId}`);
     } catch (error: unknown) {
       if (mounted.current) {
         setErrorMessage(getErrorMessage(error, "Could not confirm your response. Check the invitation details."));
@@ -105,15 +105,16 @@ function Invitations({ canUseInvitationActions }: { canUseInvitationActions: boo
                       const status = invitationStatus(invitation);
                       const busy = busyIds.has(invitation.id);
                       const actionable = canUseInvitationActions && isActionableInvitation(invitation);
+                      const title = invitation.taskTitle ?? "Task invitation";
                       return <li className="inbox-row inbox-invitation-row" key={invitation.id}>
                         <div className="inbox-row__marker" aria-hidden="true" />
                         <div className="inbox-row__content">
-                          <div className="inbox-row__title-line"><h3>{invitation.taskTitle}</h3>
+                          <div className="inbox-row__title-line"><h3>{title}</h3>
                             <span className={`inbox-status inbox-status--${status.toLowerCase()}`}>{status}</span></div>
                           {invitation.unavailableReason && <p className="inbox-row__warning" role="alert">
                             {invitation.unavailableReason}</p>}
                           <div className="inbox-row__meta">
-                            <span>Invited by {invitation.inviterUserName}</span>
+                            {invitation.inviterUserName && <span>Invited by {invitation.inviterUserName}</span>}
                             <span>{permissionText(invitation.permission)} access</span>
                             <time dateTime={invitation.createdAt}>{formatDate(invitation.createdAt)}</time>
                           </div>
@@ -121,13 +122,13 @@ function Invitations({ canUseInvitationActions }: { canUseInvitationActions: boo
                         </div>
                         {canUseInvitationActions && <div className="inbox-row__actions">
                           {actionable && !invitation.message && invitation.canAccept && <button className="primary-button" disabled={busy} type="button"
-                            aria-label={`Accept invitation to ${invitation.taskTitle}`}
+                            aria-label={`Accept invitation to ${title}`}
                             onClick={() => respond(invitation.id, true)}>Accept</button>}
                           {actionable && !invitation.message && invitation.canReject && <button className="secondary-button" disabled={busy} type="button"
-                            aria-label={`Reject invitation to ${invitation.taskTitle}`}
+                            aria-label={`Reject invitation to ${title}`}
                             onClick={() => respond(invitation.id, false)}>Reject</button>}
                           <Link className={invitation.message ? "primary-button" : "secondary-button"} to={`/tasks/invitations/${invitation.id}`}
-                            aria-label={`${actionable ? "Review and reply to" : "View"} invitation for ${invitation.taskTitle}`}>{actionable ? "Review & reply" : "View details"}</Link>
+                            aria-label={`${actionable ? "Review and reply to" : "View"} invitation for ${title}`}>{actionable ? "Review & reply" : "View details"}</Link>
                         </div>}
                       </li>;
                     })}

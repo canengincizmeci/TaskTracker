@@ -61,8 +61,7 @@ function NotificationsPage() {
             ];
           });
         }
-      } catch (error) {
-        console.error("Failed to load notifications:", error);
+      } catch {
         if (isActive) setFailure("Notifications could not be loaded.");
       } finally {
         if (isActive) setLoading(false);
@@ -95,8 +94,8 @@ function NotificationsPage() {
           detail: { notificationId },
         })
       );
-    } catch (error) {
-      console.error("Failed to mark notification as read:", error);
+    } catch {
+      console.error("Failed to mark notification as read.");
     }
   };
 
@@ -147,8 +146,7 @@ function NotificationsPage() {
 
           return [...liveAfterSnapshot, ...refreshedNotifications];
         });
-      } catch (refreshError) {
-        console.error("Failed to refresh notifications after marking all as read:", refreshError);
+      } catch {
         const readAt = new Date().toISOString();
 
         setNotifications((currentNotifications) =>
@@ -167,8 +165,8 @@ function NotificationsPage() {
           );
         });
       }
-    } catch (error) {
-      console.error("Failed to mark all notifications as read:", error);
+    } catch {
+      console.error("Failed to mark all notifications as read.");
     } finally {
       markAllInFlight.current = false;
       liveUnreadDuringMarkAll.current.clear();

@@ -154,8 +154,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
           setUnread({ accountToken: token, count: knownUnreadIds.size });
         }
-      } catch (error) {
-        console.error("Failed to load unread notification count:", error);
+      } catch {
+        console.error("Failed to load unread notification count.");
       }
     };
 

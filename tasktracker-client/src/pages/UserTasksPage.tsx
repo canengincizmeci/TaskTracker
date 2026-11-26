@@ -42,8 +42,7 @@ function UserTasksPage() {
 
         const data = await getUserTasks();
         setTasks(data);
-      } catch (err) {
-        console.error(err);
+      } catch {
         setError("Tasks could not be loaded.");
         toast.error("Tasks could not be loaded.");
       } finally {
