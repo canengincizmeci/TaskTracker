@@ -1,6 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TaskTracker.API.Controllers;
@@ -18,6 +22,54 @@ namespace TaskTracker.Tests;
 
 public sealed class TaskAttachmentTests
 {
+    [Fact]
+    public async Task Upload_resource_filter_blocks_unauthorized_and_excess_requests_before_model_binding()
+    {
+        using var database = new TestDatabase();
+        await using var db = database.CreateContext();
+        db.TaskRequests.Add(TestDatabase.Task());
+        await db.SaveChangesAsync();
+        using var slots = new TaskUploadSlots(Options.Create(new TaskFileOptions { MaxConcurrentUploads = 1 }));
+        var service = TaskCollaborationTestServices.Create(db);
+        var denied = ResourceContext();
+        static Task<ResourceExecutedContext> UnexpectedBinding() =>
+            throw new InvalidOperationException("The resource filter must stop before binding.");
+        await new TaskUploadFilter(slots, new CurrentUser(2), service).OnResourceExecutionAsync(denied, UnexpectedBinding);
+        Assert.IsType<ForbidResult>(denied.Result);
+
+        var authorized = new TaskUploadFilter(slots, new CurrentUser(1), service);
+        var first = ResourceContext();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = authorized.OnResourceExecutionAsync(first, async () =>
+        {
+            entered.SetResult();
+            await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            return new ResourceExecutedContext(first, []);
+        });
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var excess = ResourceContext();
+            await authorized.OnResourceExecutionAsync(excess, UnexpectedBinding);
+            Assert.Equal(429, Assert.IsType<ObjectResult>(excess.Result).StatusCode);
+            Assert.Equal("1", excess.HttpContext.Response.Headers.RetryAfter.ToString());
+        }
+        finally { release.TrySetResult(); }
+        await running;
+        var following = ResourceContext();
+        await authorized.OnResourceExecutionAsync(following, () => Task.FromResult(new ResourceExecutedContext(following, [])));
+        Assert.Null(following.Result);
+    }
+
+    private static ResourceExecutingContext ResourceContext()
+    {
+        var route = new RouteData();
+        route.Values["taskId"] = "1";
+        return new ResourceExecutingContext(new ActionContext(new DefaultHttpContext(), route, new ActionDescriptor()),
+            [], new List<IValueProviderFactory>());
+    }
+
     [Fact]
     public async Task Required_scan_fails_closed_when_scanner_is_not_configured()
     {

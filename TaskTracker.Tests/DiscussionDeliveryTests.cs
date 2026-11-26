@@ -246,7 +246,7 @@ public class DiscussionDeliveryTests
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "User")], "test"))
         };
         var conversation = new TaskCollaborationManager(new UnitOfWork(db), new EfTaskCollaborationDal(db),
-            realtime ?? new Realtime(), NullLogger<TaskCollaborationManager>.Instance);
+            realtime ?? new Realtime(), NullLogger<TaskCollaborationManager>.Instance, new EfSubTaskDal(db));
         return new(db, new Actor(userId), conversation, store, scanner ?? new Scanner(TaskFileScanVerdict.Clean),
             Options.Create(options ?? new TaskFileOptions()), new EfSubTaskDal(db))
         { ControllerContext = new ControllerContext { HttpContext = http } };

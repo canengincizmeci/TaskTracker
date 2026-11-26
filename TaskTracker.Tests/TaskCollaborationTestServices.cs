@@ -45,7 +45,7 @@ internal static class TaskCollaborationTestServices
 
     public static TaskCollaborationManager Create(TaskTrackerDbContext context, bool failRealtime = false) =>
         new(new UnitOfWork(context), new EfTaskCollaborationDal(context), new Realtime(failRealtime),
-            NullLogger<TaskCollaborationManager>.Instance);
+            NullLogger<TaskCollaborationManager>.Instance, new EfSubTaskDal(context));
 
     public static TaskRequestManager TaskRequests(TaskTrackerDbContext context,
         INotificationService? notifications = null, ITaskCollaborationService? collaboration = null)

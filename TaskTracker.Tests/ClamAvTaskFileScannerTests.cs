@@ -32,6 +32,26 @@ namespace TaskTracker.Tests;
 public sealed class ClamAvTaskFileScannerTests
 {
     [Fact]
+    public async Task Private_store_removes_a_partial_file_when_copy_is_cancelled()
+    {
+        using var temp = new TempFileStore();
+        using var cancellation = new CancellationTokenSource();
+        await using var source = new CancelAfterWriteStream(cancellation);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => temp.Store.SaveAsync(source, cancellation.Token));
+        Assert.Empty(temp.DiskFiles());
+    }
+
+    private sealed class CancelAfterWriteStream(CancellationTokenSource cancellation) : MemoryStream
+    {
+        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
+        {
+            await destination.WriteAsync("Partial file"u8.ToArray(), cancellationToken);
+            cancellation.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+    }
+
+    [Fact]
     public async Task Clean_multichunk_stream_and_partial_tcp_reads_are_accepted_and_downloadable_only_after_persistence()
     {
         using var database = new TestDatabase();
@@ -608,7 +628,8 @@ public sealed class ClamAvTaskFileScannerTests
             new UnitOfWork(db),
             new EfTaskCollaborationDal(db),
             new NoOpRealtime(),
-            NullLogger<TaskCollaborationManager>.Instance);
+            NullLogger<TaskCollaborationManager>.Instance,
+            new EfSubTaskDal(db));
 
         return new TaskAttachmentController(
             db,

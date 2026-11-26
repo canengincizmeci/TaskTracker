@@ -4,7 +4,7 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { localCalendarDate } from "../src/utils/localCalendarDate.ts";
-import { deliveryFileIds, matchingDeliveryFileIds, sameFiles, workflowSubmission } from "../src/utils/taskWorkflowState.ts";
+import { deliveryFileIds, sameFiles, workflowSubmission } from "../src/utils/taskWorkflowState.ts";
 
 test("the task workflow points to the exact revision, not the final item in a stale list", () => {
   const first = { id: 41, revisionNumber: 1 };
@@ -24,8 +24,6 @@ test("revision file snapshots detect late attachments without including referenc
   assert.deepEqual(deliveryFileIds(files, 42), [3, 4]);
   assert.equal(sameFiles([3, 4], [4, 3]), true);
   assert.equal(sameFiles([3], deliveryFileIds(files, 42)), false);
-  assert.deepEqual(matchingDeliveryFileIds(files, 42, 3, " notes.txt ", 8), [3]);
-  assert.deepEqual(matchingDeliveryFileIds(files, 42, 4, "notes.txt", 8), []);
 });
 
 test("local calendar day is stable at midnight across UTC offsets", () => {

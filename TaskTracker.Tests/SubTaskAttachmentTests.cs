@@ -69,12 +69,16 @@ public class SubTaskAttachmentTests
         await using var data = download.FileStream;
         Assert.Equal("notes.txt", download.FileDownloadName);
         Assert.Equal("nosniff", owner.Response.Headers.XContentTypeOptions.ToString());
-        Assert.IsType<ConflictObjectResult>(await Controller(context, 2, store)
+        var replay = Assert.IsType<OkObjectResult>(await Controller(context, 2, store)
             .UploadSubTaskFile(1, item.Id, submissionId, item.Version, file, default));
+        Assert.Equal(attachment.Id, Assert.IsType<TaskAttachmentDto>(replay.Value).Id);
         Assert.IsAssignableFrom<IConflictResult>(await service.ReviewAsync(1, item.Id, submissionId, Review(item.Version), 1));
         Assert.True((await service.ReviewAsync(1, item.Id, submissionId, Review(listed.Version), 1)).Success);
-        Assert.IsType<ConflictObjectResult>(await Controller(context, 2, store)
+        Assert.IsType<OkObjectResult>(await Controller(context, 2, store)
             .UploadSubTaskFile(1, item.Id, submissionId, listed.Version + 1, file, default));
+        using var different = CreateFile("different.txt", "Different evidence");
+        Assert.IsType<ConflictObjectResult>(await Controller(context, 2, store)
+            .UploadSubTaskFile(1, item.Id, submissionId, listed.Version + 1, different.Form, default));
         Assert.Single(await context.TaskAttachments.ToListAsync());
         Assert.Single(store.Files);
     }

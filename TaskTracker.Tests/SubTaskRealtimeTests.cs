@@ -27,7 +27,7 @@ public class SubTaskRealtimeTests
             events.Add((group, method, arguments, persisted.Status));
         }));
         var collaboration = new TaskCollaborationManager(new UnitOfWork(context), new EfTaskCollaborationDal(context),
-            new SignalRTaskCollaborationService(hub), NullLogger<TaskCollaborationManager>.Instance);
+            new SignalRTaskCollaborationService(hub), NullLogger<TaskCollaborationManager>.Instance, new EfSubTaskDal(context));
         var service = TaskCollaborationTestServices.SubTasks(context, collaboration);
         var created = Data(await service.CreateAsync(1, Details("Sensitive title"), 1));
         var started = Data(await service.StartAsync(1, created.Id, Version(created.Version), 1));
