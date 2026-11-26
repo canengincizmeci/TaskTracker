@@ -60,6 +60,59 @@ public class InvitationTests
         await context.SaveChangesAsync();
     }
 
+    [PostgreSqlTheory]
+    [InlineData("Cancelled")]
+    [InlineData("Accepted")]
+    [InlineData("Rejected")]
+    [InlineData("Expired")]
+    public async Task Invitation_history_does_not_disclose_task_details_without_current_access(string historicalStatus)
+    {
+        await using var database = await PostgreSqlTestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        await Seed(context);
+        var task = await context.TaskRequests.SingleAsync();
+        var invitation = await context.TaskShareInvitations.SingleAsync();
+        invitation.Message = "Private planning note";
+        await context.SaveChangesAsync();
+        var recipient = Manager(context);
+        var owner = Manager(context, 1);
+        var pending = (await recipient.GetInvitationAsync(invitation.Id)).Data;
+        Assert.Equal(task.Title, pending.TaskTitle);
+        Assert.Equal(invitation.Message, pending.Message);
+        Assert.True(pending.CanAccept);
+
+        switch (historicalStatus)
+        {
+            case "Cancelled":
+                Assert.True((await owner.CancelInvitationAsync(invitation.Id, task.Version)).Success);
+                break;
+            case "Accepted":
+                Assert.True((await recipient.AcceptTaskInvitationAsync(invitation.Id)).Success);
+                Assert.Equal(task.Id, (await recipient.GetInvitationAsync(invitation.Id)).Data.TaskRequestId);
+                Assert.True((await owner.RemoveParticipantAsync(task.Id, 2, task.Version)).Success);
+                break;
+            case "Rejected":
+                Assert.True((await recipient.RejectTaskInvitationAsync(invitation.Id)).Success);
+                break;
+            case "Expired":
+                invitation.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+                break;
+        }
+
+        task.Title = "Confidential updated name";
+        task.Description = "Confidential updated description";
+        await context.SaveChangesAsync();
+        var result = await recipient.GetInvitationAsync(invitation.Id);
+        Assert.True(result.Success);
+        Assert.Equal(historicalStatus, result.Data.Status);
+        Assert.Null(result.Data.TaskTitle);
+        Assert.Null(result.Data.TaskRequestId);
+        Assert.Null(result.Data.InviterUserName);
+        Assert.Null(result.Data.Message);
+        Assert.False(result.Data.CanAccept);
+        Assert.False(result.Data.CanReject);
+    }
+
     [Fact]
     public async Task Legacy_manage_can_be_accepted_but_does_not_grant_owner_controls()
     {

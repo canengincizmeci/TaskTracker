@@ -36,7 +36,7 @@ public class PostgreSqlPasswordHardeningTests
         staleContext.RefreshTokens.Add(new RefreshToken
         {
             UserId = staleUser.Id,
-            Token = "must-roll-back",
+            TokenDigest = new string('A', 64),
             Expires = DateTime.UtcNow.AddDays(1)
         });
 
@@ -345,13 +345,8 @@ public class PostgreSqlPasswordHardeningTests
     {
         public AccessToken CreateToken(User user, List<OperationClaim> operationClaims, Guid sessionId) => new();
 
-        public RefreshToken CreateRefreshToken(int userId, Guid sessionId) => new()
-        {
-            UserId = userId,
-            SessionId = sessionId,
-            Token = Guid.NewGuid().ToString("N"),
-            Expires = DateTime.UtcNow.AddDays(7)
-        };
+        public (string Credential, RefreshToken Record) CreateRefreshToken(int userId, Guid sessionId) =>
+            RefreshTokenCredential.Issue(userId, sessionId, TimeSpan.FromDays(7));
     }
 
     private sealed class BeforeSaveInterceptor : SaveChangesInterceptor

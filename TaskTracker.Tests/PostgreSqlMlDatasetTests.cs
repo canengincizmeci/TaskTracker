@@ -1,13 +1,65 @@
 using Microsoft.EntityFrameworkCore;
+using TaskTracker.Bussiness.Concrete;
 using TaskTracker.Core.Entities.Concrete;
 using TaskTracker.Core.Utilities.Enums;
 using TaskTracker.Core.Utilities.Results;
 using TaskTracker.Entities.DTOs;
+using TaskTracker.DataAccess.Concrete.EfCore;
 
 namespace TaskTracker.Tests;
 
 public class PostgreSqlMlDatasetTests
 {
+    [PostgreSqlTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Dataset_budgets_apply_only_to_authorized_scope(bool historyBudget)
+    {
+        await using var database = await PostgreSqlTestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var largeWorkspace = new Workspace
+        {
+            Name = "Large fixture",
+            Members = [new() { UserId = 1, Role = WorkspaceRole.Owner, IsActive = true }]
+        };
+        context.Workspaces.Add(largeWorkspace);
+        context.TaskRequests.Add(new TaskRequest
+        {
+            OwnerId = 2, Title = "Private personal fixture", Description = "Private body", Category = "Fixture"
+        });
+        await context.SaveChangesAsync();
+
+        var taskCount = historyBudget ? 1 : EfTaskMlDatasetDal.MaxTasks + 1;
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "TaskRequests" ("Title", "Description", "Category", "Priority", "Status", "Visibility",
+                "WorkspaceId", "OwnerId", "SharedCount")
+            SELECT 'Private workspace fixture', 'Private workspace body', 'Fixture', 'Medium', 'Pending', 0,
+                {largeWorkspace.Id}, 1, 0 FROM generate_series(1, {taskCount})
+            """);
+        if (historyBudget)
+        {
+            var taskId = await context.TaskRequests.Where(x => x.WorkspaceId == largeWorkspace.Id).Select(x => x.Id).SingleAsync();
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "TaskActivities" ("TaskRequestId", "ActorUserId", "ActivityType")
+                SELECT {taskId}, 1, 'TaskReopened' FROM generate_series(1, {EfTaskMlDatasetDal.MaxHistoryRecords + 1})
+                """);
+        }
+
+        var dataset = TaskCollaborationTestServices.MlDatasets(context);
+        Assert.Equal(TaskMlDatasetManager.DatasetLimitExceeded, (await dataset.ExportCsvAsync(1, largeWorkspace.Id)).Message);
+        Assert.Equal(TaskMlDatasetManager.DatasetLimitExceeded, (await dataset.AnalyzeEligibilityAsync(1, largeWorkspace.Id)).Message);
+        Assert.False((await dataset.ExportCsvAsync(2, largeWorkspace.Id)).Success);
+        Assert.False((await dataset.AnalyzeEligibilityAsync(2, largeWorkspace.Id)).Success);
+
+        var export = await dataset.ExportCsvAsync(2);
+        Assert.True(export.Success);
+        var row = Assert.Single(export.Data.Rows);
+        Assert.Equal(row.TaskId, Assert.Single((await dataset.AnalyzeEligibilityAsync(2)).Data).TaskId);
+        Assert.DoesNotContain("Private personal fixture", export.Data.CsvContent);
+        Assert.DoesNotContain("Private body", export.Data.CsvContent);
+        Assert.DoesNotContain("pg-user", export.Data.CsvContent);
+    }
+
     [PostgreSqlFact]
     public async Task PostgreSql_migration_enforces_snapshot_constraints_and_round_trips_microsecond_deadlines()
     {

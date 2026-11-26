@@ -987,7 +987,7 @@ public class AuthPasswordHardeningTests
         winnerContext.RefreshTokens.Add(new RefreshToken
         {
             UserId = user.Id,
-            Token = "active-refresh-token",
+            TokenDigest = new string('A', 64),
             Expires = DateTime.UtcNow.AddDays(1)
         });
         await winnerContext.SaveChangesAsync();
@@ -1108,13 +1108,8 @@ public class AuthPasswordHardeningTests
             Expiration = DateTime.UtcNow.AddMinutes(30)
         };
 
-        public RefreshToken CreateRefreshToken(int userId, Guid sessionId) => new()
-        {
-            UserId = userId,
-            SessionId = sessionId,
-            Token = Guid.NewGuid().ToString("N"),
-            Expires = DateTime.UtcNow.AddDays(7)
-        };
+        public (string Credential, RefreshToken Record) CreateRefreshToken(int userId, Guid sessionId) =>
+            RefreshTokenCredential.Issue(userId, sessionId, TimeSpan.FromDays(7));
     }
 
     private sealed class FailNextSaveInterceptor : SaveChangesInterceptor

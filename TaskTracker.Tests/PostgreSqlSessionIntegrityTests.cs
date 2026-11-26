@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -54,11 +55,28 @@ public class PostgreSqlSessionIntegrityTests
         Assert.True(winner.Success);
         Assert.False((await competing).Success);
         await using var verify = database.CreateContext();
-        var originalToken = await verify.RefreshTokens.SingleAsync(token => token.Token == original.RefreshToken);
+        var originalDigest = RefreshTokenCredential.DigestPresentedToken(original.RefreshToken);
+        var originalToken = await verify.RefreshTokens.SingleAsync(token => token.TokenDigest == originalDigest);
         var active = await verify.RefreshTokens.SingleAsync(token => token.SessionId == originalToken.SessionId && !token.IsRevoked);
-        Assert.Equal(winner.Data.RefreshToken, active.Token);
+        Assert.Equal(RefreshTokenCredential.DigestPresentedToken(winner.Data.RefreshToken), active.TokenDigest);
         Assert.True(await IsActiveAsync(verify, original.AccessToken.Token));
         Assert.True(await IsActiveAsync(verify, winner.Data.AccessToken));
+    }
+
+    [PostgreSqlFact]
+    public async Task Stored_digest_cannot_rotate_or_revoke_the_session()
+    {
+        await using var database = await PostgreSqlTestDatabase.CreateAsync();
+        var (original, _) = await StartSessionsAsync(database);
+        await using var context = database.CreateContext();
+        var expected = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(original.RefreshToken)));
+        var record = await context.RefreshTokens.SingleAsync(token => token.TokenDigest == expected);
+        Assert.Equal(32, Base64UrlEncoder.DecodeBytes(original.RefreshToken).Length);
+        Assert.NotEqual(original.RefreshToken, record.TokenDigest);
+        Assert.False((await Rotate(context, record.TokenDigest)).Success);
+        await Manager(context).LogoutAsync(new() { RefreshToken = record.TokenDigest });
+        Assert.True(await IsActiveAsync(context, original.AccessToken.Token));
+        Assert.True((await Rotate(context, original.RefreshToken)).Success);
     }
 
     [PostgreSqlTheory]
@@ -192,7 +210,7 @@ public class PostgreSqlSessionIntegrityTests
     }
 
     [PostgreSqlFact]
-    public async Task Migration_revokes_legacy_tokens_and_initializes_session_version()
+    public async Task Migrations_remove_legacy_credentials_and_initialize_session_version()
     {
         await using var database = await PostgreSqlTestDatabase.CreateAsync("20261122160631_AddSubTaskSubmissionDeliveries");
         await using var context = database.CreateContext();
@@ -203,11 +221,32 @@ public class PostgreSqlSessionIntegrityTests
             """);
 
         await context.Database.MigrateAsync();
-        var token = await context.RefreshTokens.SingleAsync();
-        Assert.True(token.IsRevoked);
-        Assert.Equal(Guid.Empty, token.SessionId);
+        Assert.Empty(await context.RefreshTokens.ToListAsync());
         Assert.Equal(0, (await context.Users.SingleAsync(user => user.Id == 1)).SessionVersion);
         Assert.False((await Rotate(context, legacy)).Success);
+    }
+
+    [PostgreSqlFact]
+    public async Task Hash_migration_invalidates_an_active_batch03_session()
+    {
+        await using var database = await PostgreSqlTestDatabase.CreateAsync("20261124005759_AddAttachmentRetryDigest");
+        await using var context = database.CreateContext();
+        var user = await context.Users.SingleAsync(user => user.Id == 1);
+        user.IsVerified = true;
+        await context.SaveChangesAsync();
+        var sessionId = Guid.NewGuid();
+        var oldAccessToken = new JwtHelper(TokenConfiguration()).CreateToken(user, [], sessionId).Token;
+        var oldRefreshToken = Guid.NewGuid().ToString();
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "RefreshTokens" ("Token", "SessionId", "UserId", "CreatedAt", "Expires", "IsRevoked")
+            VALUES ({oldRefreshToken}, {sessionId}, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 day', FALSE)
+            """);
+        Assert.True(await IsActiveAsync(context, oldAccessToken));
+
+        await context.Database.MigrateAsync();
+        Assert.False(await IsActiveAsync(context, oldAccessToken));
+        Assert.False((await Rotate(context, oldRefreshToken)).Success);
+        Assert.Empty(await context.RefreshTokens.ToListAsync());
     }
 
     private static async Task<(LoginResponseDto Original, LoginResponseDto Other)> StartSessionsAsync(PostgreSqlTestDatabase database)
@@ -245,14 +284,17 @@ public class PostgreSqlSessionIntegrityTests
 
     private static AuthManager Manager(TaskTrackerDbContext context)
     {
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var config = TokenConfiguration();
+        return new(new UnitOfWork(context), new JwtHelper(config), new NoEmail(), new CurrentUser(), config,
+            NullLogger<AuthManager>.Instance, PasswordHashServiceTests.Service(), new IdentityNormalizer());
+    }
+
+    private static IConfiguration TokenConfiguration() =>
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["TokenOptions:SecurityKey"] = SigningKey, ["TokenOptions:Issuer"] = Issuer, ["TokenOptions:Audience"] = Audience,
             ["TokenOptions:AccessTokenExpiration"] = "30", ["TokenOptions:RefreshTokenExpirationDays"] = "7"
         }).Build();
-        return new(new UnitOfWork(context), new JwtHelper(config), new NoEmail(), new CurrentUser(), config,
-            NullLogger<AuthManager>.Instance, PasswordHashServiceTests.Service(), new IdentityNormalizer());
-    }
 
     private sealed class CurrentUser : ICurrentUserService
     {
