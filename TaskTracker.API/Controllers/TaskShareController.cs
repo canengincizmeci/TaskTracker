@@ -66,6 +66,7 @@ namespace TaskTracker.API.Controllers
         }
         [Authorize(Roles = "User,Admin")]
         [HttpGet("get-user-invitations")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<IActionResult> GetMyPendingInvitationsAsync()
         {
             var result = await _taskShareService.GetMyPendingInvitationsAsync();
@@ -79,6 +80,7 @@ namespace TaskTracker.API.Controllers
 
         [Authorize(Roles = "User")]
         [HttpGet("invitation-details/{invitationId}")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<IActionResult> GetInvitation(int invitationId)
         {
             var result = await _taskShareService.GetInvitationAsync(invitationId);

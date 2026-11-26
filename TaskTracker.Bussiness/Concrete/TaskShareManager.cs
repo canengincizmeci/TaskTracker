@@ -104,10 +104,10 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             if (transaction is not null) unitOfWork.DiscardTrackedChanges();
             return new ConflictResult(ConcurrentChange);
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
             if (transaction is not null) unitOfWork.DiscardTrackedChanges();
-            logger.LogWarning(ex, "Invitation change could not be saved for task {TaskId}", task.Id);
+            logger.LogWarning("Invitation change could not be saved for task {TaskId}", task.Id);
             return new ErrorResult("The invitation change could not be saved. Refresh and retry.");
         }
     }
@@ -120,35 +120,46 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             (!x.ExpiresAt.HasValue || x.ExpiresAt > now) && x.TaskRequest.Activity &&
             x.TaskRequest.WorkspaceId == null &&
             x.TaskRequest.Status != TaskStatus.Completed && x.TaskRequest.Status != TaskStatus.Cancelled,
-            include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
+            include: q => q.AsNoTracking().Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
         return new SuccessDataResult<List<TaskInvitationDto>>(invitations.OrderByDescending(x => x.CreatedAt)
             .Select(x => MapInvitation(x, now)).ToList());
     }
 
     public async Task<IDataResult<TaskInvitationDto>> GetInvitationAsync(int invitationId)
     {
+        var userId = currentUserService.UserId;
+        // Read the current share and task in the same statement as the invitation.
         var invitation = await unitOfWork.GetRepository<TaskShareInvitation>().GetAsync(x =>
-            x.Id == invitationId && x.InvitedUserId == currentUserService.UserId,
-            include: q => q.Include(x => x.TaskRequest).Include(x => x.InvitedByUser));
+            x.Id == invitationId && x.InvitedUserId == userId,
+            include: q => q.AsNoTracking()
+                .Include(x => x.TaskRequest).ThenInclude(task => task.TaskShares.Where(share =>
+                    share.SharedWithUserId == userId && share.Permission >= TaskPermission.View &&
+                    share.Permission <= TaskPermission.Manage))
+                .Include(x => x.InvitedByUser).AsSingleQuery());
         return invitation is null
             ? new ErrorDataResult<TaskInvitationDto>(Messages.InvitationNotFound)
             : invitation.TaskRequest.WorkspaceId.HasValue
                 ? new ConflictDataResult<TaskInvitationDto>(WorkspaceTaskSharingUnavailable)
-            : new SuccessDataResult<TaskInvitationDto>(MapInvitation(invitation, DateTime.UtcNow));
+                : new SuccessDataResult<TaskInvitationDto>(MapInvitation(invitation, DateTime.UtcNow,
+                    invitation.TaskRequest.Activity && (invitation.TaskRequest.OwnerId == userId ||
+                        invitation.TaskRequest.TaskShares.Count != 0)));
     }
 
-    private static TaskInvitationDto MapInvitation(TaskShareInvitation invitation, DateTime now)
+    private static TaskInvitationDto MapInvitation(TaskShareInvitation invitation, DateTime now, bool hasCurrentAccess = false)
     {
         var pending = invitation.Status == TaskShareInvitationStatus.Pending;
         var expired = pending && IsExpired(invitation, now);
         var available = pending && !expired && CanJoin(invitation.TaskRequest);
         var permission = PermissionName(invitation.Permission);
+        var showTask = (available && permission is not null) ||
+            (invitation.Status == TaskShareInvitationStatus.Accepted && hasCurrentAccess);
         return new TaskInvitationDto
         {
-            Id = invitation.Id, TaskRequestId = invitation.TaskRequestId,
-            TaskTitle = invitation.TaskRequest.Title, InviterUserName = invitation.InvitedByUser.UserName,
+            Id = invitation.Id, TaskRequestId = showTask ? invitation.TaskRequestId : null,
+            TaskTitle = showTask ? invitation.TaskRequest.Title : null,
+            InviterUserName = showTask ? invitation.InvitedByUser.UserName : null,
             Permission = permission, CreatedAt = invitation.CreatedAt, ExpiresAt = invitation.ExpiresAt,
-            RespondedAt = invitation.RespondedAt, Message = invitation.Message,
+            RespondedAt = invitation.RespondedAt, Message = showTask ? invitation.Message : null,
             ResponseMessage = invitation.ResponseMessage,
             Status = expired ? "Expired" : invitation.Status.ToString(),
             CanAccept = available && permission is not null, CanReject = pending && !expired,
@@ -251,9 +262,9 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         {
             await notificationService.CreateTaskShareInvitationNotificationAsync(user.Id, task.Title, inviter.UserName, invitation.Id);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogWarning(ex, "Notification delivery failed for persisted invitation {InvitationId}", invitation.Id);
+            logger.LogWarning("Notification delivery failed for a persisted invitation.");
         }
         try
         {
@@ -262,9 +273,9 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             await emailService.SendTaskShareInvitationEmailAsync(user.Email, task.Title, inviter.UserName,
                 $"{clientUrl.TrimEnd('/')}/tasks/invitations/{invitation.Id}");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogWarning(ex, "Email delivery failed for persisted invitation {InvitationId}", invitation.Id);
+            logger.LogWarning("Email delivery failed for a persisted invitation.");
         }
         return result;
     }
@@ -410,7 +421,7 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
         var result = await SaveInvitationChange(task, "Participant removed.", transaction);
         if (!result.Success) return result;
         try { await collaborationService.RevokeAccessAsync(task.Id, userId); }
-        catch (Exception ex) { logger.LogWarning(ex, "Could not revoke live workspace access for task {TaskId}", task.Id); }
+        catch (Exception) { logger.LogWarning("Could not revoke live workspace access for task {TaskId}", task.Id); }
         if (unassigned is not null) await collaborationService.PublishActivityAsync(unassigned);
         if (resetActivity is not null) await collaborationService.PublishActivityAsync(resetActivity);
         await collaborationService.PublishActivityAsync(activity);
@@ -434,6 +445,6 @@ public class TaskShareManager(IUnitOfWork unitOfWork, ITaskShareDal taskShareDal
             await notificationService.CreateTaskNotificationAsync(userId, NotificationType.TaskAccessChanged,
                 title, message, taskId, redirectUrl);
         }
-        catch (Exception ex) { logger.LogWarning(ex, "Task notification delivery failed for task {TaskId}", taskId); }
+        catch (Exception) { logger.LogWarning("Task notification delivery failed."); }
     }
 }

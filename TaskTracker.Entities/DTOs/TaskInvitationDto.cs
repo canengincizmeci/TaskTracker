@@ -9,9 +9,9 @@ namespace TaskTracker.Entities.DTOs
     public class TaskInvitationDto:IDto
     {
         public int Id { get; set; }
-        public int TaskRequestId { get; set; }
-        public string TaskTitle { get; set; } = null!;
-        public string InviterUserName { get; set; } = null!;
+        public int? TaskRequestId { get; set; }
+        public string? TaskTitle { get; set; }
+        public string? InviterUserName { get; set; }
         public string? Permission { get; set; }
         public string Status { get; set; } = null!;
         public bool CanAccept { get; set; }
