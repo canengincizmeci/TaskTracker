@@ -23,7 +23,8 @@ public sealed class TaskMlDatasetSourceRecord
 
 public interface ITaskMlDatasetDal
 {
-    Task<List<TaskMlDatasetSourceRecord>> GetAuthorizedRecordsAsync(int userId, int? workspaceId = null,
+    // Null means the authorized dataset exceeds the bounded query budget.
+    Task<List<TaskMlDatasetSourceRecord>?> GetAuthorizedRecordsAsync(int userId, int? workspaceId = null,
         CancellationToken ct = default);
     Task<TaskPlanningSnapshot?> GetSnapshotAsync(int taskId, CancellationToken ct = default);
 }

@@ -18,6 +18,7 @@ public class TaskMlDatasetManager(
     public const string SchemaVersion = TaskPlanningSnapshot.CurrentSchemaVersion;
     public const string MissingValue = "";
     public const string CsvFileName = "task-late-completion-dataset-v1.0.csv";
+    public const string DatasetLimitExceeded = "The authorized dataset exceeds the request budget. Select a smaller workspace scope.";
 
     private static readonly IReadOnlyList<TaskMlDatasetColumnDefinitionDto> ColumnDefinitions =
     [
@@ -250,6 +251,8 @@ public class TaskMlDatasetManager(
             return new ErrorDataResult<TaskMlDatasetExportDto>(Messages.AuthorizationDenied);
 
         var records = await datasetDal.GetAuthorizedRecordsAsync(currentUserId, workspaceId, ct);
+        if (records is null)
+            return new ErrorDataResult<TaskMlDatasetExportDto>(DatasetLimitExceeded);
         var allRows = records.Select(EvaluateRecord).ToList();
         var exportedRows = eligibleOnly
             ? allRows.Where(x => x.IsEligible).ToList()
@@ -281,6 +284,8 @@ public class TaskMlDatasetManager(
             return new ErrorDataResult<List<TaskHistoricalEligibilityDto>>(Messages.AuthorizationDenied);
 
         var records = await datasetDal.GetAuthorizedRecordsAsync(currentUserId, workspaceId, ct);
+        if (records is null)
+            return new ErrorDataResult<List<TaskHistoricalEligibilityDto>>(DatasetLimitExceeded);
         var analyses = records.Select(AnalyzeRecordEligibility).ToList();
         return new SuccessDataResult<List<TaskHistoricalEligibilityDto>>(analyses);
     }

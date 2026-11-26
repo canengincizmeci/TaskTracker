@@ -8,7 +8,10 @@ namespace TaskTracker.DataAccess.Concrete.EfCore;
 
 public class EfTaskMlDatasetDal(TaskTrackerDbContext context) : ITaskMlDatasetDal
 {
-    public async Task<List<TaskMlDatasetSourceRecord>> GetAuthorizedRecordsAsync(int userId, int? workspaceId = null,
+    public const int MaxTasks = 5_000;
+    public const int MaxHistoryRecords = 50_000;
+
+    public async Task<List<TaskMlDatasetSourceRecord>?> GetAuthorizedRecordsAsync(int userId, int? workspaceId = null,
         CancellationToken ct = default)
     {
         var query = context.TaskRequests.AsNoTracking();
@@ -27,6 +30,7 @@ public class EfTaskMlDatasetDal(TaskTrackerDbContext context) : ITaskMlDatasetDa
 
         var tasks = await query
             .OrderBy(x => x.Id)
+            .Take(MaxTasks + 1)
             .Select(x => new
             {
                 x.Id,
@@ -39,6 +43,8 @@ public class EfTaskMlDatasetDal(TaskTrackerDbContext context) : ITaskMlDatasetDa
 
         if (tasks.Count == 0)
             return [];
+        if (tasks.Count > MaxTasks)
+            return null;
 
         var taskIds = tasks.Select(x => x.Id).ToArray();
 
@@ -49,17 +55,29 @@ public class EfTaskMlDatasetDal(TaskTrackerDbContext context) : ITaskMlDatasetDa
 
         var activities = await context.TaskActivities
             .AsNoTracking()
-            .Where(x => taskIds.Contains(x.TaskRequestId))
+            .Where(x => taskIds.Contains(x.TaskRequestId) && (x.ToStatus != null ||
+                x.ActivityType == TaskActivityType.TaskCreated || x.ActivityType == TaskActivityType.TaskReopened ||
+                x.ActivityType == TaskActivityType.TaskCancelled || x.ActivityType == TaskActivityType.TaskDeleted))
             .OrderBy(x => x.TaskRequestId)
             .ThenBy(x => x.CreatedAt)
             .ThenBy(x => x.Id)
+            .Take(MaxHistoryRecords + 1)
+            .Select(x => new TaskActivity
+            {
+                Id = x.Id,
+                TaskRequestId = x.TaskRequestId,
+                CreatedAt = x.CreatedAt,
+                ActivityType = x.ActivityType,
+                ToStatus = x.ToStatus
+            })
             .ToListAsync(ct);
+
+        if (activities.Count > MaxHistoryRecords)
+            return null;
 
         var revisions = await context.TaskPlanningRevisions
             .AsNoTracking()
-            .Where(x => taskIds.Contains(x.TaskRequestId))
-            .OrderBy(x => x.TaskRequestId)
-            .ThenBy(x => x.RevisionNumber)
+            .Where(x => taskIds.Contains(x.TaskRequestId) && x.RevisionNumber == 1)
             .Select(x => new
             {
                 x.TaskRequestId,

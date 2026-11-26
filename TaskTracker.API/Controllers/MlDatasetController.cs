@@ -1,8 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaskTracker.API.Services;
 using TaskTracker.Bussiness.Abstract;
 using TaskTracker.Bussiness.Constanst;
+using TaskTracker.Bussiness.Concrete;
 
 namespace TaskTracker.API.Controllers;
 
@@ -24,6 +26,7 @@ public class MlDatasetController(
     }
 
     [HttpGet("export")]
+    [ServiceFilter(typeof(MlDatasetResourceFilter))]
     public async Task<IActionResult> ExportCsv(
         [FromQuery] int? workspaceId = null,
         [FromQuery] bool eligibleOnly = false,
@@ -37,9 +40,7 @@ public class MlDatasetController(
 
         if (!result.Success)
         {
-            return result.Message == Messages.AuthorizationDenied
-                ? StatusCode(403, result.Message)
-                : BadRequest(result.Message);
+            return Failure(result.Message);
         }
 
         Response?.Headers.Append(SchemaVersionHeader, result.Data.SchemaVersion);
@@ -48,6 +49,7 @@ public class MlDatasetController(
     }
 
     [HttpGet("eligibility")]
+    [ServiceFilter(typeof(MlDatasetResourceFilter))]
     public async Task<IActionResult> AnalyzeEligibility(
         [FromQuery] int? workspaceId = null,
         CancellationToken ct = default)
@@ -59,11 +61,16 @@ public class MlDatasetController(
 
         if (!result.Success)
         {
-            return result.Message == Messages.AuthorizationDenied
-                ? StatusCode(403, result.Message)
-                : BadRequest(result.Message);
+            return Failure(result.Message);
         }
 
         return Ok(result.Data);
     }
+
+    private IActionResult Failure(string message) => message switch
+    {
+        _ when message == Messages.AuthorizationDenied => StatusCode(StatusCodes.Status403Forbidden, message),
+        TaskMlDatasetManager.DatasetLimitExceeded => UnprocessableEntity(message),
+        _ => BadRequest(message)
+    };
 }
