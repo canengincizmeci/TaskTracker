@@ -282,6 +282,7 @@ Production migrations are treated as a deployment operation rather than being ap
 ## Docker
 
 The full application can be started locally with Docker Compose.
+For deployment, see the [production checklist](deploy/production.md).
 
 ### Requirements
 
@@ -321,6 +322,8 @@ The application is then available at:
 http://localhost:8080
 ```
 
+The frontend binds to loopback by default. Set `CLIENT_BIND_ADDRESS` explicitly for a local LAN demonstration. Task attachments are stored in the `task_files` volume. If an older local container holds attachments in its writable layer, copy them into the volume before recreating that container.
+
 ### Check container status
 
 ```bash
@@ -333,7 +336,7 @@ Expected state:
 db       healthy
 migrate  Exited (0)
 api      healthy
-client   running
+client   healthy
 ```
 
 ### Stop the stack
@@ -342,7 +345,7 @@ client   running
 docker compose down
 ```
 
-The PostgreSQL named volume is preserved by default.
+PostgreSQL, ClamAV signatures and attachment named volumes are preserved by default.
 
 To intentionally remove the local Docker database as well:
 
@@ -350,7 +353,7 @@ To intentionally remove the local Docker database as well:
 docker compose down -v
 ```
 
-> `docker compose down -v` also removes the local PostgreSQL volume. Use it only when you intentionally want a fresh database.
+> `docker compose down -v` removes local PostgreSQL data, stored attachments and the signature cache. Use it only for disposable local data.
 
 ---
 
