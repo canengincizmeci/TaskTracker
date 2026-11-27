@@ -1,0 +1,66 @@
+name: Validate
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: disposable-ci-postgres
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      TASKTRACKER_TEST_DATABASE: Host=127.0.0.1;Port=${{ job.services.postgres.ports[5432] }};Username=postgres;Password=disposable-ci-postgres
+      NuGetAuditMode: all
+      WarningsAsErrors: NU1903;NU1904
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore TaskTracker.slnx
+      - run: dotnet test TaskTracker.slnx -c Release --no-restore
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tasktracker-client
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tasktracker-client/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: node --test --test-timeout=15000 --test-concurrency=1 tests/*.test.mjs
+      - run: npm run build
+
+  container-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: docker compose --env-file .env.example config --quiet
+      - run: docker compose --env-file .env.production.example -f compose.production.yaml --profile migration config --quiet
+      - run: docker compose --env-file .env.production.example -f compose.production.yaml --profile migration build
