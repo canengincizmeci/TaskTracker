@@ -20,7 +20,6 @@ jobs:
           --health-cmd pg_isready --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
-      TASKTRACKER_TEST_DATABASE: Host=127.0.0.1;Port=${{ job.services.postgres.ports[5432] }};Username=postgres;Password=disposable-ci-postgres
       NuGetAuditMode: all
       WarningsAsErrors: NU1903;NU1904
     steps:
@@ -32,6 +31,8 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet restore TaskTracker.slnx
       - run: dotnet test TaskTracker.slnx -c Release --no-restore
+        env:
+          TASKTRACKER_TEST_DATABASE: Host=127.0.0.1;Port=${{ job.services.postgres.ports[5432] }};Username=postgres;Password=disposable-ci-postgres
 
   frontend:
     runs-on: ubuntu-24.04
