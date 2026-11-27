@@ -10,7 +10,12 @@ x-dotnet-build-args: &dotnet-build-args
 
 services:
   db:
-    image: ${TASKTRACKER_POSTGRES_IMAGE:-postgres:16}
+    build:
+      context: ./deploy/images
+      target: postgres
+      args:
+        POSTGRES_BASE_IMAGE: ${TASKTRACKER_POSTGRES_IMAGE:-postgres:16.16-trixie}
+        GOSU_BUILD_IMAGE: ${TASKTRACKER_GOSU_BUILD_IMAGE:-golang:1.27.4-alpine3.24}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tasktracker}
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
@@ -37,7 +42,7 @@ services:
     restart: unless-stopped
 
   clamav:
-    image: ${TASKTRACKER_CLAMAV_IMAGE:-clamav/clamav:1.4}
+    image: ${TASKTRACKER_CLAMAV_IMAGE:-clamav/clamav:1.4.7}
     environment:
       CLAMAV_NO_MILTERD: "true"
     volumes:
@@ -139,8 +144,8 @@ services:
       context: ./tasktracker-client
       args:
         VITE_API_BASE_URL: /api
-        NODE_BUILD_IMAGE: ${TASKTRACKER_NODE_BUILD_IMAGE:-node:24-bookworm-slim}
-        NGINX_RUNTIME_IMAGE: ${TASKTRACKER_NGINX_RUNTIME_IMAGE:-nginxinc/nginx-unprivileged:stable-alpine-slim}
+        NODE_BUILD_IMAGE: ${TASKTRACKER_NODE_BUILD_IMAGE:-node:24.22.3-trixie-slim}
+        NGINX_RUNTIME_IMAGE: ${TASKTRACKER_NGINX_RUNTIME_IMAGE:-ghcr.io/nginx/nginx-unprivileged:1.30.8-alpine3.24-slim}
     ports:
       - "127.0.0.1:${TASKTRACKER_EDGE_PORT:-8080}:8080"
     volumes:
