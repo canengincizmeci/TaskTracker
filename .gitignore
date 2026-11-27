@@ -14,7 +14,29 @@ publish/
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
+!/.env.production.example
+!/tasktracker-client/.env.development
+!/tasktracker-client/.env.production
+
+# Private configuration, TLS material and local deployment output
+**/appsettings.*.local.json
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.kdbx
+*.log
+*.dump
+*.pgdump
+*.backup
+.pgpass
+**/secrets/
+**/App_Data/
 
 
 artifacts/
-/TaskTracker.API/App_Data/task-files/
