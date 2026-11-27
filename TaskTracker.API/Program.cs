@@ -18,6 +18,7 @@ using TaskTracker.Core.Extensions;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddMountedSecrets();
 RequestCredentialProtection.ConfigureLogging(builder.Logging);
 
 builder.Services.Configure<PasswordHasherOptions>(options =>
