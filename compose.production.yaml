@@ -1,0 +1,183 @@
+x-logging: &bounded-logging
+  driver: local
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-dotnet-build-args: &dotnet-build-args
+  DOTNET_SDK_IMAGE: ${TASKTRACKER_DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+  DOTNET_RUNTIME_IMAGE: ${TASKTRACKER_DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+
+services:
+  db:
+    image: ${TASKTRACKER_POSTGRES_IMAGE:-postgres:16}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tasktracker}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: ${TASKTRACKER_DB_ADMIN_PASSWORD_FILE:?Set a private PostgreSQL bootstrap password file}
+        target: /run/secrets/postgres_password
+        read_only: true
+        bind: { create_host_path: false }
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    shm_size: 128m
+    mem_limit: ${TASKTRACKER_DB_MEMORY:-1g}
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    logging: *bounded-logging
+    restart: unless-stopped
+
+  clamav:
+    image: ${TASKTRACKER_CLAMAV_IMAGE:-clamav/clamav:1.4}
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    networks: [scanner]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 12
+      start_period: 180s
+    mem_limit: ${TASKTRACKER_CLAMAV_MEMORY:-4g}
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    logging: *bounded-logging
+    restart: unless-stopped
+
+  migrate:
+    profiles: [migration]
+    build:
+      context: .
+      dockerfile: TaskTracker.API/Dockerfile
+      target: migrations
+      args: *dotnet-build-args
+    environment:
+      TASKTRACKER_SECRETS_DIRECTORY: /run/tasktracker-secrets
+      DOTNET_BUNDLE_EXTRACT_BASE_DIR: /run/tasktracker-bundle
+    volumes:
+      - type: bind
+        source: ${TASKTRACKER_MIGRATION_SECRETS_DIR:?Set a private migration secrets directory}
+        target: /run/tasktracker-secrets
+        read_only: true
+        bind: { create_host_path: false }
+    networks: [database]
+    depends_on:
+      db: { condition: service_healthy }
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"
+      # The self-contained bundle loads extracted native libraries from this private mount.
+      - "/run/tasktracker-bundle:rw,exec,nosuid,nodev,size=192m,mode=0700,uid=1654,gid=1654"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 512m
+    logging: *bounded-logging
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: TaskTracker.API/Dockerfile
+      args: *dotnet-build-args
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      TASKTRACKER_SECRETS_DIRECTORY: /run/tasktracker-secrets
+      AllowedHosts: ${TASKTRACKER_HOSTNAME:?Set the public hostname};localhost;127.0.0.1
+      ClientApp__BaseUrl: "https://${TASKTRACKER_HOSTNAME:?Set the public hostname}"
+      ReverseProxy__KnownProxies__0: ${TASKTRACKER_CLIENT_PROXY_IP:?Set the exact container proxy IPv4 address}
+      Smtp__Host: ${SMTP_HOST:?Set the SMTP endpoint}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL:?Set the SMTP sender address}
+      TaskFiles__RootPath: /app/App_Data/task-files
+      TaskFiles__RequireCleanScan: "true"
+      TaskFiles__EnableDiscussionUploads: ${TASKFILES_ENABLE_DISCUSSION_UPLOADS:-false}
+      TaskFiles__EnableSubTaskSubmissionUploads: ${TASKFILES_ENABLE_SUBTASK_SUBMISSION_UPLOADS:-false}
+      TaskFiles__Scanner__Enabled: "true"
+      TaskFiles__Scanner__Host: clamav
+      TaskFiles__Scanner__Port: "3310"
+      ASPNETCORE_TEMP: /tmp
+    volumes:
+      - task_files:/app/App_Data/task-files
+      - type: bind
+        source: ${TASKTRACKER_API_SECRETS_DIR:?Set a private API secrets directory}
+        target: /run/tasktracker-secrets
+        read_only: true
+        bind: { create_host_path: false }
+    networks: [edge, database, scanner]
+    depends_on:
+      db: { condition: service_healthy }
+      clamav: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=448m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: ${TASKTRACKER_API_MEMORY:-1g}
+    logging: *bounded-logging
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./tasktracker-client
+      args:
+        VITE_API_BASE_URL: /api
+        NODE_BUILD_IMAGE: ${TASKTRACKER_NODE_BUILD_IMAGE:-node:24-bookworm-slim}
+        NGINX_RUNTIME_IMAGE: ${TASKTRACKER_NGINX_RUNTIME_IMAGE:-nginxinc/nginx-unprivileged:stable-alpine-slim}
+    ports:
+      - "127.0.0.1:${TASKTRACKER_EDGE_PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: ${TASKTRACKER_PROXY_TRUST_DIR:?Set the host Nginx trust configuration directory}
+        target: /etc/nginx/tasktracker-trust
+        read_only: true
+        bind: { create_host_path: false }
+    networks:
+      edge:
+        ipv4_address: ${TASKTRACKER_CLIENT_PROXY_IP:?Set the exact container proxy IPv4 address}
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/_health"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 192m
+    logging: *bounded-logging
+    restart: unless-stopped
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: ${TASKTRACKER_EDGE_SUBNET:?Set an unused edge subnet}
+  database:
+    internal: true
+  scanner: {} # FreshClam needs outbound access to the signature CDN.
+
+volumes:
+  postgres_data:
+  clamav_data:
+  task_files:
