@@ -1,4 +1,6 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
+ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
+FROM ${DOTNET_SDK_IMAGE} AS build
 
 WORKDIR /src
 
@@ -28,10 +30,7 @@ RUN dotnet tool install --global dotnet-ef --version 10.0.8
 
 ENV PATH="/root/.dotnet/tools:${PATH}"
 
-RUN ConnectionStrings__PostgreSql="Host=localhost;Port=5432;Database=tasktracker;Username=tasktracker;Password=build-placeholder" \
-    TokenOptions__SecurityKey="docker-build-placeholder-security-key-123456789" \
-    PasswordRecovery__HmacSecret="docker-build-placeholder-hmac-secret-123456789" \
-    dotnet ef migrations bundle \
+RUN dotnet ef migrations bundle \
         --project TaskTracker.Core/TaskTracker.Core.csproj \
         --startup-project TaskTracker.API/TaskTracker.API.csproj \
         --context TaskTrackerDbContext \
@@ -39,7 +38,7 @@ RUN ConnectionStrings__PostgreSql="Host=localhost;Port=5432;Database=tasktracker
         --target-runtime linux-x64 \
         --output /app/efbundle
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrations
+FROM ${DOTNET_RUNTIME_IMAGE} AS migrations
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
@@ -49,9 +48,12 @@ WORKDIR /app
 
 COPY --from=migration-build /app/efbundle ./efbundle
 
+ENV DOTNET_BUNDLE_EXTRACT_BASE_DIR=/tmp/tasktracker-bundle
+USER $APP_UID
+
 ENTRYPOINT ["./efbundle"]
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM ${DOTNET_RUNTIME_IMAGE} AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
@@ -60,6 +62,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=build /app/publish .
+RUN install -d -m 0700 -o "$APP_UID" /app/App_Data/task-files
 
 ENV ASPNETCORE_HTTP_PORTS=8080
 

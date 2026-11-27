@@ -17,3 +17,14 @@ logs
 .env.production
 .env.local
 .env.*.local
+
+**/*.pem
+**/*.key
+**/*.crt
+**/*.cer
+**/*.pfx
+**/*.p12
+**/*.jks
+**/*.dump
+**/*.backup
+**/secrets

@@ -26,5 +26,19 @@ logs
 **/*.p12
 **/*.pem
 **/*.key
+**/*.crt
+**/*.cer
+**/*.jks
+**/*.kdbx
+**/*.dump
+**/*.pgdump
+**/*.backup
+**/.pgpass
+**/secrets
+**/App_Data
+artifacts
+.aws
+.codex
+.agents
 
 tasktracker-client
