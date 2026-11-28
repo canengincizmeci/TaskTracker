@@ -16,5 +16,6 @@ namespace TaskTracker.Entities.DTOs
         public TaskStatus Status { get; set; }
         public DateOnly? DueDate { get; set; }
         public int UtcOffsetMinutes { get; set; }
+        public bool MlConsentGranted { get; set; }
     }
 }

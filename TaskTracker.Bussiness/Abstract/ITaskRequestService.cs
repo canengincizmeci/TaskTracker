@@ -14,6 +14,7 @@ namespace TaskTracker.Bussiness.Abstract
         Task<IDataResult<TaskRequestDto>> AddWorkspaceTaskAsync(int workspaceId, WorkspaceTaskCreateDto dto,
             int currentUserId);
         Task<IDataResult<TaskRequestDto>> GetTaskById(int taskId, int currentUserId);
+        Task<IResult> UpdateMlConsentAsync(int taskId, UpdateTaskMlConsentDto dto, int currentUserId);
         Task<IResult> DeleteTask(int taskId, int currentUserId);
         Task<IResult> UpdateTask(UpdateTaskRequestDto taskRequest, int currentUserId);
         Task<IResult> AssignTaskAsync(int taskId, AssignTaskDto dto, int currentUserId);

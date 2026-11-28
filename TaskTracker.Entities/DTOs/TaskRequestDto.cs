@@ -23,6 +23,7 @@ namespace TaskTracker.Entities.DTOs
         public int? AssigneeUserId { get; set; }
         public string? AssigneeUserName { get; set; }
         public long Version { get; set; }
+        public TaskMlConsentDto? MlConsent { get; set; }
         public bool IsOwner { get; set; }
         public bool IsAssignee { get; set; }
         public bool CanView { get; set; }

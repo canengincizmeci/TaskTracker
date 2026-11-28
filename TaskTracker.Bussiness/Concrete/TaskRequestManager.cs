@@ -57,6 +57,8 @@ public class TaskRequestManager : ITaskRequestService
             CreatedAt = now, SharedCount = 0
         };
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        if (dto.MlConsentGranted)
+            await RecordMlConsentAsync(task, true, currentUserId, now);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
         await _unitOfWork.GetRepository<TaskPlanningSnapshot>().AddAsync(
@@ -94,6 +96,8 @@ public class TaskRequestManager : ITaskRequestService
             Activity = true, Visibility = TaskVisibility.Private, CreatedAt = now, SharedCount = 0
         };
         await _unitOfWork.GetRepository<TaskRequest>().AddAsync(task);
+        if (dto.MlConsentGranted)
+            await RecordMlConsentAsync(task, true, currentUserId, now);
         await _unitOfWork.GetRepository<TaskPlanningRevision>().AddAsync(
             CreatePlanningRevision(task, 1, currentUserId, now));
         await _unitOfWork.GetRepository<TaskPlanningSnapshot>().AddAsync(
@@ -162,6 +166,9 @@ public class TaskRequestManager : ITaskRequestService
             Category = task.Category, Priority = task.Priority.ToString(), Status = task.Status.ToString(),
             Activity = task.Activity, DueDate = task.DueDate, Visibility = task.Visibility.ToString(),
             CreatedAt = task.CreatedAt, IsOwner = isOwner, IsAssignee = task.AssigneeUserId == currentUserId,
+            MlConsent = isOwner ? new TaskMlConsentDto(
+                task.MlConsentGranted && task.MlConsentPolicyVersion == TaskMlConsentEvent.CurrentPolicyVersion,
+                task.MlConsentGrantedAt, task.MlConsentRevokedAt, task.MlConsentPolicyVersion) : null,
             CanView = canView, CanEdit = canEdit,
             CanShare = isOwner && task.WorkspaceId is null,
             CanDelete = isOwner && (task.WorkspaceId is null || workspaceMembership is not null),
@@ -177,6 +184,65 @@ public class TaskRequestManager : ITaskRequestService
             CanReview = isOwner && task.Status == TaskStatus.InReview && workflowSubmissionId.HasValue,
             WorkflowSubmissionId = workflowSubmissionId,
             CurrentUserPermission = isOwner ? "Owner" : validShare ? share!.Permission.ToString() : null
+        });
+    }
+
+    public async Task<IResult> UpdateMlConsentAsync(int taskId, UpdateTaskMlConsentDto dto, int currentUserId)
+    {
+        if (dto.Granted is not bool granted || dto.Version is null or < 0)
+            return new ErrorResult("A consent decision and a valid task version are required.");
+
+        await using var transaction = await _unitOfWork.BeginTransactionAsync();
+        await _subTaskDal.LockParentWorkspaceAsync(taskId);
+        await _subTaskDal.LockParentAsync(taskId, exclusive: true);
+        var task = await _unitOfWork.GetRepository<TaskRequest>().GetAsync(x => x.Id == taskId && x.Activity);
+        if (task is null || task.OwnerId != currentUserId ||
+            (task.WorkspaceId.HasValue &&
+             await _workspaceDal.GetActiveMembershipAsync(task.WorkspaceId.Value, currentUserId) is null))
+            return new ErrorResult(Messages.AuthorizationDenied);
+
+        if (task.Version != dto.Version)
+            return new ConflictResult(ConcurrentChange);
+
+        if (task.MlConsentGranted == granted &&
+            (!granted || task.MlConsentPolicyVersion == TaskMlConsentEvent.CurrentPolicyVersion))
+            return new SuccessResult(Messages.DataUpdated);
+
+        await RecordMlConsentAsync(task, granted, currentUserId, DateTime.UtcNow);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _unitOfWork.DiscardTrackedChanges();
+            return new ConflictResult(ConcurrentChange);
+        }
+        return new SuccessResult(Messages.DataUpdated);
+    }
+
+    private async Task RecordMlConsentAsync(TaskRequest task, bool granted, int actorId, DateTime now)
+    {
+        task.MlConsentGranted = granted;
+        if (granted)
+        {
+            task.MlConsentGrantedAt = now;
+            task.MlConsentRevokedAt = null;
+            task.MlConsentPolicyVersion = TaskMlConsentEvent.CurrentPolicyVersion;
+        }
+        else
+        {
+            task.MlConsentRevokedAt = now;
+        }
+
+        await _unitOfWork.GetRepository<TaskMlConsentEvent>().AddAsync(new TaskMlConsentEvent
+        {
+            TaskRequest = task,
+            ActorUserId = actorId,
+            Granted = granted,
+            OccurredAtUtc = now,
+            PolicyVersion = task.MlConsentPolicyVersion!
         });
     }
 

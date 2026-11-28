@@ -76,6 +76,11 @@ namespace TaskTracker.API.Controllers
         }
 
         [Authorize(Roles = "Admin,User")]
+        [HttpPut("{taskId:int}/ml-consent")]
+        public async Task<IActionResult> UpdateMlConsent(int taskId, UpdateTaskMlConsentDto dto) =>
+            ToActionResult(await _taskRequestService.UpdateMlConsentAsync(taskId, dto, _currentUserService.UserId));
+
+        [Authorize(Roles = "Admin,User")]
         [HttpDelete("delete-task/{id}")]
         public async Task<IActionResult> DeleteTaskRequest(int id)
         {
