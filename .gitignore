@@ -44,3 +44,5 @@ artifacts/
 # Local deployment documentation
 deploy/production.md
 deploy/container-security.md
+
+deploy/ml-data-consent.md
