@@ -12,11 +12,20 @@ namespace TaskTracker.Core.Entities.Configurations
     {
         public void Configure(EntityTypeBuilder<TaskRequest> builder)
         {
-            builder.ToTable("TaskRequests", table => table.HasCheckConstraint(
-                "CK_TaskRequests_DeletionAudit",
-                "(\"Activity\" = TRUE AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
-                "(\"Activity\" = FALSE AND ((\"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
-                "(\"DeletedAt\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL)))"));
+            builder.ToTable("TaskRequests", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_TaskRequests_DeletionAudit",
+                    "(\"Activity\" = TRUE AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
+                    "(\"Activity\" = FALSE AND ((\"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR " +
+                    "(\"DeletedAt\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL)))");
+                table.HasCheckConstraint("CK_TaskRequests_MlConsent",
+                    "(\"MlConsentGranted\" AND \"MlConsentGrantedAt\" IS NOT NULL AND \"MlConsentRevokedAt\" IS NULL AND " +
+                    "\"MlConsentPolicyVersion\" IS NOT NULL) OR (NOT \"MlConsentGranted\" AND " +
+                    "((\"MlConsentGrantedAt\" IS NULL AND \"MlConsentRevokedAt\" IS NULL AND \"MlConsentPolicyVersion\" IS NULL) OR " +
+                    "(\"MlConsentGrantedAt\" IS NOT NULL AND \"MlConsentRevokedAt\" IS NOT NULL AND " +
+                    "\"MlConsentPolicyVersion\" IS NOT NULL)))");
+            });
 
             builder.HasKey(tr => tr.Id);
             builder.Property(tr => tr.Id).ValueGeneratedOnAdd();
@@ -33,6 +42,8 @@ namespace TaskTracker.Core.Entities.Configurations
 
             builder.Property(tr => tr.Activity).IsRequired().HasDefaultValue(true);
             builder.Property(tr => tr.Version).IsConcurrencyToken().HasDefaultValue(0L);
+            builder.Property(tr => tr.MlConsentGranted).HasDefaultValue(false);
+            builder.Property(tr => tr.MlConsentPolicyVersion).HasMaxLength(TaskMlConsentEvent.MaxPolicyVersionLength);
 
             builder.Property(tr => tr.DueDate).HasColumnType("date");
 
@@ -47,6 +58,8 @@ namespace TaskTracker.Core.Entities.Configurations
             builder.HasOne(x => x.Workspace).WithMany(x => x.Tasks).HasForeignKey(x => x.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             builder.HasIndex(x => x.WorkspaceId);
+            builder.HasIndex(x => x.Id, "IX_TaskRequests_MlDatasetConsented")
+                .HasFilter("\"Activity\" AND \"MlConsentGranted\"");
 
         }
     }

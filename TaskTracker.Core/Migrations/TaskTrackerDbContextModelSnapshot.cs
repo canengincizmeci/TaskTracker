@@ -716,6 +716,40 @@ namespace TaskTracker.Core.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMlConsentEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Granted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PolicyVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("TaskRequestId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("TaskRequestId", "OccurredAtUtc", "Id");
+
+                    b.ToTable("TaskMlConsentEvents");
+                });
+
             modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskPlanningRevision", b =>
                 {
                     b.Property<int>("Id")
@@ -893,6 +927,21 @@ namespace TaskTracker.Core.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("MlConsentGranted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("MlConsentGrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MlConsentPolicyVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("MlConsentRevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("OwnerId")
                         .HasColumnType("integer");
 
@@ -936,9 +985,14 @@ namespace TaskTracker.Core.Migrations
 
                     b.HasIndex("WorkspaceId");
 
+                    b.HasIndex(new[] { "Id" }, "IX_TaskRequests_MlDatasetConsented")
+                        .HasFilter("\"Activity\" AND \"MlConsentGranted\"");
+
                     b.ToTable("TaskRequests", null, t =>
                         {
                             t.HasCheckConstraint("CK_TaskRequests_DeletionAudit", "(\"Activity\" = TRUE AND \"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR (\"Activity\" = FALSE AND ((\"DeletedAt\" IS NULL AND \"DeletedByUserId\" IS NULL) OR (\"DeletedAt\" IS NOT NULL AND \"DeletedByUserId\" IS NOT NULL)))");
+
+                            t.HasCheckConstraint("CK_TaskRequests_MlConsent", "(\"MlConsentGranted\" AND \"MlConsentGrantedAt\" IS NOT NULL AND \"MlConsentRevokedAt\" IS NULL AND \"MlConsentPolicyVersion\" IS NOT NULL) OR (NOT \"MlConsentGranted\" AND ((\"MlConsentGrantedAt\" IS NULL AND \"MlConsentRevokedAt\" IS NULL AND \"MlConsentPolicyVersion\" IS NULL) OR (\"MlConsentGrantedAt\" IS NOT NULL AND \"MlConsentRevokedAt\" IS NOT NULL AND \"MlConsentPolicyVersion\" IS NOT NULL)))");
                         });
                 });
 
@@ -1670,6 +1724,23 @@ namespace TaskTracker.Core.Migrations
                         .IsRequired();
 
                     b.Navigation("SenderUser");
+
+                    b.Navigation("TaskRequest");
+                });
+
+            modelBuilder.Entity("TaskTracker.Core.Entities.Concrete.TaskMlConsentEvent", b =>
+                {
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TaskTracker.Core.Entities.Concrete.TaskRequest", "TaskRequest")
+                        .WithMany()
+                        .HasForeignKey("TaskRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("TaskRequest");
                 });

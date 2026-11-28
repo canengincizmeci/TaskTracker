@@ -34,6 +34,7 @@ namespace TaskTracker.Core.DataAccess
         public DbSet<TaskActivity> TaskActivities { get; set; }
         public DbSet<TaskPlanningRevision> TaskPlanningRevisions { get; set; }
         public DbSet<TaskPlanningSnapshot> TaskPlanningSnapshots { get; set; }
+        public DbSet<TaskMlConsentEvent> TaskMlConsentEvents { get; set; }
         public DbSet<TaskMessage> TaskMessages { get; set; }
         public DbSet<TaskAttachment> TaskAttachments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
@@ -66,7 +67,8 @@ namespace TaskTracker.Core.DataAccess
             foreach (var entry in ChangeTracker.Entries())
             {
                 if (entry.Entity is TaskSubmission or TaskSubmissionReview or TaskActivity or TaskMessage or
-                        TaskPlanningRevision or TaskPlanningSnapshot or SubTaskSubmission or SubTaskSubmissionReview or SubTaskActivity &&
+                        TaskPlanningRevision or TaskPlanningSnapshot or TaskMlConsentEvent or
+                        SubTaskSubmission or SubTaskSubmissionReview or SubTaskActivity &&
                     entry.State is EntityState.Modified or EntityState.Deleted)
                     throw new InvalidOperationException("Workflow history is immutable. Add a new revision or decision instead.");
 

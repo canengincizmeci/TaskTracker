@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json.Serialization;
 using TaskTracker.Core.Utilities.Enums;
 using TaskStatus = TaskTracker.Core.Utilities.Enums.TaskStatus;
 
@@ -32,6 +33,10 @@ namespace TaskTracker.Core.Entities.Concrete
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? DeletedAt { get; set; }
         public int? DeletedByUserId { get; set; }
+        [JsonIgnore] public bool MlConsentGranted { get; set; }
+        [JsonIgnore] public DateTime? MlConsentGrantedAt { get; set; }
+        [JsonIgnore] public DateTime? MlConsentRevokedAt { get; set; }
+        [JsonIgnore] public string? MlConsentPolicyVersion { get; set; }
         public User Owner { get; set; } = null!;
         public User? DeletedByUser { get; set; }
         public ICollection<TaskShare> TaskShares { get; set; } = new List<TaskShare>();
