@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { TaskPriority } from "../types/CreateTaskRequest";
 import type { TaskCreationFormValue } from "../types/taskCreationForm";
 import { localCalendarDate, maxTaskCategoryLength } from "../utils/localCalendarDate";
+import MlConsentCheckbox from "./MlConsentCheckbox";
 
 export type TaskCreationAssignee = {
   id: number;
@@ -160,6 +161,9 @@ export default function TaskCreationForm({
           )}
         </div>
       </section>
+
+      <MlConsentCheckbox checked={value.mlConsentGranted} disabled={submitting}
+        onChange={mlConsentGranted => onChange({ ...value, mlConsentGranted })} />
 
       {displayedError && <p className="task-creation-form__error" role="alert">{displayedError}</p>}
 

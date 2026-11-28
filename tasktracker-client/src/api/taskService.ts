@@ -40,6 +40,10 @@ async function updateTask(data: UpdateTaskRequest): Promise<string> {
   return response.data;
 }
 
+export async function updateTaskMlConsent(taskId: number, granted: boolean, version: number): Promise<void> {
+  await axiosClient.put(`/TaskRequest/${taskId}/ml-consent`, { granted, version });
+}
+
 async function assignTask(taskId: number, assigneeUserId: number, version: number): Promise<string> {
   return (await axiosClient.post(`/TaskRequest/${taskId}/assign`, { assigneeUserId, version })).data;
 }

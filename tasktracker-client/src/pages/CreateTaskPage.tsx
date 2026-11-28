@@ -37,6 +37,7 @@ function CreateTaskPage() {
       category: value.category,
       priority: value.priority,
       dueDate: value.dueDate,
+      mlConsentGranted: value.mlConsentGranted,
     };
 
     createInProgress.current = true;

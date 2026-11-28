@@ -1,6 +1,7 @@
 import type { CreateTaskRequest } from "./CreateTaskRequest";
 
 export type TaskCreationFormValue = CreateTaskRequest & {
+  mlConsentGranted: boolean;
   assigneeUserId: number | null;
 };
 
@@ -11,6 +12,7 @@ export function createEmptyTaskCreationValue(): TaskCreationFormValue {
     category: "",
     priority: "Medium",
     dueDate: null,
+    mlConsentGranted: false,
     assigneeUserId: null,
   };
 }

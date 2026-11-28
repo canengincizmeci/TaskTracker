@@ -15,6 +15,12 @@ export interface Task {
   assigneeUserId: number | null;
   assigneeUserName: string | null;
   version: number;
+  mlConsent?: {
+    granted: boolean;
+    grantedAt: string | null;
+    revokedAt: string | null;
+    policyVersion: string | null;
+  } | null;
   isOwner?: boolean;
   isAssignee?: boolean;
   isSharedWithMe?: boolean;

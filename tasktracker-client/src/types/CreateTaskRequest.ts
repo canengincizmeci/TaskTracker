@@ -6,4 +6,5 @@ export interface CreateTaskRequest {
   category: string;
   priority: TaskPriority;
   dueDate: string | null;
+  mlConsentGranted?: boolean;
 }

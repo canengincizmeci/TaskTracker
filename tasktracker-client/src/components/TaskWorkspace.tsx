@@ -15,6 +15,7 @@ import TaskDiscussion from "./TaskDiscussion";
 import TaskFiles, { TaskReferenceFiles } from "./TaskFiles";
 import { TaskWorkspaceActivity } from "./TaskCollaborationPanel";
 import TaskEditDialog, { TaskDialog } from "./TaskEditDialog";
+import TaskMlConsentDialog from "./TaskMlConsentDialog";
 import SubTasksSection from "./SubTasksSection";
 
 import { tabs, labels, type View } from "../utils/taskWorkspaceViews";
@@ -45,6 +46,7 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
   const navigate = useNavigate();
   const location = useLocation();
   const [editing, setEditing] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<{ command: keyof typeof confirmations; version: number } | null>(null);
   const confirm = confirmation?.command;
   const [busy, setBusy] = useState(false);
@@ -181,6 +183,9 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
             <button ref={moreButton} className="tw-control tw-icon-button" type="button" aria-label="More task actions"
               aria-expanded={menuOpen} aria-controls="workspace-actions" onClick={() => setMenuOpen(!menuOpen)}><Icon name="more" /></button>
             {menuOpen && <div id="workspace-actions" className="tw-menu">
+              {task.mlConsent && <button type="button" lang="tr" disabled={blocked} onClick={() => {
+                setMenuOpen(false); clearFeedback(); setConsentOpen(true);
+              }}>Veri kullanım izni</button>}
               {task.isOwner && <button type="button" disabled={blocked} onClick={() => ask(terminal ? "reopen" : "cancel")}>
                 {terminal ? "Reopen task" : "Cancel task"}</button>}
               {task.canDelete && <button type="button" className="tw-danger" disabled={blocked} onClick={() => ask("delete")}>Delete task</button>}
@@ -234,6 +239,11 @@ export default function TaskWorkspace({ task, view, refreshTask, refreshFailed }
       onSaved={async () => {
         await showSaved("Task details saved.");
         if (alive.current) setEditing(false);
+      }} />}
+    {consentOpen && task.mlConsent && <TaskMlConsentDialog task={task} opener={moreButton}
+      onClose={() => setConsentOpen(false)} refreshTask={refreshTask} onSaved={async () => {
+        await showSaved("Veri kullanım izni kaydedildi.");
+        if (alive.current) setConsentOpen(false);
       }} />}
     {confirm && <TaskDialog title={confirmations[confirm][0]} onClose={() => setConfirmation(null)} busy={busy} opener={moreButton}>
       <p>{confirmations[confirm][1]}</p><div className="tw-dialog-actions">
