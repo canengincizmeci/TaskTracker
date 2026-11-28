@@ -36,7 +36,7 @@ public class TaskMlDatasetManager(
             DataType = "integer",
             Role = "metadata",
             AllowMissing = false,
-            Definition = "Internal task identifier for linking and auditing only; never use as a predictive feature."
+            Definition = "Row number local to this export. Never use this metadata as a predictive feature or join key."
         },
         new()
         {
@@ -450,12 +450,13 @@ public class TaskMlDatasetManager(
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(",", ColumnDefinitions.Select(c => c.Name)));
 
+        var rowNumber = 0;
         foreach (var row in rows)
         {
             var fields = new[]
             {
                 EscapeCsv(row.DatasetSchemaVersion),
-                row.TaskId.ToString(CultureInfo.InvariantCulture),
+                (++rowNumber).ToString(CultureInfo.InvariantCulture),
                 FormatUtc(row.CreatedAtUtc),
                 FormatInt(row.InitialUtcOffsetMinutes),
                 FormatInt(row.CreatedDayOfWeek),
