@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="15" fill="#0D1B34"/>
-  <path d="m17 32 10 10 20-21" fill="none" stroke="#E5F6FF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      rect { fill: #636ee3; }
+    }
+  </style>
+  <rect width="28" height="28" rx="7" fill="#4f56c8"/>
+  <path d="M10.67 10.5h6.68v1.54h-2.4v6.86h-1.9v-6.86h-2.38z" fill="#fff"/>
 </svg>
