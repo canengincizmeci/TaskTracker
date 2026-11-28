@@ -15,6 +15,7 @@ const hubs = [];
 const revokedUrls = [];
 let nextUrl = 0;
 let dom, vite, client, createRoot, TaskDiscussion, TaskCollaborationPanel, AuthContext;
+let TaskCreationForm, TaskMlConsentDialog, createEmptyTaskCreationValue;
 const task = { id: 9, ownerId: 1, canViewParticipants: true, title: "Local work" };
 const messagesPath = "/TaskWorkspace/9/messages";
 const deliveryPath = messagesPath + "/delivery";
@@ -23,6 +24,9 @@ const limits = { uploadsEnabled: true, maxFiles: 3, maxFileSizeBytes: 20, maxTot
 
 before(async () => {
   dom = new JSDOM("<html><body></body></html>", { url: "http://localhost/" });
+  const dialog = dom.window.HTMLDialogElement.prototype;
+  dialog.showModal = function () { this.open = true; };
+  dialog.close = function () { this.open = false; };
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document,
     Node: dom.window.Node, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage,
     sessionStorage: dom.window.sessionStorage, FormData: dom.window.FormData, File: dom.window.File,
@@ -53,6 +57,9 @@ before(async () => {
   ({ default: TaskDiscussion } = await vite.ssrLoadModule("/src/components/TaskDiscussion.tsx"));
   ({ default: TaskCollaborationPanel } = await vite.ssrLoadModule("/src/components/TaskCollaborationPanel.tsx"));
   ({ AuthContext } = await vite.ssrLoadModule("/src/context/authContextValue.ts"));
+  ({ default: TaskCreationForm } = await vite.ssrLoadModule("/src/components/TaskCreationForm.tsx"));
+  ({ default: TaskMlConsentDialog } = await vite.ssrLoadModule("/src/components/TaskMlConsentDialog.tsx"));
+  ({ createEmptyTaskCreationValue } = await vite.ssrLoadModule("/src/types/taskCreationForm.ts"));
 });
 
 afterEach(async () => {
@@ -157,6 +164,54 @@ function attachment(id, messageId, name, mime) {
   return { id, taskRequestId: 9, taskMessageId: messageId, kind: "Message", fileName: name,
     contentType: mime, sizeBytes: 5, canDelete: false };
 }
+
+test("task creation defaults to no consent and submits with or without an explicit opt-in", async () => {
+  const host = document.createElement("main");
+  document.body.append(host);
+  const root = createRoot(host);
+  roots.push(root);
+  const decisions = [];
+  function Harness() {
+    const [value, setValue] = useState(() => ({ ...createEmptyTaskCreationValue(),
+      title: "Fixture task", description: "Complete draft", category: "Testing" }));
+    return h(TaskCreationForm, {
+      idPrefix: "test-task", value, onChange: setValue, onSubmit: draft => decisions.push(draft.mlConsentGranted),
+      submitting: false, onCancel: () => {},
+    });
+  }
+  await act(async () => root.render(h(Harness)));
+  const checkbox = host.querySelector('input[name="mlConsentGranted"]');
+  assert.equal(checkbox.checked, false);
+  assert.equal(checkbox.required, false);
+  await click(button(host, "Create task"));
+  await click(checkbox);
+  await click(button(host, "Create task"));
+  assert.deepEqual(decisions, [false, true]);
+});
+
+test("completed-task consent settings submit an explicit revoke with the task version", async () => {
+  const host = document.createElement("main");
+  document.body.append(host);
+  const root = createRoot(host);
+  roots.push(root);
+  const requests = [];
+  let saved = 0;
+  client.defaults.adapter = async config => {
+    requests.push({ url: config.url, method: config.method, body: JSON.parse(config.data) });
+    return { data: "Saved" };
+  };
+  await act(async () => root.render(h(TaskMlConsentDialog, {
+    task: { id: 9, version: 4, mlConsent: { granted: true }, status: "Completed" },
+    onClose: () => {}, refreshTask: async () => 5, onSaved: async () => { saved++; },
+  })));
+  const checkbox = host.querySelector('input[name="mlConsentGranted"]');
+  assert.equal(checkbox.checked, true);
+  assert.equal(button(host, "İzni kaydet").disabled, true);
+  await click(checkbox);
+  await click(button(host, "İzni kaydet"));
+  assert.deepEqual(requests, [{ url: "/TaskRequest/9/ml-consent", method: "put", body: { granted: false, version: 4 } }]);
+  assert.equal(saved, 1);
+});
 
 test("text-only messages remain available when uploads are disabled", async () => {
   const requests = mockDiscussion({ settings: { ...limits, uploadsEnabled: false },
