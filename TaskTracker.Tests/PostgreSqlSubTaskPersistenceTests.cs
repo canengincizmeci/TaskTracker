@@ -12,24 +12,29 @@ public class PostgreSqlSubTaskPersistenceTests
     {
         await using var database = await PostgreSqlTestDatabase.CreateAsync("20261117181846_AddInvitationMessagesAndTaskAttachments");
         await using var context = database.CreateContext();
-        var parent = TestDatabase.Task();
-        context.TaskRequests.Add(parent);
-        var submission = new TaskSubmission
-        {
-            TaskRequestId = parent.Id, SubmittedByUserId = 2, RevisionNumber = 1, Content = "Original evidence"
-        };
-        context.TaskSubmissions.Add(submission);
-        await context.SaveChangesAsync();
+        const string submissionContent = "Original evidence";
+        // Seed the old schema directly because it lacks the current task consent columns.
         await context.Database.ExecuteSqlInterpolatedAsync($"""
+            WITH parent AS (
+                INSERT INTO "TaskRequests" ("Title", "Description", "Category", "Priority", "Status", "Visibility",
+                    "OwnerId", "SharedCount")
+                VALUES ('Workflow task', 'A task for workflow tests', 'Tests', 'Medium', 'Pending', 0, 1, 0)
+                RETURNING "Id"
+            ), submission AS (
+                INSERT INTO "TaskSubmissions" ("TaskRequestId", "SubmittedByUserId", "RevisionNumber", "Content")
+                SELECT "Id", 2, 1, {submissionContent} FROM parent
+                RETURNING "Id", "TaskRequestId"
+            )
             INSERT INTO "TaskAttachments" ("TaskRequestId", "UploaderUserId", "Kind", "TaskSubmissionId",
                 "OriginalFileName", "StorageKey", "ContentType", "SizeBytes", "CreatedAt", "IsDeleted")
-            VALUES ({parent.Id}, 2, 2, {submission.Id}, 'work.txt', 'original', 'text/plain', 4, CURRENT_TIMESTAMP, FALSE)
+            SELECT "TaskRequestId", 2, 2, "Id", 'work.txt', 'original', 'text/plain', 4, CURRENT_TIMESTAMP, FALSE
+            FROM submission
             """);
 
         await context.Database.MigrateAsync();
-        context.ChangeTracker.Clear();
         Assert.Equal(0, (await context.TaskRequests.SingleAsync()).Version);
-        Assert.Equal(submission.Content, (await context.TaskSubmissions.SingleAsync()).Content);
+        var submission = await context.TaskSubmissions.SingleAsync();
+        Assert.Equal(submissionContent, submission.Content);
         var original = await context.TaskAttachments.SingleAsync();
         Assert.Equal(TaskAttachmentKind.Submission, original.Kind);
         Assert.Equal(submission.Id, original.TaskSubmissionId);

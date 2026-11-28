@@ -170,6 +170,7 @@ public class TaskMlDatasetTests
 
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
+            MlConsentGranted = true,
             Title = "Original short title",
             Description = "Original planning description",
             Category = "ML",
@@ -357,8 +358,8 @@ public class TaskMlDatasetTests
 
         var export = await TaskCollaborationTestServices.MlDatasets(context).ExportCsvAsync(1);
         Assert.True(export.Success);
-        Assert.Equal(3, export.Data.TotalCount);
-        Assert.Equal(3, export.Data.EligibleCount);
+        Assert.Equal(2, export.Data.TotalCount);
+        Assert.Equal(2, export.Data.EligibleCount);
 
         var rows = export.Data.Rows.ToDictionary(x => x.TaskId);
         Assert.True(rows[1].IsEligible);
@@ -369,9 +370,7 @@ public class TaskMlDatasetTests
         Assert.True(rows[2].IsLate);
         Assert.Equal(string.Empty, rows[2].ExclusionReasonCode);
 
-        Assert.True(rows[3].IsEligible);
-        Assert.True(rows[3].IsLate);
-        Assert.Equal(TaskInitialAssignmentState.Delegated, rows[3].InitialAssignmentState);
+        Assert.DoesNotContain(3, rows.Keys);
     }
 
     [Fact]
@@ -385,6 +384,7 @@ public class TaskMlDatasetTests
 
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
+            MlConsentGranted = true,
             Title = "Reopen policy task",
             Description = "Verify reopen invalidates single-cycle label",
             Category = "Policy",
@@ -443,6 +443,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "Pending task", Description = "Remains pending", Category = "ML",
+            MlConsentGranted = true,
             Priority = TaskPriority.Low, DueDate = dueDate
         }, 1)).Success);
 
@@ -450,6 +451,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "InProgress task", Description = "Started but unfinished", Category = "ML",
+            MlConsentGranted = true,
             Priority = TaskPriority.Medium, DueDate = dueDate
         }, 1)).Success);
         Assert.True((await manager.StartTaskAsync(2, new TaskWorkflowCommandDto { Version = 0 }, 1)).Success);
@@ -458,6 +460,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "Cancelled task", Description = "Cancelled before completion", Category = "ML",
+            MlConsentGranted = true,
             Priority = TaskPriority.High, DueDate = dueDate
         }, 1)).Success);
         Assert.True((await manager.CancelTaskAsync(3, new TaskWorkflowCommandDto { Version = 0 }, 1)).Success);
@@ -466,6 +469,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "Deleted task", Description = "Soft deleted by owner", Category = "ML",
+            MlConsentGranted = true,
             Priority = TaskPriority.Critical, DueDate = dueDate
         }, 1)).Success);
         Assert.True((await manager.DeleteTask(4, 1)).Success);
@@ -474,6 +478,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "No initial deadline task", Description = "Deadline added only on later edit", Category = "ML",
+            MlConsentGranted = true,
             Priority = TaskPriority.Medium, DueDate = null
         }, 1)).Success);
         Assert.True((await manager.UpdateTask(new UpdateTaskRequestDto
@@ -486,9 +491,9 @@ public class TaskMlDatasetTests
 
         var export = await datasetService.ExportCsvAsync(1);
         Assert.True(export.Success);
-        Assert.Equal(5, export.Data.TotalCount);
+        Assert.Equal(4, export.Data.TotalCount);
         Assert.Equal(0, export.Data.EligibleCount);
-        Assert.Equal(5, export.Data.ExcludedCount);
+        Assert.Equal(4, export.Data.ExcludedCount);
         Assert.All(export.Data.Rows, row =>
         {
             Assert.False(row.IsEligible);
@@ -499,7 +504,7 @@ public class TaskMlDatasetTests
         Assert.Equal(TaskDatasetExclusionReason.Unfinished, byId[1].ExclusionReason);
         Assert.Equal(TaskDatasetExclusionReason.Unfinished, byId[2].ExclusionReason);
         Assert.Equal(TaskDatasetExclusionReason.Cancelled, byId[3].ExclusionReason);
-        Assert.Equal(TaskDatasetExclusionReason.Deleted, byId[4].ExclusionReason);
+        Assert.DoesNotContain(4, byId.Keys);
         Assert.Equal(TaskDatasetExclusionReason.MissingInitialDeadline, byId[5].ExclusionReason);
 
         var eligibleOnlyExport = await datasetService.ExportCsvAsync(1, eligibleOnly: true);
@@ -588,6 +593,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "User1 private", Description = "Private to user 1", Category = "Private",
+            MlConsentGranted = true,
             Priority = TaskPriority.Medium, DueDate = dueDate
         }, 1)).Success);
 
@@ -595,6 +601,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "User1 public visibility", Description = "Still must not leak globally", Category = "Public",
+            MlConsentGranted = true,
             Priority = TaskPriority.High, DueDate = dueDate
         }, 1)).Success);
         var task2 = await context.TaskRequests.SingleAsync(x => x.Id == 2);
@@ -604,6 +611,7 @@ public class TaskMlDatasetTests
         Assert.True((await manager.AddTaskRequestAsync(new TaskRequestCreateDto
         {
             Title = "Shared with user2", Description = "Collaborator access test", Category = "Shared",
+            MlConsentGranted = true,
             Priority = TaskPriority.Low, DueDate = dueDate
         }, 1)).Success);
         context.TaskShares.Add(new TaskShare
@@ -620,7 +628,8 @@ public class TaskMlDatasetTests
         var wsTaskResult = await manager.AddWorkspaceTaskAsync(workspace.Id, new WorkspaceTaskCreateDto
         {
             Title = "Workspace task", Description = "Accessible to workspace members", Category = "Workspace",
-            Priority = TaskPriority.Critical, DueDate = dueDate, AssigneeUserId = 2
+            MlConsentGranted = true,
+            Priority = TaskPriority.Critical, DueDate = dueDate
         }, 1);
         Assert.True(wsTaskResult.Success);
         await context.SaveChangesAsync();
@@ -656,8 +665,6 @@ public class TaskMlDatasetTests
         var task3Version = (await context.TaskRequests.SingleAsync(x => x.Id == 3)).Version;
         Assert.True((await shareManager.RemoveParticipantAsync(3, 2, task3Version)).Success);
 
-        var task4Version = (await context.TaskRequests.SingleAsync(x => x.Id == 4)).Version;
-        Assert.True((await manager.UnassignTaskAsync(4, new TaskWorkflowCommandDto { Version = task4Version }, 1)).Success);
         var member2 = await context.WorkspaceMembers.SingleAsync(x => x.WorkspaceId == workspace.Id && x.UserId == 2);
         var workspaceManager = TaskCollaborationTestServices.Workspaces(context, 1);
         Assert.True((await workspaceManager.RemoveMemberAsync(workspace.Id, 2,
@@ -732,6 +739,11 @@ public class TaskMlDatasetTests
         });
         await context.SaveChangesAsync();
 
+        var manager = TaskCollaborationTestServices.TaskRequests(context);
+        foreach (var taskId in new[] { 1, 2, 3 })
+            Assert.True((await manager.UpdateMlConsentAsync(taskId,
+                new UpdateTaskMlConsentDto { Granted = true, Version = 0 }, 1)).Success);
+
         var datasetService = TaskCollaborationTestServices.MlDatasets(context);
         var export = await datasetService.ExportCsvAsync(1);
         Assert.True(export.Success);
@@ -794,6 +806,7 @@ public class TaskMlDatasetTests
             Title = "CONFIDENTIAL_TASK_TITLE_ALPHA",
             Description = "SENSITIVE_DESCRIPTION_PAYLOAD_BETA",
             Category = "PRIVATE_CATEGORY_GAMMA",
+            MlConsentGranted = true,
             Priority = TaskPriority.Low,
             DueDate = dueDate,
             UtcOffsetMinutes = 60,
@@ -821,6 +834,15 @@ public class TaskMlDatasetTests
             DueDate = dueDate.AddDays(7),
             UtcOffsetMinutes = 60
         }, 1)).Success);
+
+        var exportAfterOwnerEdit = await datasetService.ExportCsvAsync(1);
+        Assert.True(exportAfterOwnerEdit.Success);
+        var editedValues = ParseCsvLines(exportAfterOwnerEdit.Data.CsvContent)[1];
+        Assert.Equal(23, header.Length);
+        Assert.Equal(creationValues, editedValues);
+        Assert.Equal("0", creationValues[20]);
+        Assert.Equal("unfinished", creationValues[21]);
+        Assert.Equal(string.Empty, creationValues[22]);
 
         Assert.True((await manager.AssignTaskAsync(taskId, new AssignTaskDto { AssigneeUserId = 2, Version = 1 }, 1)).Success);
         Assert.True((await manager.StartTaskAsync(taskId, new TaskWorkflowCommandDto { Version = 2 }, 2)).Success);
@@ -902,7 +924,10 @@ public class TaskMlDatasetTests
             "example.test"
         ];
         foreach (var token in forbiddenTokens)
+        {
             Assert.DoesNotContain(token, csvText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(token, exportAfterOwnerEdit.Data.CsvContent, StringComparison.OrdinalIgnoreCase);
+        }
 
         // 2. Schema check: no raw user ID columns or post-creation leakage columns exist in schema.
         var schema = datasetService.GetSchema();
@@ -915,27 +940,7 @@ public class TaskMlDatasetTests
             c.Name.Contains("submission", StringComparison.OrdinalIgnoreCase) ||
             c.Name.Contains("current_", StringComparison.OrdinalIgnoreCase));
 
-        // 3. Data leakage invariance check: every metadata & feature column (all columns except is_eligible, exclusion_reason, is_late)
-        // must be 100% identical between creation time and post-completion time.
-        var completionCsvLines = ParseCsvLines(csvText);
-        Assert.Equal(2, completionCsvLines.Count);
-        var completionValues = completionCsvLines[1];
-
-        // Columns 0..19 are dataset_schema_version, task_id, and the 18 prediction-time features.
-        // Columns 20..22 are is_eligible, exclusion_reason, is_late.
-        Assert.Equal(23, header.Length);
-        for (var i = 0; i < 20; i++)
-        {
-            Assert.Equal(creationValues[i], completionValues[i]);
-        }
-
-        Assert.Equal("0", creationValues[20]);
-        Assert.Equal("unfinished", creationValues[21]);
-        Assert.Equal(string.Empty, creationValues[22]);
-
-        Assert.Equal("1", completionValues[20]);
-        Assert.Equal(string.Empty, completionValues[21]);
-        Assert.Equal("0", completionValues[22]);
+        Assert.Equal(header, Assert.Single(ParseCsvLines(csvText)));
     }
 
     [Fact]
@@ -989,7 +994,10 @@ public class TaskMlDatasetTests
             DueDate = currentDueDate,
             Activity = true,
             Visibility = TaskVisibility.Private,
-            CreatedAt = createdAtUtc
+            CreatedAt = createdAtUtc,
+            MlConsentGranted = true,
+            MlConsentGrantedAt = createdAtUtc,
+            MlConsentPolicyVersion = TaskMlConsentEvent.CurrentPolicyVersion
         };
         context.TaskRequests.Add(task);
 

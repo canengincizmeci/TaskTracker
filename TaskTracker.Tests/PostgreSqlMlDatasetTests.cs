@@ -25,16 +25,20 @@ public class PostgreSqlMlDatasetTests
         context.Workspaces.Add(largeWorkspace);
         context.TaskRequests.Add(new TaskRequest
         {
-            OwnerId = 2, Title = "Private personal fixture", Description = "Private body", Category = "Fixture"
+            OwnerId = 2, Title = "Private personal fixture", Description = "Private body", Category = "Fixture",
+            Activity = true,
+            MlConsentGranted = true, MlConsentGrantedAt = DateTime.UtcNow,
+            MlConsentPolicyVersion = TaskMlConsentEvent.CurrentPolicyVersion
         });
         await context.SaveChangesAsync();
 
         var taskCount = historyBudget ? 1 : EfTaskMlDatasetDal.MaxTasks + 1;
         await context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "TaskRequests" ("Title", "Description", "Category", "Priority", "Status", "Visibility",
-                "WorkspaceId", "OwnerId", "SharedCount")
+                "WorkspaceId", "OwnerId", "SharedCount", "MlConsentGranted", "MlConsentGrantedAt", "MlConsentPolicyVersion")
             SELECT 'Private workspace fixture', 'Private workspace body', 'Fixture', 'Medium', 'Pending', 0,
-                {largeWorkspace.Id}, 1, 0 FROM generate_series(1, {taskCount})
+                {largeWorkspace.Id}, 1, 0, TRUE, CURRENT_TIMESTAMP, {TaskMlConsentEvent.CurrentPolicyVersion}
+            FROM generate_series(1, {taskCount})
             """);
         if (historyBudget)
         {
@@ -76,6 +80,7 @@ public class PostgreSqlMlDatasetTests
                 Description = "Verify migration constraints and timestamp precision",
                 Category = "Database",
                 Priority = TaskPriority.High,
+                MlConsentGranted = true,
                 DueDate = dueDate,
                 UtcOffsetMinutes = offsetMinutes
             }, 1);
